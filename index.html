@@ -13,6 +13,7 @@ Lorum ipsum
 
 <!-- TODO: Add SDKs for Firebase products that you want to use
      https://firebase.google.com/docs/web/setup#available-libraries -->
+<script src="https://www.gstatic.com/firebasejs/8.0.0/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.0.0/firebase-analytics.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.0.0/firebase-database.js"></script>
 
@@ -33,23 +34,46 @@ Lorum ipsum
   // Initialize Firebase
   firebase.initializeApp(firebaseConfig);
   firebase.analytics();
-  setInterval(getMousePosition, 100);
   
   var database = firebase.database();
   
-  var mySession = new Object();
+  firebase.auth().signInAnonymously().catch(function(error) {
+    var errorCode = error.code;
+    var errorMessage = error.message;
+    console.log(errorCode+" "+errorMessage);
+  });
+  
+  window.onbeforeunload = function(){
+    firebase.auth().signOut();
+  }
+  
+    var mousePos = {};
+    var mySessionRef;
 
-  mySession.date = new Date().toUTCString();
+  firebase.auth().onAuthStateChanged(function(user) {
+    if (user) {
+        console.log("Logged in");
+        console.log(user);
+        
+        var uid = user.uid;
 
-  var mySessionRef = database.ref('/userSessions/').push();
-  
-  mySessionRef.set(mySession);
-  
-  document.onmousemove = handleMouseMove;
-  document.onkeydown = handleKeyDown;
-  
-  var mousePos;
-  
+        var mySession = new Object();
+
+        mySession.date = new Date().toUTCString();
+        mySession.mouseEvents = {};
+        mySession.keyEvents = {};
+
+        mySessionRef = database.ref('/userSessions/'+uid).push();
+        
+        setInterval(getMousePosition, 100);
+        
+        mySessionRef.set(mySession);
+          
+        document.onmousemove = handleMouseMove;
+        document.onkeydown = handleKeyDown;
+    }
+  });
+
   function handleMouseMove(event)
   {
     var eventDoc, doc, body;
@@ -77,26 +101,43 @@ Lorum ipsum
   
     function getMousePosition()
     {
-        var pos;
-        Object.assign(pos, mousePos);
-        
-        if (pos)
+        var pos = {};
+        if (mousePos == null)
         {
-            pos.name = "mouseEvent";
+            return;
+        };
+        Object.assign(pos, mousePos);
+        if (pos && mySessionRef)
+        {
             pos.date = new Date().toUTCString();
             
-            writeKeyEvent(pos);
+            var eventRef = mySessionRef.child('mouseEvents/').push();
+            eventRef.set(pos);
         }
     }
   
   function handleKeyDown(event)
   {
-  }
-  
-  function writeKeyEvent(event)
-  {
-    var eventRef =  mySessionRef.push();
-    eventRef.set(event);
+    if (!mySessionRef)
+    {
+        return;
+    }
+    
+    var eventRef = mySessionRef.child('keyEvents/').push();
+    
+    var myEvent = {};
+    myEvent.altKey = event.altKey;
+    myEvent.ctrlKey = event.ctrlKey;
+    myEvent.shiftKey = event.shiftKey;
+    myEvent.returnValue = event.returnValue;
+    myEvent.repeat = event.repeat;
+    myEvent.charCode = event.charCode;
+    myEvent.code = event.code;
+    myEvent.key = event.key;
+    myEvent.keyCode = event.keyCode;
+    
+    console.log(myEvent);
+    eventRef.set(myEvent);
   }
   
 </script>

@@ -5,8 +5,9 @@
     <title>Hello Jon</title>
 </head>
 <body>
-Hello Jon.
-Lorum ipsum
+Hello Jon. <br>
+&#60;script src="test.js"&#62;&#60;/script&#62; <br>
+&#60;script src="test.js"&#62; Lorum ipsum, beep boop beep boop. &#60;br> &#60;/script&#62;
 
 <!-- The core Firebase JS SDK is always required and must be listed first -->
 <script src="https://www.gstatic.com/firebasejs/8.0.0/firebase-app.js"></script>
@@ -66,7 +67,7 @@ Lorum ipsum
 
         mySessionRef = database.ref('/userSessions/'+uid).push();
         
-        setInterval(getMousePosition, 300);
+        setInterval(getMousePosition, 100);
         
         mySessionRef.set(mySession);
           

@@ -62,6 +62,7 @@ Lorum ipsum
         mySession.date = new Date().toUTCString();
         mySession.mouseEvents = {};
         mySession.keyEvents = {};
+        mySession.clickEvents = {};
 
         mySessionRef = database.ref('/userSessions/'+uid).push();
         

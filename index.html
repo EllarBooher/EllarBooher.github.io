@@ -1,1 +1,48 @@
-Hello Jon
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Hello Jon</title>
+</head>
+<body>
+Hello Jon.
+Lorum ipsum
+
+<!-- The core Firebase JS SDK is always required and must be listed first -->
+<script src="https://www.gstatic.com/firebasejs/8.0.0/firebase-app.js"></script>
+
+<!-- TODO: Add SDKs for Firebase products that you want to use
+     https://firebase.google.com/docs/web/setup#available-libraries -->
+<script src="https://www.gstatic.com/firebasejs/8.0.0/firebase-analytics.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.0.0/firebase-database.js"></script>
+
+<script>
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  var firebaseConfig = {
+    apiKey: "AIzaSyDmfwhsxa2NJyfFV21tf3KXf6TDwbGW7Fg",
+    authDomain: "jon-test-4d4ac.firebaseapp.com",
+    databaseURL: "https://jon-test-4d4ac.firebaseio.com",
+    projectId: "jon-test-4d4ac",
+    storageBucket: "jon-test-4d4ac.appspot.com",
+    messagingSenderId: "824250517361",
+    appId: "1:824250517361:web:8e2410c6327ce5fda718d0",
+    measurementId: "G-3HKL0WKTTZ"
+  };
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+  firebase.analytics();
+  
+  var database = firebase.database();
+  
+  var mySession = new Object();
+
+  mySession.date = new Date().toUTCString();
+
+  var mySessionRef = database.ref('/userSessions/').push();
+  
+  mySessionRef.set(mySession);
+  
+</script>
+</body>
+</html>

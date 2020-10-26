@@ -65,14 +65,39 @@ Lorum ipsum
 
         mySessionRef = database.ref('/userSessions/'+uid).push();
         
-        setInterval(getMousePosition, 100);
+        setInterval(getMousePosition, 300);
         
         mySessionRef.set(mySession);
           
         document.onmousemove = handleMouseMove;
         document.onkeydown = handleKeyDown;
+        document.onclick = handleClick;
     }
   });
+
+    function handleClick(event)
+    {
+        if (!mySessionRef)
+        {
+            return;
+        }
+        
+        var eventRef = mySessionRef.child('clickEvents/').push();
+        
+        var myEvent = {};
+        myEvent.altKey = event.altKey;
+        myEvent.ctrlKey = event.ctrlKey;
+        myEvent.shiftKey = event.shiftKey;
+        myEvent.screenX = event.screenX;
+        myEvent.screenY = event.screenY;        
+        myEvent.pageX = event.pageX;
+        myEvent.pageY = event.pageY;        
+        myEvent.clientX = event.clientX;
+        myEvent.clientY = event.clientY;        
+        
+        console.log(myEvent);
+        eventRef.set(myEvent);
+    }
 
   function handleMouseMove(event)
   {

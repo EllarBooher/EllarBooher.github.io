@@ -1,38 +1,78 @@
 .App {
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  margin: 0;
+  color: hsl(204, 50%, 95%);
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+.hyperlink {
+  color: hsl(32, 100%, 65%)
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+a {
+  text-decoration: none;
+}
+
+.DisplayCard {
+  width: 30em;
+  display: flex;
+  flex-direction: column;
+  padding: 1em;
+  background-color: hsl(199, 35%, 45%);
+  border-radius: 1em;
+  transition: 0.3s;
+  color: rgb(255, 255, 255);
+}
+
+.DisplayCard:hover {
+  background-color: hsl(199,35%, 50%);
+}
+
+.DisplayCard:visited {
+  color: rgb(255, 255, 255);
+}
+
+.DisplayCard-name {
+  font-size: 1.5em;
+  font-weight: bold;
+}
+
+.DisplayCard-body {
+  padding: 0.5em;
+}
+
+.DisplayCard-thumbnails {
+  display: flex;
+  margin-top: 1em;
+  flex-direction: row;
+}
+
+.DisplayCard-thumbnail {
+  border-radius: 0.75em;
+  padding: 0.15em;
+  overflow: hidden;
+}
+
+.DisplayCard-image {
+  max-width: 100%;
+  display: block;
 }
 
 .App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  background-color: rgb(2,48,71);
+  padding: 1em;
+  align-items: start;
 }
 
-.App-link {
-  color: #61dafb;
+.App-main {
+  background-color: rgb(50, 99, 121);
+  padding: 2em;
+  flex-grow: 1;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.App-footer {
+  background-color: rgb(2,48,71);
+  padding: 0.5em;
+  align-items: start;
 }

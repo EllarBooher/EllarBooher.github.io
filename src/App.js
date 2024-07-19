@@ -1,8 +1,8 @@
 import { memo } from 'react';
 import './App.css';
 
-const emailLink = <a target="_blank" className="hyperlink" href="mailto:estelle.booher@gmail.com">estelle.booher@gmail.com</a>;
-const githubLink = <a target="_blank" className="hyperlink" href="https://github.com/EllarBooher">https://github.com/EllarBooher</a>;
+const emailLink = <a target="_blank" rel="noreferrer" className="hyperlink" href="mailto:estelle.booher@gmail.com">estelle.booher@gmail.com</a>;
+const githubLink = <a target="_blank" rel="noreferrer" className="hyperlink" href="https://github.com/EllarBooher">https://github.com/EllarBooher</a>;
 
 const DisplayCard = memo(({
   hyperlink, 
@@ -13,11 +13,11 @@ const DisplayCard = memo(({
   const thumbnails = <div className="DisplayCard-thumbnails">{
     thumbnailAssets.map(e => 
       <div className="DisplayCard-thumbnail">
-        <img className="DisplayCard-image" src={e}/>
+        <img className="DisplayCard-image" src={e} alt=""/>
       </div>)
   }</div>;
 
-  return (<a className="DisplayCard" href={hyperlink} target="_blank">
+  return (<a className="DisplayCard" href={hyperlink} target="_blank" rel="noreferrer">
     <div>
       <div className="DisplayCard-name">
         {title}
@@ -39,8 +39,8 @@ function App() {
       <div className="App-main">
         <div>
           Hello, my name is Estelle Booher. 
-          I am working on building a portfolio and career in computer graphics, 
-          and my passion is realtime rendering and engine backend infrastructure. 
+          My passion is realtime rendering and engine infrastructure, and
+          I am actively working on building a portfolio and career in computer graphics.
           This website is a landing spot where I will host links to various projects of mine.
           <br/>
           <br/>
@@ -48,7 +48,7 @@ function App() {
           <br/>
           To contact me, please email at {emailLink}.
           <br/>
-          <h1>Graphics Programming</h1>
+          <h1>Computer Graphics</h1>
           <DisplayCard 
             hyperlink={`https://github.com/EllarBooher/Syzygy`} 
             thumbnailAssets={[ require('./assets/syzygy1.png'), require('./assets/syzygy2.png') ]}
@@ -64,7 +64,7 @@ function App() {
             thumbnailAssets={[ require('./assets/snailblazer1.png'), require('./assets/snailblazer2.png')]}
             title={`Snail Blazer`}
             description={`
-              A short bullet-hell video game made for the Bullet Hell Jam 2023 on itch.io. 
+              A short bullet-hell made for the Bullet Hell Jam 2023 on itch.io. 
               The player primarily moves via grappling on enemy projectiles and the environment, 
               instead of the conventional WASD-style of movement.
             `}
@@ -72,7 +72,7 @@ function App() {
         </div>
       </div>
       <footer className="App-footer">
-        All works present are copyrighted, unless externally provided with attributions or license.
+        All works present are copyrighted, unless provided with external attributions or license.
       </footer>
     </div>
   );

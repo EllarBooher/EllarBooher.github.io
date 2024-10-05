@@ -51,11 +51,11 @@ function App() {
           <h1>Computer Graphics</h1>
           <DisplayCard 
             hyperlink={`https://github.com/EllarBooher/Syzygy`} 
-            thumbnailAssets={[ require('./assets/syzygy1.png'), require('./assets/syzygy2.png') ]}
+            thumbnailAssets={[ require('./assets/syzygy1.png') ]}
             title={`Syzygy`} 
             description={`
               A sandbox renderer I started to study C++ and Vulkan. 
-              It aims to implement various features common in modern engines.
+              It aims to be a testbed of various features and techniques.
             `}
           />
           <h1>Video Games</h1>

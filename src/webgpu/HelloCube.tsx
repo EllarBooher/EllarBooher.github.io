@@ -1,6 +1,5 @@
 import { getDevice, draw } from "./HelloCube";
 import { useEffect, useState, useRef } from "react";
-import { NavigateLink } from "../NavigateLink";
 
 export function HelloCube() {
     const [device, setDevice] = useState<GPUDevice | undefined>(undefined);
@@ -71,15 +70,11 @@ export function HelloCube() {
                 width: '100vw', 
                 height: '100vh'
             }}>
-                <header style={{flexGrow: 0}} className="website-header">
-                    <NavigateLink link="/" label="Estelle Booher"/> {`>`} <NavigateLink link="/hello-cube" label="Hello Cube"/> 
-                </header>
                 {(initialized && !device) ? errorBlock : null}
                 <canvas style={{        
                     visibility: initialized ? 'visible' : 'hidden',
                     width: '100%',
                     flexGrow: 2,
-                    // display: 'block',
                 }}/>
                 <p style={{  
                     backgroundColor: 'rgb(2,48,71)',

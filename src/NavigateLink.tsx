@@ -1,6 +1,6 @@
-import React from 'react';
-import { useNavigate } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import './NavigateLink.css';
+import { memo } from "react";
 
 interface NavigateLinkProps
 {
@@ -8,14 +8,49 @@ interface NavigateLinkProps
     label: string,
 }
 
-export const NavigateLink = ({link, label} : NavigateLinkProps) => {
+const pathSegmentToTitles = new Map<string, string>([
+    ["", "Estelle Booher"],
+    ["hello-cube", "Hello Cube"]
+]);
+
+const NavigateLink = memo(function NavigateLink({link, label} : NavigateLinkProps) {
     const navigate = useNavigate();
 
     const handleClick = () => {
+        console.log(link);
         navigate(link);
     }
-
     return (
         <button className="nav-button" onClick={handleClick} type="button">{label}</button>
     );
-}
+})
+
+export const NavigationHeader = memo(function NavigationHeader() {
+    const location = useLocation();
+
+    let navSteps = [
+        <>
+            <NavigateLink link={"/"} label={pathSegmentToTitles.get("")!}/>
+        </>
+    ];
+    
+    if (location.pathname != "/")
+    {
+        const pathSegments = location.pathname.substring(1).split("/");
+        let accumulatedLink = "/"; 
+        navSteps.push(...pathSegments.map((segment: string, index: number) => {
+            const prettySegment = pathSegmentToTitles.get(segment);
+            const separator = index > 0 ? '/' : '';
+            accumulatedLink = accumulatedLink.concat(`${separator}${segment}`);
+            console.log(`${segment} | ${accumulatedLink}`)
+            return <>
+                {' > '}
+                <NavigateLink link={accumulatedLink} label={prettySegment ? prettySegment : segment}/>
+            </>
+        }));
+    }
+
+    return <header style={{flexGrow: 0}} className="website-header">
+        {navSteps}
+    </header>
+});

@@ -6,17 +6,17 @@ const githubLink = <a target="_blank" rel="noreferrer" className="hyperlink" hre
 
 interface DisplayCardProps {
   hyperlink: string;
-  thumbnailAssets: Array<URL>;
+  thumbnailAssets: URL[];
   title: string;
   description: string;
 }
 
-const DisplayCard = memo(({
+const DisplayCard = memo(function DisplayCard({
   hyperlink, 
   thumbnailAssets=[],
   title=`PLACEHOLDER TITLE`, 
   description=`PLACEHOLDER DESCRIPTION`
-}: DisplayCardProps) => {
+}: DisplayCardProps) {
   const thumbnails = <div className="DisplayCard-thumbnails">{
     thumbnailAssets.map((url: URL) => 
       <div className="DisplayCard-thumbnail" key={url.toString()}>

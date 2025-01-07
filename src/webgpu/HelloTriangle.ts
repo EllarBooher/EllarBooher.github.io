@@ -1,15 +1,18 @@
 import shaderSource from '../shaders/main.wgsl';
 
 export function drawTriangle(device: GPUDevice) {
-    device.lost.then((reason) => {
+    void device.lost.then((reason) => {
         throw new Error(`WebGPU device lost - ("${reason.reason}"):\n ${reason.message}`);
+    }, (err) => {
+        // This shouldn't happen
+        throw new Error(`WebGPU device lost rejected`, {cause: err})
     })
     device.onuncapturederror = (ev) => {
         throw new Error(`WebGPU device uncaptured error: ${ev.error.message}`)
     }
 
-    const canvas = document.querySelector('canvas') as HTMLCanvasElement;
-    const context = canvas.getContext('webgpu') as GPUCanvasContext;
+    const canvas = document.querySelector('canvas')!;// as HTMLCanvasElement;
+    const context = canvas.getContext('webgpu')!;// as GPUCanvasContext;
 
     const devicePixelRatio = window.devicePixelRatio;
     canvas.width = canvas.clientWidth * devicePixelRatio;
@@ -36,7 +39,7 @@ export function drawTriangle(device: GPUDevice) {
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
     });
     device.queue.writeBuffer(vertexBuffer, 0, vertices, 0, vertices.length);
-    const vertexBuffers: Array<GPUVertexBufferLayout> = [{ attributes: [
+    const vertexBuffers: GPUVertexBufferLayout[] = [{ attributes: [
             {shaderLocation: 0, offset: 0, format: "float32x4",},
             {shaderLocation: 1, offset: 16, format: "float32x4"},
         ],
@@ -104,11 +107,11 @@ export async function getDevice(): Promise<GPUDevice> {
         }).then(device => {
             if(device)
             {
-                resolve(device!);
+                resolve(device);
             }
             reject(new Error(`No WebGPU device.`));
         }).catch(reason => {
-            reject(new Error("Unable to get WebGPU Device", {cause: new Error(`${reason.reason} - ${reason.message}`)}));
+            reject(new Error("Unable to get WebGPU Device", {cause: reason}));
         });
     });
 }

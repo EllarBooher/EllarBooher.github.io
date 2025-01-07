@@ -12,7 +12,7 @@ function HelloTriangle() {
         }, (err) => {
             console.error(err);
             setErrorMessage(
-                `${err.message}`
+                `${err}`
             );
         }).finally(() => {
             setInitialized(true);
@@ -22,7 +22,7 @@ function HelloTriangle() {
     useEffect(() => {
         if (device)
         {
-            drawTriangle(device!);
+            drawTriangle(device);
         }
     }, [device]);
 

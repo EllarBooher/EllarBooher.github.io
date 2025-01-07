@@ -39,6 +39,7 @@ code {
   border-radius: 1em;
   transition: 0.3s;
   color: rgb(255, 255, 255);
+  cursor: pointer;
 }
 
 .DisplayCard:hover {

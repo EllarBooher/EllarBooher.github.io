@@ -33,3 +33,10 @@ a:link {
   color: hsl(32, 100%, 65%)
 }
 a:hover{color:hsl(33, 45%, 45%);}
+
+button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+}

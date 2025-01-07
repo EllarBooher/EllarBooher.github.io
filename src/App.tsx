@@ -40,10 +40,10 @@ const DisplayCard = memo(({
 function App() {
   return (
     <div className="App">
-      <header className="App-header">
+      <header className="website-header">
         Estelle Booher
       </header>
-      <div className="App-main">
+      <div className="website-main">
         <div>
           Hello, my name is Estelle Booher. 
           My passion is realtime rendering and engine infrastructure, and
@@ -55,7 +55,18 @@ function App() {
           <br/>
           To contact me, please email at {emailLink}.
           <br/>
-          <h1>Computer Graphics</h1>
+          <h1>WebGPU</h1>
+          <div className="DisplayGrid">
+            <DisplayCard 
+              hyperlink={`/hello-triangle`} 
+              thumbnailAssets={[]}
+              title={`Hello Triangle`} 
+              description={`
+                Test of WebGPU.
+              `}
+            />
+          </div>
+          <h1>Computer Graphics Offline</h1>
           <div className="DisplayGrid">
             <DisplayCard 
               hyperlink={`https://github.com/EllarBooher/Syzygy`} 
@@ -88,7 +99,7 @@ function App() {
           />
         </div>
       </div>
-      <footer className="App-footer">
+      <footer className="website-footer">
         All works present are copyrighted, unless provided with external attributions or license.
       </footer>
     </div>

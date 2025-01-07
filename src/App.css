@@ -14,6 +14,12 @@ a {
   text-decoration: none;
 }
 
+.DisplayGrid {
+  display: flex;
+  gap: 1em;
+  flex-wrap: wrap;
+}
+
 .DisplayCard {
   width: 30em;
   max-width: 90%;

@@ -4,16 +4,23 @@ import './App.css';
 const emailLink = <a target="_blank" rel="noreferrer" className="hyperlink" href="mailto:estelle.booher@gmail.com">estelle.booher@gmail.com</a>;
 const githubLink = <a target="_blank" rel="noreferrer" className="hyperlink" href="https://github.com/EllarBooher">https://github.com/EllarBooher</a>;
 
+interface DisplayCardProps {
+  hyperlink: string;
+  thumbnailAssets: Array<URL>;
+  title: string;
+  description: string;
+}
+
 const DisplayCard = memo(({
   hyperlink, 
   thumbnailAssets=[],
   title=`PLACEHOLDER TITLE`, 
   description=`PLACEHOLDER DESCRIPTION`
-}) => {
+}: DisplayCardProps) => {
   const thumbnails = <div className="DisplayCard-thumbnails">{
-    thumbnailAssets.map(e => 
-      <div className="DisplayCard-thumbnail">
-        <img className="DisplayCard-image" src={e} alt=""/>
+    thumbnailAssets.map((url: URL) => 
+      <div className="DisplayCard-thumbnail" key={url.toString()}>
+        <img className="DisplayCard-image" src={url.toString()} alt=""/>
       </div>)
   }</div>;
 
@@ -49,19 +56,29 @@ function App() {
           To contact me, please email at {emailLink}.
           <br/>
           <h1>Computer Graphics</h1>
-          <DisplayCard 
-            hyperlink={`https://github.com/EllarBooher/Syzygy`} 
-            thumbnailAssets={[ require('./assets/syzygy1.png') ]}
-            title={`Syzygy`} 
-            description={`
-              A sandbox renderer I started to study C++ and Vulkan. 
-              It aims to be a testbed of various features and techniques.
-            `}
-          />
+          <div className="DisplayGrid">
+            <DisplayCard 
+              hyperlink={`https://github.com/EllarBooher/Syzygy`} 
+              thumbnailAssets={[ new URL('./assets/syzygy1.png', import.meta.url) ]}
+              title={`Syzygy`} 
+              description={`
+                A sandbox renderer I started to study C++ and Vulkan. 
+                It aims to be a testbed of various features and techniques.
+              `}
+            />
+            <DisplayCard 
+              hyperlink={`https://github.com/EllarBooher/VulkanTemplate/tree/SSAO`} 
+              thumbnailAssets={[ new URL('./assets/ssao1.png', import.meta.url) ]}
+              title={`SSAO`} 
+              description={`
+                An implementation of Screen-Space Ambient Occlusion.
+              `}
+            />
+          </div>
           <h1>Video Games</h1>
           <DisplayCard 
             hyperlink={`https://ellarbooher.itch.io/snail-blazer`}
-            thumbnailAssets={[ require('./assets/snailblazer1.png'), require('./assets/snailblazer2.png')]}
+            thumbnailAssets={[ new URL('./assets/snailblazer1.png', import.meta.url), new URL('./assets/snailblazer2.png', import.meta.url)]}
             title={`Snail Blazer`}
             description={`
               A short bullet-hell made for the Bullet Hell Jam 2023 on itch.io. 

@@ -22,6 +22,10 @@ export function HelloCube() {
         }).finally(() => {
             setInitialized(true);
         });
+
+        return () => {
+            device?.destroy();
+        }
     }, []);
 
     const animate = (time: number) => {

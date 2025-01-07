@@ -174,6 +174,10 @@ export function draw(device: GPUDevice, time: number) {
 
     passEncoder.end();
     device.queue.submit([commandEncoder.finish()]);
+
+    vertexBuffer.destroy();
+    indexBuffer.destroy();
+    projViewModelBuffer.destroy();
 }
 
 export async function getDevice(): Promise<GPUDevice> {

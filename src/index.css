@@ -18,3 +18,14 @@
   align-items: start;
   color: hsl(204, 50%, 95%);
 }
+
+a:active {
+  color: inherit
+}
+a:visited {
+  color: inherit
+}
+a:link {
+  color: inherit
+}
+a:hover{color:hsl(201, 9%, 63%);}

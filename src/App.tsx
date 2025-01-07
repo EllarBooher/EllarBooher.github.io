@@ -1,11 +1,14 @@
 import { memo } from 'react';
 import './App.css';
+import { useNavigate } from "react-router";
+import { NavigateLink } from './NavigateLink';
 
 const emailLink = <a target="_blank" rel="noreferrer" className="hyperlink" href="mailto:estelle.booher@gmail.com">estelle.booher@gmail.com</a>;
 const githubLink = <a target="_blank" rel="noreferrer" className="hyperlink" href="https://github.com/EllarBooher">https://github.com/EllarBooher</a>;
 
 interface DisplayCardProps {
   hyperlink: string;
+  externalLink?: boolean;
   thumbnailAssets: URL[];
   title: string;
   description: string;
@@ -13,6 +16,7 @@ interface DisplayCardProps {
 
 const DisplayCard = memo(function DisplayCard({
   hyperlink, 
+  externalLink = true,
   thumbnailAssets=[],
   title=`PLACEHOLDER TITLE`, 
   description=`PLACEHOLDER DESCRIPTION`
@@ -24,7 +28,20 @@ const DisplayCard = memo(function DisplayCard({
       </div>)
   }</div>;
 
-  return (<a className="DisplayCard" href={hyperlink} target="_blank" rel="noreferrer">
+  const navigate = useNavigate();
+
+  const handleClick = () => {
+      if(externalLink)
+      {
+        window.location.href = hyperlink;
+      }
+      else
+      {
+        navigate(hyperlink);
+      }
+  }
+
+  return (<button className="DisplayCard" onClick={handleClick}>
     <div>
       <div className="DisplayCard-name">
         {title}
@@ -34,14 +51,14 @@ const DisplayCard = memo(function DisplayCard({
         {thumbnails}
       </div>
     </div>
-  </a>);
+  </button>);
 });
 
 function App() {
   return (
     <div className="App">
       <header className="website-header">
-        Estelle Booher
+        <NavigateLink link="/" label="Estelle Booher"/>
       </header>
       <div className="website-main">
         <div>
@@ -58,9 +75,10 @@ function App() {
           <h1>WebGPU</h1>
           <div className="DisplayGrid">
             <DisplayCard 
-              hyperlink={`/#/hello-triangle`} 
+              hyperlink={`/hello-cube`} 
+              externalLink={false}
               thumbnailAssets={[]}
-              title={`Hello Triangle`} 
+              title={`Hello Cube`} 
               description={`
                 Test of WebGPU.
               `}

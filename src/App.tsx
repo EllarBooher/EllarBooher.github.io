@@ -58,7 +58,7 @@ function App() {
           <h1>WebGPU</h1>
           <div className="DisplayGrid">
             <DisplayCard 
-              hyperlink={`/hello-triangle`} 
+              hyperlink={`/#/hello-triangle`} 
               thumbnailAssets={[]}
               title={`Hello Triangle`} 
               description={`

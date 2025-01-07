@@ -1,5 +1,22 @@
 import { getDevice, draw } from "./HelloCube";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, memo } from "react";
+
+interface FPSIndicatorProps
+{
+    deltaTime: number,
+}
+
+const FPSIndicator = memo(function FPSIndicator({deltaTime}: FPSIndicatorProps) {
+    return <p style={{  
+        backgroundColor: 'rgb(2,48,71)',
+        padding: '1em',
+        alignItems: 'start',
+        color: 'hsl(204, 50%, 95%)',
+        flexGrow: 0,
+    }}> 
+        FPS: {(1000.0 / deltaTime).toFixed(2)}
+    </p>
+});
 
 export function HelloCube() {
     const [device, setDevice] = useState<GPUDevice | undefined>(undefined);
@@ -76,15 +93,7 @@ export function HelloCube() {
                     width: '100%',
                     flexGrow: 2,
                 }}/>
-                <p style={{  
-                    backgroundColor: 'rgb(2,48,71)',
-                    padding: '1em',
-                    alignItems: 'start',
-                    color: 'hsl(204, 50%, 95%)',
-                    flexGrow: 0,
-                }}> 
-                    FPS: {deltaTime ? (1000.0 / deltaTime).toFixed(2) : null}
-                </p>
+            {deltaTime ? <FPSIndicator deltaTime={deltaTime!}/> : null}
             </div>
         </div>
     )

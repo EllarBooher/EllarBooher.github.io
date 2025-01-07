@@ -23,14 +23,6 @@ code {
     monospace;
 }
 
-.hyperlink {
-  color: hsl(32, 100%, 65%)
-}
-
-a {
-  text-decoration: none;
-}
-
 .DisplayGrid {
   display: flex;
   gap: 1em;

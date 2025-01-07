@@ -19,13 +19,17 @@
   color: hsl(204, 50%, 95%);
 }
 
+a {
+  text-decoration: none;
+}
+
 a:active {
-  color: inherit
+  color: hsl(32, 100%, 65%)
 }
 a:visited {
-  color: inherit
+  color: hsl(32, 72%, 55%)
 }
 a:link {
-  color: inherit
+  color: hsl(32, 100%, 65%)
 }
-a:hover{color:hsl(201, 9%, 63%);}
+a:hover{color:hsl(33, 45%, 45%);}

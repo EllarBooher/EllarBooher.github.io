@@ -3,8 +3,8 @@ import './App.css';
 import { useNavigate } from "react-router";
 import { NavigateLink } from './NavigateLink';
 
-const emailLink = <a target="_blank" rel="noreferrer" className="hyperlink" href="mailto:estelle.booher@gmail.com">estelle.booher@gmail.com</a>;
-const githubLink = <a target="_blank" rel="noreferrer" className="hyperlink" href="https://github.com/EllarBooher">https://github.com/EllarBooher</a>;
+const emailLink = <a target="_blank" rel="noreferrer" href="mailto:estelle.booher@gmail.com">estelle.booher@gmail.com</a>;
+const githubLink = <a target="_blank" rel="noreferrer" href="https://github.com/EllarBooher">https://github.com/EllarBooher</a>;
 
 interface DisplayCardProps {
   hyperlink: string;

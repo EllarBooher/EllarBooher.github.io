@@ -1,41 +1,23 @@
 import { getDevice, draw } from "./HelloCube";
-import { useEffect, useState, useRef, memo } from "react";
-import { Fragment } from "react";
-
-interface FPSIndicatorProps
-{
-    deltaTime: number,
-}
-
-const FPSIndicator = memo(function FPSIndicator({deltaTime}: FPSIndicatorProps) {
-    return <p style={{  
-        backgroundColor: 'rgb(2,48,71)',
-        padding: '1em',
-        margin: 0,
-        alignItems: 'start',
-        color: 'hsl(204, 50%, 95%)',
-    }}> 
-        FPS: {(1000.0 / deltaTime).toFixed(2)}
-    </p>
-});
+import { useEffect, useCallback, useState, useRef, memo } from "react";
 
 interface RenderingCanvasProps
 {
     device: GPUDevice
 }
 
-const RenderingCanvas = memo(function RenderingCanvas({device}: RenderingCanvasProps){
+const RenderingCanvas = function RenderingCanvas({device}: RenderingCanvasProps){
     const animateRequestRef = useRef<number>();
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    const animate = (time: number) => {
+    const animate = useCallback((time: number) => {
         if (device) {
             draw(device, time);
         }
         animateRequestRef.current = requestAnimationFrame(animate);
-    }
+    }, [device]);
 
-    const resizeCanvas = () => {
+    const resizeCanvas = useCallback(() => {
         const canvas = canvasRef.current;
 
         if(canvas)
@@ -44,7 +26,7 @@ const RenderingCanvas = memo(function RenderingCanvas({device}: RenderingCanvasP
             canvas.width = canvas.offsetWidth * devicePixelRatio;
             canvas.height = canvas.offsetHeight * devicePixelRatio;
         }
-    };
+    }, []);
 
     useEffect(() => {
         animateRequestRef.current = requestAnimationFrame(animate);
@@ -55,15 +37,15 @@ const RenderingCanvas = memo(function RenderingCanvas({device}: RenderingCanvasP
                 cancelAnimationFrame(animateRequestRef.current);
             }
         }
-    }, [])
+    }, [animate])
     useEffect(() => {
         resizeCanvas();
         window.addEventListener("resize", resizeCanvas);
         return () => {
             window.removeEventListener("resize", resizeCanvas);
         }
-    }, [])
-    
+    }, [resizeCanvas])
+
     return <div 
         style={{
             color: 'hsl(204, 50%, 95%)', 
@@ -79,13 +61,14 @@ const RenderingCanvas = memo(function RenderingCanvas({device}: RenderingCanvasP
         }}
     />
     </div>
-});
+}
 
 export const HelloCube = memo(function HelloCube() {
-    const [device, setDevice] = useState<GPUDevice | undefined>(undefined);
+    const [device, setDevice] = useState<GPUDevice>();
     const [initialized, setInitialized] = useState(false);
 
     useEffect(() => {
+        setInitialized(false);
         getDevice().then((value) => {
             setDevice(value);
         }, (err) => {
@@ -93,11 +76,27 @@ export const HelloCube = memo(function HelloCube() {
         }).finally(() => {
             setInitialized(true);
         });
+    }, [setDevice]);
 
-        return () => {
-            device?.destroy();
+    useEffect(() => {
+        if(device)
+        {
+            device.lost.then((reason) => {
+                console.log(`WebGPU device lost - ("${reason.reason}"):\n ${reason.message}`);
+                setDevice(undefined);
+            }, (err) => {
+                // This shouldn't happen
+                throw new Error(`WebGPU device lost rejected`, {cause: err})
+            })
+            device.onuncapturederror = (ev) => {
+                console.error(`WebGPU device uncaptured error: ${ev.error.message}`);
+            }
+
+            return () => {
+                device?.destroy();
+            }
         }
-    }, []);
+    }, [device]);
 
     const errorBlock =<p style={{  
         backgroundColor: 'rgb(50, 99, 121)',

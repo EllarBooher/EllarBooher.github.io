@@ -7,4 +7,8 @@ interface RendererApp
         aspectRatio: number, 
         time: number
     ) => void;
+    prepare: (
+        device: GPUDevice, 
+        presentFormat: GPUTextureFormat
+    ) => void;
 };

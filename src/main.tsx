@@ -21,12 +21,12 @@ createRoot(root).render(
             <Route index element={<App />} />
             <Route path="hello-cube" element={
               <div style={{flex: 1, overflow: 'hidden'}}>
-                <RendererComponent app={HelloCubeApp}/>        
+                <RendererComponent app={new HelloCubeApp}/>        
               </div>
             }/>
             <Route path="sky-sea" element={
               <div style={{flex: 1, overflow: 'hidden'}}>
-                <RendererComponent app={SkySeaApp}/>        
+                <RendererComponent app={new SkySeaApp}/>        
               </div>
             }/>
           </Routes>

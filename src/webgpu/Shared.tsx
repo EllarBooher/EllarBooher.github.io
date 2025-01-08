@@ -13,17 +13,19 @@ const RenderingCanvas = function RenderingCanvas({device, app}: RenderingCanvasP
 
     const animate = useCallback((time: number) => {
         const drawContext = canvasRef.current?.getContext("webgpu");
+
         if (device && drawContext) {
             app.draw(
-                device, 
+                device,
                 drawContext.getCurrentTexture().createView(), 
                 navigator.gpu.getPreferredCanvasFormat(),
                 canvasRef.current!.width / canvasRef.current!.height,
                 time
             );
+
+            animateRequestRef.current = requestAnimationFrame(animate);
         }
-        animateRequestRef.current = requestAnimationFrame(animate);
-    }, [device]);
+    }, [device, app]);
 
     const resizeCanvas = useCallback(() => {
         const canvas = canvasRef.current;
@@ -54,7 +56,7 @@ const RenderingCanvas = function RenderingCanvas({device, app}: RenderingCanvasP
                 }
             }
         }
-    }, [animate])
+    }, [animate, device])
     useEffect(() => {
         resizeCanvas();
         window.addEventListener("resize", resizeCanvas);
@@ -98,6 +100,8 @@ export const RendererComponent = memo(function RendererComponent({app}: {app: Re
     useEffect(() => {
         if(device)
         {
+            app.prepare(device, navigator.gpu.getPreferredCanvasFormat());
+
             device.lost.then((reason) => {
                 console.log(`WebGPU device lost - ("${reason.reason}"):\n ${reason.message}`);
                 setDevice(undefined);

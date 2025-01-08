@@ -17,7 +17,9 @@ const NavigateLink = memo(function NavigateLink({link, label} : NavigateLinkProp
     const navigate = useNavigate();
 
     const handleClick = () => {
-        navigate(link);
+        navigate(link)?.catch((err) => {
+            throw new Error("Unable to navigate", {cause: err});
+        });
     }
     return (
         <button className="nav-button" onClick={handleClick} type="button">{label}</button>
@@ -27,8 +29,8 @@ const NavigateLink = memo(function NavigateLink({link, label} : NavigateLinkProp
 export const NavigationHeader = memo(function NavigationHeader() {
     const location = useLocation();
 
-    let navSteps = [
-        <Fragment key={pathSegmentToTitles.get("")!}>
+    const navSteps = [
+        <Fragment key={pathSegmentToTitles.get("")}>
             <NavigateLink link={"/"} label={pathSegmentToTitles.get("")!}/>
         </Fragment>
     ];

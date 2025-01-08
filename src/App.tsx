@@ -36,7 +36,9 @@ const DisplayCard = memo(function DisplayCard({
       }
       else
       {
-        navigate(hyperlink);
+        navigate(hyperlink)?.catch((err) => {
+          throw new Error("Unable to navigate", {cause: err});
+        });
       }
   }
 

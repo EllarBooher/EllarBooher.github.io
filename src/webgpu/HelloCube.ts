@@ -1,7 +1,9 @@
 import shaderSource from '../shaders/main.wgsl';
 import { mat4 } from 'wgpu-matrix';
 
-export function draw(device: GPUDevice, presentView: GPUTextureView, presentFormat: GPUTextureFormat, aspectRatio: number, time: number) {
+// Draw a simple cube
+
+function drawCube(device: GPUDevice, presentView: GPUTextureView, presentFormat: GPUTextureFormat, aspectRatio: number, time: number) {
     const shaderModule = device.createShaderModule({
         code: shaderSource,
     });
@@ -158,23 +160,6 @@ export function draw(device: GPUDevice, presentView: GPUTextureView, presentForm
     projViewModelBuffer.destroy();
 }
 
-export async function getDevice(): Promise<GPUDevice> {
-    return new Promise<GPUDevice>((resolve, reject) => {
-        console.log("Starting WebGPU");
-        if(!('gpu' in navigator)) {
-            reject(new Error("WebGPU is not available in this browser.", {cause: new Error("navigator.gpu is null")}));
-        }
-    
-        navigator.gpu.requestAdapter().then(adapter => {
-            return adapter?.requestDevice();
-        }).then(device => {
-            if(device)
-            {
-                resolve(device);
-            }
-            reject(new Error(`No WebGPU device.`));
-        }).catch(reason => {
-            reject(new Error("Unable to get WebGPU Device", {cause: reason}));
-        });
-    });
-}
+export const HelloCubeApp: RendererApp = {
+    draw: drawCube,
+};

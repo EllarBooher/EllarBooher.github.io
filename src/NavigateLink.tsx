@@ -10,7 +10,8 @@ interface NavigateLinkProps
 
 const pathSegmentToTitles = new Map<string, string>([
     ["", "Estelle Booher"],
-    ["hello-cube", "Hello Cube"]
+    ["hello-cube", "Hello Cube"],
+    ["sky-sea", "Sky and Sea"]
 ]);
 
 const NavigateLink = memo(function NavigateLink({link, label} : NavigateLinkProps) {

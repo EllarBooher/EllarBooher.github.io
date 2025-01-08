@@ -1,19 +1,20 @@
-import { getDevice, draw } from "./HelloCube";
 import { useEffect, useCallback, useState, useRef, memo } from "react";
+import { getDevice } from "./Shared";
 
 interface RenderingCanvasProps
 {
-    device: GPUDevice
+    device: GPUDevice,
+    app: RendererApp,
 }
 
-const RenderingCanvas = function RenderingCanvas({device}: RenderingCanvasProps){
+const RenderingCanvas = function RenderingCanvas({device, app}: RenderingCanvasProps){
     const animateRequestRef = useRef<number>();
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const animate = useCallback((time: number) => {
         const drawContext = canvasRef.current?.getContext("webgpu");
         if (device && drawContext) {
-            draw(
+            app.draw(
                 device, 
                 drawContext.getCurrentTexture().createView(), 
                 navigator.gpu.getPreferredCanvasFormat(),
@@ -79,7 +80,7 @@ const RenderingCanvas = function RenderingCanvas({device}: RenderingCanvasProps)
     </div>
 }
 
-export const HelloCube = memo(function HelloCube() {
+export const RendererComponent = memo(function RendererComponent({app}: {app: RendererApp}) {
     const [device, setDevice] = useState<GPUDevice>();
     const [initialized, setInitialized] = useState(false);
 
@@ -124,7 +125,7 @@ export const HelloCube = memo(function HelloCube() {
 
     return <>
         {
-            initialized ? <>{device ? <RenderingCanvas device={device}/> : errorBlock}</> : null
+            initialized ? <>{device ? <RenderingCanvas device={device} app={app}/> : errorBlock}</> : null
         }
     </>
 });

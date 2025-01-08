@@ -138,7 +138,7 @@ export function draw(device: GPUDevice, time: number) {
 
     const commandEncoder = device.createCommandEncoder();
 
-    const clearColor = {r: 0.0, g: 0.3, b: 0.6, a: 1.0};
+    const clearColor = {r: 0.5, g: 0.5, b: 0.5, a: 0.0};
     const presentationView = context.getCurrentTexture().createView();
     const drawVerticesPass: GPURenderPassDescriptor = {
         colorAttachments: [
@@ -179,15 +179,6 @@ export async function getDevice(): Promise<GPUDevice> {
         }).then(device => {
             if(device)
             {
-                void device.lost.then((reason) => {
-                    throw new Error(`WebGPU device lost - ("${reason.reason}"):\n ${reason.message}`);
-                }, (err) => {
-                    // This shouldn't happen
-                    throw new Error(`WebGPU device lost rejected`, {cause: err})
-                })
-                device.onuncapturederror = (ev) => {
-                    throw new Error(`WebGPU device uncaptured error: ${ev.error.message}`)
-                }
                 resolve(device);
             }
             reject(new Error(`No WebGPU device.`));

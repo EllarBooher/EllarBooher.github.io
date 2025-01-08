@@ -1,14 +1,7 @@
 import shaderSource from '../shaders/main.wgsl';
 import { mat4 } from 'wgpu-matrix';
 
-export function draw(device: GPUDevice, time: number) {
-    const canvas = document.querySelector('canvas')!;// as HTMLCanvasElement;
-    const context = canvas.getContext('webgpu')!;// as GPUCanvasContext;
-
-    const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-
-    context.configure({device: device, format: presentationFormat});
-
+export function draw(device: GPUDevice, presentView: GPUTextureView, presentFormat: GPUTextureFormat, aspectRatio: number, time: number) {
     const shaderModule = device.createShaderModule({
         code: shaderSource,
     });
@@ -31,7 +24,7 @@ export function draw(device: GPUDevice, time: number) {
          1,  1,  1, 1.0,
             1.0, 1.0, 1.0, 1.0,
         -1,  1,  1, 1.0,
-                0.0, 1.0, 1.0, 1.0,
+            0.0, 1.0, 1.0, 1.0,
     ]);
     const indices = new Uint32Array([
         // -Z
@@ -55,10 +48,9 @@ export function draw(device: GPUDevice, time: number) {
     ]);
 
     const fov = 60 * Math.PI / 180
-    const aspect = canvas.width / canvas.height;
     const near = 0.1;
     const far = 1000;
-    const perspective = mat4.perspective(fov, aspect, near, far);
+    const perspective = mat4.perspective(fov, aspectRatio, near, far);
     
     const eye = [3, 5, 10];
     const target = [0, 0, 0];
@@ -121,7 +113,7 @@ export function draw(device: GPUDevice, time: number) {
             entryPoint: "fragment_main",
             targets: [
                 {
-                    format: presentationFormat
+                    format: presentFormat
                 },
             ]
         },
@@ -139,14 +131,13 @@ export function draw(device: GPUDevice, time: number) {
     const commandEncoder = device.createCommandEncoder();
 
     const clearColor = {r: 0.5, g: 0.5, b: 0.5, a: 0.0};
-    const presentationView = context.getCurrentTexture().createView();
     const drawVerticesPass: GPURenderPassDescriptor = {
         colorAttachments: [
             { 
                 clearValue: clearColor, 
                 loadOp: "clear", 
                 storeOp: "store", 
-                view: presentationView
+                view: presentView
             },
         ],
     };

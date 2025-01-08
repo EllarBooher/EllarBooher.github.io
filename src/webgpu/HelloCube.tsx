@@ -11,8 +11,15 @@ const RenderingCanvas = function RenderingCanvas({device}: RenderingCanvasProps)
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const animate = useCallback((time: number) => {
-        if (device) {
-            draw(device, time);
+        const drawContext = canvasRef.current?.getContext("webgpu");
+        if (device && drawContext) {
+            draw(
+                device, 
+                drawContext.getCurrentTexture().createView(), 
+                navigator.gpu.getPreferredCanvasFormat(),
+                canvasRef.current!.width / canvasRef.current!.height,
+                time
+            );
         }
         animateRequestRef.current = requestAnimationFrame(animate);
     }, [device]);
@@ -29,12 +36,21 @@ const RenderingCanvas = function RenderingCanvas({device}: RenderingCanvasProps)
     }, []);
 
     useEffect(() => {
-        animateRequestRef.current = requestAnimationFrame(animate);
-
-        return () => {
-            if (animateRequestRef.current)
-            {
-                cancelAnimationFrame(animateRequestRef.current);
+        const context = canvasRef.current?.getContext('webgpu');
+    
+        if (context)
+        {
+            const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+    
+            context.configure({device: device, format: presentationFormat});
+    
+            animateRequestRef.current = requestAnimationFrame(animate);
+    
+            return () => {
+                if (animateRequestRef.current)
+                {
+                    cancelAnimationFrame(animateRequestRef.current);
+                }
             }
         }
     }, [animate])

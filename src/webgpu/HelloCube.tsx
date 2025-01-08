@@ -91,10 +91,6 @@ export const HelloCube = memo(function HelloCube() {
             device.onuncapturederror = (ev) => {
                 console.error(`WebGPU device uncaptured error: ${ev.error.message}`);
             }
-
-            return () => {
-                device?.destroy();
-            }
         }
     }, [device]);
 

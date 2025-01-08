@@ -11,11 +11,20 @@ const root = document.getElementById('root')!;
 createRoot(root).render(
   <StrictMode>
     <HashRouter>
-      <NavigationHeader/>
-      <Routes>
-        <Route index element={<App />} />
-        <Route path="hello-cube" element={<HelloCube/>}/>
-      </Routes>
+      <div style={{display:"flex", flexDirection:"column", height: '100vh'}}>
+        <div style={{flex: '0 1 auto'}}>  
+          <NavigationHeader/>
+        </div>
+          <Routes>
+            <Route index element={<App />} />
+            <Route path="hello-cube" element={
+              <div style={{flex: 1, overflow: 'hidden'}}>
+                <HelloCube/>        
+              </div>
+            }/>
+          </Routes>
+
+      </div>
     </HashRouter>
   </StrictMode>,
 )

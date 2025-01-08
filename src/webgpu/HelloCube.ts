@@ -2,22 +2,9 @@ import shaderSource from '../shaders/main.wgsl';
 import { mat4 } from 'wgpu-matrix';
 
 export function draw(device: GPUDevice, time: number) {
-    void device.lost.then((reason) => {
-        throw new Error(`WebGPU device lost - ("${reason.reason}"):\n ${reason.message}`);
-    }, (err) => {
-        // This shouldn't happen
-        throw new Error(`WebGPU device lost rejected`, {cause: err})
-    })
-    device.onuncapturederror = (ev) => {
-        throw new Error(`WebGPU device uncaptured error: ${ev.error.message}`)
-    }
-
     const canvas = document.querySelector('canvas')!;// as HTMLCanvasElement;
     const context = canvas.getContext('webgpu')!;// as GPUCanvasContext;
 
-    const devicePixelRatio = window.devicePixelRatio;
-    canvas.width = canvas.clientWidth * devicePixelRatio;
-    canvas.height = canvas.clientHeight * devicePixelRatio;
     const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
 
     context.configure({device: device, format: presentationFormat});
@@ -192,6 +179,15 @@ export async function getDevice(): Promise<GPUDevice> {
         }).then(device => {
             if(device)
             {
+                void device.lost.then((reason) => {
+                    throw new Error(`WebGPU device lost - ("${reason.reason}"):\n ${reason.message}`);
+                }, (err) => {
+                    // This shouldn't happen
+                    throw new Error(`WebGPU device lost rejected`, {cause: err})
+                })
+                device.onuncapturederror = (ev) => {
+                    throw new Error(`WebGPU device uncaptured error: ${ev.error.message}`)
+                }
                 resolve(device);
             }
             reject(new Error(`No WebGPU device.`));

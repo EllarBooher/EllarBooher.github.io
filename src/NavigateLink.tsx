@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from "react-router";
 import './NavigateLink.css';
-import { memo } from "react";
+import { memo, Fragment } from "react";
 
 interface NavigateLinkProps
 {
@@ -17,7 +17,6 @@ const NavigateLink = memo(function NavigateLink({link, label} : NavigateLinkProp
     const navigate = useNavigate();
 
     const handleClick = () => {
-        console.log(link);
         navigate(link);
     }
     return (
@@ -29,9 +28,9 @@ export const NavigationHeader = memo(function NavigationHeader() {
     const location = useLocation();
 
     let navSteps = [
-        <>
+        <Fragment key={pathSegmentToTitles.get("")!}>
             <NavigateLink link={"/"} label={pathSegmentToTitles.get("")!}/>
-        </>
+        </Fragment>
     ];
     
     if (location.pathname != "/")
@@ -42,15 +41,14 @@ export const NavigationHeader = memo(function NavigationHeader() {
             const prettySegment = pathSegmentToTitles.get(segment);
             const separator = index > 0 ? '/' : '';
             accumulatedLink = accumulatedLink.concat(`${separator}${segment}`);
-            console.log(`${segment} | ${accumulatedLink}`)
-            return <>
+            return <Fragment key={prettySegment}>
                 {' > '}
                 <NavigateLink link={accumulatedLink} label={prettySegment ? prettySegment : segment}/>
-            </>
+            </Fragment>
         }));
     }
 
-    return <header style={{flexGrow: 0}} className="website-header">
+    return <header className="website-header">
         {navSteps}
     </header>
 });

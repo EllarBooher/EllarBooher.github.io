@@ -113,7 +113,7 @@ export const RendererComponent = memo(function RendererComponent({app}: {app: Re
                 console.error(`WebGPU device uncaptured error: ${ev.error.message}`);
             }
         }
-    }, [device]);
+    }, [device, app]);
 
     const errorBlock =<p style={{  
         backgroundColor: 'rgb(50, 99, 121)',

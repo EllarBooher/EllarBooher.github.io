@@ -4,7 +4,9 @@ import { mat4 } from 'wgpu-matrix';
 // Draw a simple cube
 
 export class HelloCubeApp implements RendererApp {
-    prepare(device: GPUDevice, presentFormat: GPUTextureFormat): void {};
+    prepare(_device: GPUDevice, _presentFormat: GPUTextureFormat): void {
+        // Do nothing. This example is simple enough to just construct resources each frame.
+    };
     draw(
         device: GPUDevice, 
         presentView: GPUTextureView, 

@@ -32,6 +32,16 @@ export default tseslint.config(
       ],
       ...react.configs.recommended.rules,
       ...react.configs['jsx-runtime'].rules,
+      "@typescript-eslint/no-unused-vars": [
+        'warn',
+        {
+          // Ignore just one underscore
+          // https://stackoverflow.com/a/78734642
+          "argsIgnorePattern": "^_[^_].*$|^_$",
+          "varsIgnorePattern": "^_[^_].*$|^_$",
+          "caughtErrorsIgnorePattern": "^_[^_].*$|^_$"
+        }
+      ]
     },
   },
 )

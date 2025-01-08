@@ -143,7 +143,7 @@ export class SkySeaApp implements RendererApp {
 
         device.queue.submit([commandEncoder.finish()]);
     }
-    draw(device: GPUDevice, presentView: GPUTextureView, presentFormat: GPUTextureFormat, _aspectRatio: number, _time: number): void
+    draw(device: GPUDevice, presentView: GPUTextureView, _presentFormat: GPUTextureFormat, _aspectRatio: number, _time: number): void
     {
         const commandEncoder = device.createCommandEncoder();
 
@@ -160,7 +160,7 @@ export class SkySeaApp implements RendererApp {
         });
         fullscreenPassEncoder.setPipeline(this.fullscreenPassPipeline!);
         fullscreenPassEncoder.setIndexBuffer(this.fullscreenQuadIndexBuffer!, "uint32", 0, this.fullscreenQuadIndexBuffer!.size);
-        fullscreenPassEncoder.setBindGroup(0, this.transmittanceLUTCombinedSamplerForFullscreenPass!);
+        fullscreenPassEncoder.setBindGroup(0, this.transmittanceLUTCombinedSamplerForFullscreenPass);
         fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
     
         fullscreenPassEncoder.end();

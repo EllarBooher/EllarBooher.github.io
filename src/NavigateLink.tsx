@@ -10,8 +10,7 @@ interface NavigateLinkProps
 
 const pathSegmentToTitles = new Map<string, string>([
     ["", "Estelle Booher"],
-    ["hello-cube", "Hello Cube"],
-    ["sky-sea", "Sky and Sea"]
+    ["webgpu-samples", "WebGPU Samples"]
 ]);
 
 const NavigateLink = memo(function NavigateLink({link, label} : NavigateLinkProps) {

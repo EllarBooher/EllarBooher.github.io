@@ -1,31 +1,11 @@
 import { useEffect, useCallback, useState, useRef, memo } from "react";
 import { getDevice } from "./Shared";
+import { useSearchParams } from "react-router";
+import { defaultSample, samplesByQueryParam } from "./samples";
 
-interface RenderingCanvasProps
-{
-    device: GPUDevice,
-    app: RendererApp,
-}
-
-const RenderingCanvas = function RenderingCanvas({device, app}: RenderingCanvasProps){
+const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
     const animateRequestRef = useRef<number>();
     const canvasRef = useRef<HTMLCanvasElement>(null);
-
-    const animate = useCallback((time: number) => {
-        const drawContext = canvasRef.current?.getContext("webgpu");
-
-        if (device && drawContext) {
-            app.draw(
-                device,
-                drawContext.getCurrentTexture().createView(), 
-                navigator.gpu.getPreferredCanvasFormat(),
-                canvasRef.current!.width / canvasRef.current!.height,
-                time
-            );
-
-            animateRequestRef.current = requestAnimationFrame(animate);
-        }
-    }, [device, app]);
 
     const resizeCanvas = useCallback(() => {
         const canvas = canvasRef.current;
@@ -39,31 +19,47 @@ const RenderingCanvas = function RenderingCanvas({device, app}: RenderingCanvasP
     }, []);
 
     useEffect(() => {
-        const context = canvasRef.current?.getContext('webgpu');
-    
-        if (context)
-        {
-            const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-    
-            context.configure({device: device, format: presentationFormat});
-    
-            animateRequestRef.current = requestAnimationFrame(animate);
-    
-            return () => {
-                if (animateRequestRef.current)
-                {
-                    cancelAnimationFrame(animateRequestRef.current);
-                }
-            }
-        }
-    }, [animate, device])
-    useEffect(() => {
         resizeCanvas();
         window.addEventListener("resize", resizeCanvas);
         return () => {
             window.removeEventListener("resize", resizeCanvas);
         }
     }, [resizeCanvas])
+
+    const animate = useCallback((time: number) => {
+        const drawContext = canvasRef.current?.getContext("webgpu");
+
+        if (drawContext) {
+            app.draw(
+                drawContext.getCurrentTexture().createView(),
+                canvasRef.current!.width / canvasRef.current!.height,
+                time
+            );
+
+            animateRequestRef.current = requestAnimationFrame(animate);
+        }
+    }, [app]);
+
+    useEffect(() => {
+        const context = canvasRef.current?.getContext('webgpu');
+    
+        if(!context)
+        {
+            console.error("'webgpu' canvas context not found, cannot animate.");
+            return;
+        }
+
+        context.configure({device: app.device, format: app.presentFormat});
+
+        animateRequestRef.current = requestAnimationFrame(animate);
+
+        return () => {
+            if (animateRequestRef.current)
+            {
+                cancelAnimationFrame(animateRequestRef.current);
+            }
+        }
+    }, [animate, app])
 
     return <div 
         style={{
@@ -82,29 +78,43 @@ const RenderingCanvas = function RenderingCanvas({device, app}: RenderingCanvasP
     </div>
 }
 
-export const RendererComponent = memo(function RendererComponent({app}: {app: RendererApp}) {
-    const [device, setDevice] = useState<GPUDevice>();
+export const RendererComponent = memo(function RendererComponent() {
+    const appRef = useRef<RendererApp>();
     const [initialized, setInitialized] = useState(false);
+    const [searchParams, _setSearchParams] = useSearchParams();
+
+    const getSample = useCallback(() => {
+        let sampleID = searchParams.get("sample");
+
+        if (!sampleID)
+        {
+            sampleID = defaultSample;
+        }
+
+        const sample = samplesByQueryParam.get(sampleID);
+        return sample;
+    }, [searchParams]);
 
     useEffect(() => {
         setInitialized(false);
-        getDevice().then((value) => {
-            setDevice(value);
-        }, (err) => {
-            console.error(err);
-        }).finally(() => {
-            setInitialized(true);
-        });
-    }, [setDevice]);
 
-    useEffect(() => {
-        if(device)
+        const sample = getSample();
+        if (!sample)
         {
-            app.prepare(device, navigator.gpu.getPreferredCanvasFormat());
+            setInitialized(true);
+            appRef.current = undefined;
+            return;
+        }
 
+        getDevice().then((device: GPUDevice) => {
+            // TODO: load this earlier so we don't need to rely on GPU being non-null again
+            const presentFormat = navigator.gpu.getPreferredCanvasFormat();
+            appRef.current = sample.create(device, presentFormat);
+
+            // We could try to recreate the device and app, but outside of hotloading/dev that seems unnecessary
+            // The user can just reload the page if a crash occurs
             device.lost.then((reason) => {
                 console.log(`WebGPU device lost - ("${reason.reason}"):\n ${reason.message}`);
-                setDevice(undefined);
             }, (err) => {
                 // This shouldn't happen
                 throw new Error(`WebGPU device lost rejected`, {cause: err})
@@ -112,8 +122,12 @@ export const RendererComponent = memo(function RendererComponent({app}: {app: Re
             device.onuncapturederror = (ev) => {
                 console.error(`WebGPU device uncaptured error: ${ev.error.message}`);
             }
-        }
-    }, [device, app]);
+        }, (err) => {
+            console.error(err);
+        }).finally(() => {
+            setInitialized(true);
+        });
+    }, [getSample]);
 
     const errorBlock =<p style={{  
         backgroundColor: 'rgb(50, 99, 121)',
@@ -129,7 +143,13 @@ export const RendererComponent = memo(function RendererComponent({app}: {app: Re
 
     return <>
         {
-            initialized ? <>{device ? <RenderingCanvas device={device} app={app}/> : errorBlock}</> : null
+            initialized 
+                ? <>
+                    {(appRef.current) 
+                    ? <RenderingCanvas app={appRef.current}/> 
+                    : errorBlock}
+                </> 
+                : null
         }
     </>
 });

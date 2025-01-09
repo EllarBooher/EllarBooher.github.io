@@ -1,12 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Routes, Route, HashRouter } from 'react-router'
+import { Routes, Route, HashRouter, Navigate } from 'react-router'
 import './index.css'
 import App from './App.tsx'
 import { RendererComponent } from './webgpu/Shared.tsx'
 import { NavigationHeader } from './NavigateLink.tsx'
-import { HelloCubeApp } from './webgpu/HelloCube.ts'
-import { SkySeaApp } from './webgpu/SkySea.ts'
 
 const root = document.getElementById('root')!;
 
@@ -19,16 +17,12 @@ createRoot(root).render(
         </div>
           <Routes>
             <Route index element={<App />} />
-            <Route path="hello-cube" element={
+            <Route path="webgpu-samples" element={
               <div style={{flex: 1, overflow: 'hidden'}}>
-                <RendererComponent app={new HelloCubeApp}/>        
+                <RendererComponent/>        
               </div>
             }/>
-            <Route path="sky-sea" element={
-              <div style={{flex: 1, overflow: 'hidden'}}>
-                <RendererComponent app={new SkySeaApp}/>        
-              </div>
-            }/>
+            <Route path="*" element={<Navigate to="/" replace/>}/>
           </Routes>
 
       </div>

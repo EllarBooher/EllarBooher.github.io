@@ -4,17 +4,24 @@ import { mat4 } from 'wgpu-matrix';
 // Draw a simple cube
 
 export class HelloCubeApp implements RendererApp {
-    prepare(_device: GPUDevice, _presentFormat: GPUTextureFormat): void {
-        // Do nothing. This example is simple enough to just construct resources each frame.
-    };
-    draw(
-        device: GPUDevice, 
-        presentView: GPUTextureView, 
-        presentFormat: GPUTextureFormat, 
-        aspectRatio: number, 
-        time: number): void
-    {
-        const shaderModule = device.createShaderModule({
+    device: GPUDevice;
+    presentFormat: GPUTextureFormat;
+
+    pipeline: GPURenderPipeline;
+
+    vertexBuffer: GPUBuffer;
+    indexBuffer: GPUBuffer;
+
+    indexCount: number;
+
+    projViewModelBuffer: GPUBuffer;
+    projViewModelBindGroup: GPUBindGroup;
+
+    constructor(device: GPUDevice, presentFormat: GPUTextureFormat) {
+        this.device = device;
+        this.presentFormat = presentFormat;
+
+        const shaderModule = this.device.createShaderModule({
             code: shaderSource,
         });
     
@@ -58,27 +65,15 @@ export class HelloCubeApp implements RendererApp {
             0, 4, 5,
             0, 5, 1,
         ]);
+        this.indexCount = indices.length;
     
-        const fov = 60 * Math.PI / 180
-        const near = 0.1;
-        const far = 1000;
-        const perspective = mat4.perspective(fov, aspectRatio, near, far);
-        
-        const eye = [3, 5, 10];
-        const target = [0, 0, 0];
-        const up = [0, 1, 0];
-        const view = mat4.lookAt(eye, target, up);
-    
-        const model = mat4.axisRotation([1.0, 1.0, 0.0], time / 1000.0);
-    
-        const projViewModel =  mat4.mul(perspective, mat4.mul(view, model));
-    
-        const vertexBuffer = device.createBuffer({
+        this.vertexBuffer = this.device.createBuffer({
             size: vertices.byteLength,
             usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
         });
-        device.queue.writeBuffer(vertexBuffer, 0, vertices, 0, vertices.length);
-        const vertexBuffers: GPUVertexBufferLayout[] = [{ attributes: [
+        this.device.queue.writeBuffer(this.vertexBuffer, 0, vertices, 0, vertices.length);
+        const vertexBuffers: GPUVertexBufferLayout[] = [{ 
+            attributes: [
                 {shaderLocation: 0, offset: 0, format: "float32x4",},
                 {shaderLocation: 1, offset: 16, format: "float32x4"},
             ],
@@ -86,13 +81,14 @@ export class HelloCubeApp implements RendererApp {
             stepMode: "vertex",
         }];
     
-        const indexBuffer = device.createBuffer({size: indices.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST});
-        device.queue.writeBuffer(indexBuffer, 0, indices, 0, indices.length);
+        this.indexBuffer = this.device.createBuffer({size: indices.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST});
+        this.device.queue.writeBuffer(this.indexBuffer, 0, indices, 0, indices.length);
     
-        const projViewModelBuffer = device.createBuffer({size: projViewModel.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST});
-        device.queue.writeBuffer(projViewModelBuffer, 0, projViewModel, 0, projViewModel.length)
-    
-        const bindGroupLayout = device.createBindGroupLayout({entries: [
+        const PROJ_VIEW_BUFFER_SIZE = 16 * 4;
+
+        this.projViewModelBuffer = this.device.createBuffer({size: PROJ_VIEW_BUFFER_SIZE, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST});
+
+        const bindGroupLayout = this.device.createBindGroupLayout({entries: [
             {
                 binding: 0,
                 visibility: GPUShaderStage.VERTEX,
@@ -102,13 +98,13 @@ export class HelloCubeApp implements RendererApp {
             }
         ]});
     
-        const bindGroup = device.createBindGroup({
+        this.projViewModelBindGroup = this.device.createBindGroup({
             layout: bindGroupLayout, 
             entries: [
                 {
                     binding: 0,
                     resource: {
-                        buffer: projViewModelBuffer,
+                        buffer: this.projViewModelBuffer,
                     },
                 },
             ],
@@ -125,7 +121,7 @@ export class HelloCubeApp implements RendererApp {
                 entryPoint: "fragment_main",
                 targets: [
                     {
-                        format: presentFormat
+                        format: this.presentFormat
                     },
                 ]
             },
@@ -134,16 +130,36 @@ export class HelloCubeApp implements RendererApp {
                 cullMode: "back",
                 frontFace: "cw",
             },
-            layout: device.createPipelineLayout({
+            layout: this.device.createPipelineLayout({
                 bindGroupLayouts: [bindGroupLayout],
             }),
         };
-        const pipeline = device.createRenderPipeline(pipelineDescriptor);
+        this.pipeline = this.device.createRenderPipeline(pipelineDescriptor);
+    };
+    draw(
+        presentView: GPUTextureView, 
+        aspectRatio: number, 
+        time: number): void
+    {
+        const fov = 60 * Math.PI / 180
+        const near = 0.1;
+        const far = 1000;
+        const perspective = mat4.perspective(fov, aspectRatio, near, far);
+        
+        const eye = [3, 5, 10];
+        const target = [0, 0, 0];
+        const up = [0, 1, 0];
+        const view = mat4.lookAt(eye, target, up);
     
-        const commandEncoder = device.createCommandEncoder();
+        const model = mat4.axisRotation([1.0, 1.0, 0.0], time / 1000.0);
+    
+        const projViewModel =  mat4.mul(perspective, mat4.mul(view, model));
+        this.device.queue.writeBuffer(this.projViewModelBuffer, 0, projViewModel, 0, projViewModel.length)
+
+        const commandEncoder = this.device.createCommandEncoder();
     
         const clearColor = {r: 0.5, g: 0.5, b: 0.5, a: 0.0};
-        const drawVerticesPass: GPURenderPassDescriptor = {
+        const passEncoder = commandEncoder.beginRenderPass({
             colorAttachments: [
                 { 
                     clearValue: clearColor, 
@@ -152,21 +168,19 @@ export class HelloCubeApp implements RendererApp {
                     view: presentView
                 },
             ],
-        };
+        });
     
-        const passEncoder = commandEncoder.beginRenderPass(drawVerticesPass);
-    
-        passEncoder.setPipeline(pipeline);
-        passEncoder.setVertexBuffer(0, vertexBuffer);
-        passEncoder.setIndexBuffer(indexBuffer, "uint32", 0, indexBuffer.size)
-        passEncoder.setBindGroup(0, bindGroup);
-        passEncoder.drawIndexed(indices.length, 1, 0, 0, 0);
+        passEncoder.setPipeline(this.pipeline);
+        passEncoder.setVertexBuffer(0, this.vertexBuffer);
+        passEncoder.setIndexBuffer(this.indexBuffer, "uint32", 0, this.indexBuffer.size)
+        passEncoder.setBindGroup(0, this.projViewModelBindGroup);
+        passEncoder.drawIndexed(this.indexCount, 1, 0, 0, 0);
     
         passEncoder.end();
-        device.queue.submit([commandEncoder.finish()]);
-    
-        vertexBuffer.destroy();
-        indexBuffer.destroy();
-        projViewModelBuffer.destroy();
+        this.device.queue.submit([commandEncoder.finish()]);
     }
+}
+
+export const HelloCubeAppConstructor: RendererAppConstructor = (device, presentFormat) => {
+    return new HelloCubeApp(device, presentFormat);
 }

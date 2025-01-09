@@ -73,7 +73,7 @@ function App() {
           <h1>WebGPU</h1>
           <div className="DisplayGrid">
             <DisplayCard 
-              hyperlink={`/hello-cube`} 
+              hyperlink={`/webgpu-samples?sample=hello-cube`} 
               externalLink={false}
               thumbnailAssets={[]}
               title={`Hello Cube`} 

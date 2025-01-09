@@ -1,14 +1,12 @@
 interface RendererApp
 {
+    device: GPUDevice;
+    presentFormat: GPUTextureFormat;
     draw: (
-        device: GPUDevice, 
         presentView: GPUTextureView, 
-        presentFormat: GPUTextureFormat, 
         aspectRatio: number, 
         time: number
     ) => void;
-    prepare: (
-        device: GPUDevice, 
-        presentFormat: GPUTextureFormat
-    ) => void;
 };
+
+type RendererAppConstructor = (device: GPUDevice, presentFormat: GPUTextureFormat) => RendererApp;

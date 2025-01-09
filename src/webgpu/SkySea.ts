@@ -1,22 +1,28 @@
 import shaderSource from '../shaders/transmittance_LUT.wgsl'
 import fullscreenQuadSource from '../shaders/fullscreen_quad.wgsl'
 
-export class SkySeaApp implements RendererApp {
-    transmittanceLUTGroup?: GPUBindGroup;
-    transmittanceLUTPipeline?: GPUComputePipeline;
+class SkySeaApp implements RendererApp {
+    transmittanceLUTGroup: GPUBindGroup;
+    transmittanceLUTPipeline: GPUComputePipeline;
 
-    transmittanceLUTTexture?: GPUTexture;
-    transmittanceLUTView?: GPUTextureView;
+    transmittanceLUTTexture: GPUTexture;
+    transmittanceLUTView: GPUTextureView;
 
-    transmittanceLUTSampler?: GPUSampler;
+    transmittanceLUTSampler: GPUSampler;
 
-    transmittanceLUTCombinedSamplerForFullscreenPass?: GPUBindGroup;
+    transmittanceLUTCombinedSamplerForFullscreenPass: GPUBindGroup;
 
-    fullscreenQuadIndexBuffer?: GPUBuffer;
-    fullscreenPassPipeline?: GPURenderPipeline;
+    fullscreenQuadIndexBuffer: GPUBuffer;
+    fullscreenPassPipeline: GPURenderPipeline;
 
-    prepare(device: GPUDevice, presentFormat: GPUTextureFormat)
+    device: GPUDevice;
+    presentFormat: GPUTextureFormat;
+
+    constructor(device: GPUDevice, presentFormat: GPUTextureFormat)
     {
+        this.device = device;
+        this.presentFormat = presentFormat;
+
         const shaderModule = device.createShaderModule({
             code: shaderSource,
         });
@@ -143,9 +149,13 @@ export class SkySeaApp implements RendererApp {
 
         device.queue.submit([commandEncoder.finish()]);
     }
-    draw(device: GPUDevice, presentView: GPUTextureView, _presentFormat: GPUTextureFormat, _aspectRatio: number, _time: number): void
+
+    draw(
+        presentView: GPUTextureView, 
+        _aspectRatio: number, 
+        _time: number): void
     {
-        const commandEncoder = device.createCommandEncoder();
+        const commandEncoder = this.device.createCommandEncoder();
 
         const clearColor = {r: 1.0, g: 0.0, b: 0.0, a: 0.0};
         const fullscreenPassEncoder = commandEncoder.beginRenderPass({
@@ -158,13 +168,17 @@ export class SkySeaApp implements RendererApp {
                 },
             ],
         });
-        fullscreenPassEncoder.setPipeline(this.fullscreenPassPipeline!);
-        fullscreenPassEncoder.setIndexBuffer(this.fullscreenQuadIndexBuffer!, "uint32", 0, this.fullscreenQuadIndexBuffer!.size);
+        fullscreenPassEncoder.setPipeline(this.fullscreenPassPipeline);
+        fullscreenPassEncoder.setIndexBuffer(this.fullscreenQuadIndexBuffer, "uint32", 0, this.fullscreenQuadIndexBuffer.size);
         fullscreenPassEncoder.setBindGroup(0, this.transmittanceLUTCombinedSamplerForFullscreenPass);
         fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
     
         fullscreenPassEncoder.end();
     
-        device.queue.submit([commandEncoder.finish()]);
+        this.device.queue.submit([commandEncoder.finish()]);
     }
+};
+
+export const SkySeaAppConstructor: RendererAppConstructor = (device, presentFormat) => {
+    return new SkySeaApp(device, presentFormat);
 };

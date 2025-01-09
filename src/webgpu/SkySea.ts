@@ -1,5 +1,6 @@
 import shaderSource from '../shaders/transmittance_LUT.wgsl'
 import fullscreenQuadSource from '../shaders/fullscreen_quad.wgsl'
+import { RendererApp, RendererAppConstructor } from "./RendererApp"
 
 class SkySeaApp implements RendererApp {
     transmittanceLUTGroup: GPUBindGroup;

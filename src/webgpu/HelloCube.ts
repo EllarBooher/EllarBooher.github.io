@@ -1,5 +1,6 @@
 import shaderSource from '../shaders/main.wgsl';
 import { mat4 } from 'wgpu-matrix';
+import { RendererApp, RendererAppConstructor } from "./RendererApp"
 
 // Draw a simple cube
 

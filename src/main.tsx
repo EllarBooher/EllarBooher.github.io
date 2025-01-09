@@ -1,9 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Routes, Route, HashRouter, Navigate } from 'react-router'
-import './index.css'
+import './Main.css'
 import App from './App.tsx'
-import { RendererComponent } from './webgpu/Shared.tsx'
+import { RendererComponent } from './webgpu/RendererComponent.tsx'
 import { NavigationHeader } from './NavigateLink.tsx'
 
 const root = document.getElementById('root')!;

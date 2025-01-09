@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useState, useRef, memo } from "react";
-import { getDevice } from "./Shared";
 import { useSearchParams } from "react-router";
-import { defaultSample, samplesByQueryParam } from "./samples";
+import { defaultSample, samplesByQueryParam } from "./Samples";
+import { RendererApp, getDevice } from "./RendererApp";
 
 const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
     const animateRequestRef = useRef<number>();

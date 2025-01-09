@@ -1,5 +1,6 @@
 import { HelloCubeAppConstructor as HelloCube } from "./HelloCube";
 import { SkySeaAppConstructor as SkySea } from "./SkySea";
+import { RendererAppConstructor } from "./RendererApp"
 
 interface SampleEntry
 {

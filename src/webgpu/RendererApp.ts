@@ -1,3 +1,16 @@
+export interface RendererApp
+{
+    device: GPUDevice;
+    presentFormat: GPUTextureFormat;
+    draw: (
+        presentView: GPUTextureView, 
+        aspectRatio: number, 
+        time: number
+    ) => void;
+};
+
+export type RendererAppConstructor = (device: GPUDevice, presentFormat: GPUTextureFormat) => RendererApp;
+
 export async function getDevice(): Promise<GPUDevice> {
     return new Promise<GPUDevice>((resolve, reject) => {
         console.log("Starting WebGPU");

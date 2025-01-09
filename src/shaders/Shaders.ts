@@ -18,8 +18,6 @@ export function packShaders(source: string) : string
         {
             const include = line.substring(INCLUDE_PREFIX.length);
 
-            console.log(include);
-            
             if(!includeMappings.has(include))
             {
                 console.error(`Unrecognized WGSL include: ${include}`);

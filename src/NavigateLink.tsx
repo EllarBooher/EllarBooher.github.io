@@ -31,7 +31,7 @@ export const NavigationHeader = memo(function NavigationHeader() {
     const location = useLocation();
 
     const navSteps = [
-        <Fragment key={pathSegmentToTitles.get("")}>
+        <Fragment key={"root"}>
             <NavigateLink link={"/"} label={pathSegmentToTitles.get("")!}/>
         </Fragment>
     ];
@@ -44,7 +44,7 @@ export const NavigationHeader = memo(function NavigationHeader() {
             const prettySegment = pathSegmentToTitles.get(segment);
             const separator = index > 0 ? '/' : '';
             accumulatedLink = accumulatedLink.concat(`${separator}${segment}`);
-            return <Fragment key={prettySegment}>
+            return <Fragment key={accumulatedLink}>
                 {' > '}
                 <NavigateLink link={accumulatedLink} label={prettySegment ? prettySegment : segment}/>
             </Fragment>

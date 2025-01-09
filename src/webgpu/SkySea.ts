@@ -1,5 +1,5 @@
-import shaderSource from '../shaders/transmittance_LUT.wgsl'
-import fullscreenQuadSource from '../shaders/fullscreen_quad.wgsl'
+import TransmittanceLUTPak from '../shaders/transmittance_LUT.wgsl';
+import FullscreenQuadPak from '../shaders/fullscreen_quad.wgsl';
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
 
 class SkySeaApp implements RendererApp {
@@ -25,7 +25,7 @@ class SkySeaApp implements RendererApp {
         this.presentFormat = presentFormat;
 
         const shaderModule = device.createShaderModule({
-            code: shaderSource,
+            code: TransmittanceLUTPak,
         });
     
         const transmittanceLUTDimensions = {width: 512, height: 256};
@@ -113,7 +113,7 @@ class SkySeaApp implements RendererApp {
         });
     
         const fullscreenPassShaderModule = device.createShaderModule({
-            code: fullscreenQuadSource
+            code: FullscreenQuadPak
         });
     
         this.fullscreenPassPipeline = device.createRenderPipeline({

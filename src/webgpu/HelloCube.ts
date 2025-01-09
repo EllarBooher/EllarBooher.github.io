@@ -1,4 +1,4 @@
-import shaderSource from '../shaders/main.wgsl';
+import HelloCubePak from '../shaders/hello_cube.wgsl';
 import { mat4 } from 'wgpu-matrix';
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
 
@@ -23,7 +23,7 @@ export class HelloCubeApp implements RendererApp {
         this.presentFormat = presentFormat;
 
         const shaderModule = this.device.createShaderModule({
-            code: shaderSource,
+            code: HelloCubePak,
         });
     
         // Alternating position & color

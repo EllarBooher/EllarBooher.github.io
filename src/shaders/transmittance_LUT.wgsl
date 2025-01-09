@@ -4,34 +4,7 @@ const SAMPLE_COUNT: u32 = 500;
 const TRANSMITTANCE_LUT_HEIGHT: u32 = 256;
 const TRANSMITTANCE_LUT_WIDTH: u32 = 512;
 
-struct Atmosphere
-{
-    scatteringRayleighPerMm : vec3<f32>,
-    densityScaleRayleighMm : f32,
-    absorptionRayleighPerMm : vec3<f32>,
-
-    planetRadiusMm : f32,
-
-    scatteringMiePerMm : vec3<f32>,
-    densityScaleMieMm : f32,
-    absorptionMiePerMm : vec3<f32>,
-
-    atmosphereRadiusMm : f32,
-
-    groundAlbedo : vec3<f32>,
-
-    padding0 : f32,
-
-    scatteringOzonePerMm : vec3<f32>,
-
-    padding1 : f32,
-
-    absorptionOzonePerMm : vec3<f32>,
-
-    padding2 : f32,
-
-    padding3 : vec4<f32>,
-}
+//// INCLUDE atmosphere.wgsli
 
 const ATMOSPHERE_GLOBAL: Atmosphere = Atmosphere(
     vec3<f32>(5.802, 13.558, 33.1),

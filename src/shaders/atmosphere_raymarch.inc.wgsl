@@ -1,7 +1,9 @@
 // Contains methods and overloads for raymarching the atmosphere
 
+//// FLAGS MULTISCATTERING ISOTROPIC_PHASE SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE
+
 /*
- Possible preprocessor IF flags:
+Flags explanation:
 
 MULTISCATTERING 
 - read from a multiscattering texture when computing the in-scattering path integral

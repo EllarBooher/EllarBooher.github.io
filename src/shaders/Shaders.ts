@@ -5,10 +5,43 @@ const shaderRoot = "src/shaders/";
 // TODO: Load includes upon every shader compile, but cache them and check if the version on disk is newer. This is needed for hot reloading
 const includeFilenames = ["atmosphere_common.inc.wgsl", "atmosphere_raymarch.inc.wgsl"]; 
 
-const includeMappings = new Map<string,string>();
+interface ShaderInclude {
+    code: string,
+    flags: string[],
+}
+
+function gatherFlags(filename: string, source: string): string[]
+{
+    let flags: string[] = [];
+    const FLAGS_PREFIX = "//// FLAGS ";
+    let foundPrefix = false;
+    source.split('\n').forEach((line, index) => {
+        if(line.startsWith(FLAGS_PREFIX))
+        {
+            if (foundPrefix)
+            {
+                console.error(`Duplicate FLAGS prefix found:
+                    Original line: 
+                    (${filename}:${index})
+                    ${line}`)
+            }
+            else {
+                foundPrefix = true;
+                flags = line.trim().substring(FLAGS_PREFIX.length).split(' ').map((value) => {return value.trim(); }).filter((value) => {return value.length > 0;});
+            }
+        }
+    });
+    return flags;
+}
+
+const includeMappings = new Map<string,ShaderInclude>();
 includeFilenames.forEach(
     (filename) => {
-        includeMappings.set(filename, fs.readFileSync(shaderRoot+filename).toString())
+        let code = fs.readFileSync(shaderRoot+filename).toString();
+        includeMappings.set(filename, {
+            code: code,
+            flags: gatherFlags(filename, code),
+        });
     }
 );
 
@@ -34,7 +67,7 @@ ELSE may be omitted.
 At this point, nesting is not supported.
 */
 
-function replaceConditionalBlocks(filename: string, source: string, enabledConditions: string[] = [])
+function replaceConditionalBlocks(filename: string, source: ShaderInclude, enabledConditions: string[] = [])
 {
     const IF_PREFIX = "//// IF ";
     const ELSE_PREFIX = "//// ELSE";
@@ -43,6 +76,12 @@ function replaceConditionalBlocks(filename: string, source: string, enabledCondi
     const enabledFlags = new Set<string>(enabledConditions);
 
     console.log(`Including '${filename}' with flags '${enabledConditions.join(',')}'`);
+    console.log(`Possible flag(s) are '${source.flags.join(',')}'`)
+    const invalidFlags = enabledConditions.filter((flag) => {return !source.flags.includes(flag); });
+    if (invalidFlags.length > 0)
+    {
+        console.error(`Found invalid flag(s) '${invalidFlags.join(',')}', these will not be used`);
+    }
 
     enum ConditionalState {
         Outside,
@@ -81,7 +120,7 @@ function replaceConditionalBlocks(filename: string, source: string, enabledCondi
     let currentFlag = "";
     let keepLines = true;
 
-    const sourceOut = source.split('\n').filter((line, index) => {
+    const sourceOut = source.code.split('\n').filter((line, index) => {
         const {prefix, remainder} = getPrefix(line);
 
         if(step == ConditionalState.Outside)
@@ -169,7 +208,7 @@ export function packShaders(id: string, source: string) : string
         .map((line) => {
             if(line.startsWith(INCLUDE_PREFIX))
             {
-                const fragments = line.substring(INCLUDE_PREFIX.length).split(' ').map((value) => {return value.trim(); });
+                const fragments = line.substring(INCLUDE_PREFIX.length).split(' ').map((value) => {return value.trim(); }).filter((value) => {return value.length > 0;});
                 if (fragments.length == 0)
                 {
                     return "";

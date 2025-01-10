@@ -358,12 +358,13 @@ class SkySeaApp implements RendererApp {
     device: GPUDevice;
     presentFormat: GPUTextureFormat;
 
-    firstDrawTime: number | undefined;
+    startTime: number;
 
-    constructor(device: GPUDevice, presentFormat: GPUTextureFormat)
+    constructor(device: GPUDevice, presentFormat: GPUTextureFormat, time: number)
     {
         this.device = device;
         this.presentFormat = presentFormat;
+        this.startTime = time;
 
         this.celestialLightUBO = new CelestialLightUBO(device);
 
@@ -540,8 +541,7 @@ class SkySeaApp implements RendererApp {
         skyviewLUTPassEncoder.setPipeline(this.skyviewLUTPassResources.pipeline);
         skyviewLUTPassEncoder.setBindGroup(0, this.skyviewLUTPassResources.group0);
 
-        this.firstDrawTime = this.firstDrawTime ? time : this.firstDrawTime;
-        const adjustedTime = time - (this.firstDrawTime ? this.firstDrawTime : 0.0);
+        const adjustedTime = time - this.startTime;
 
         // offset the time so that the app starts during the day
         const START_ROTATION = 3.1416 / 2.0 - 0.1;
@@ -602,6 +602,6 @@ class SkySeaApp implements RendererApp {
     }
 };
 
-export const SkySeaAppConstructor: RendererAppConstructor = (device, presentFormat) => {
-    return new SkySeaApp(device, presentFormat);
+export const SkySeaAppConstructor: RendererAppConstructor = (device, presentFormat, time) => {
+    return new SkySeaApp(device, presentFormat, time);
 };

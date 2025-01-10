@@ -101,16 +101,18 @@ export const RendererComponent = memo(function RendererComponent() {
     }, [searchParams]);
 
     useEffect(() => {
+        setInitialized(false);
         const sample = getSample();
         getDevice().then((device: GPUDevice) => {
             if(appRef.current)
             {
-                console.warn("Device found, but app was already created. This is assumed to be a duplicate rerender, and this execution will be aborted. The original is untouched.");
-                return;
+                console.warn("Device found, but app was already created. This is due to either a duplicate component rerender, or the sample changing without a full page refresh. Overriding the original.");
+            }
+            else
+            {
+                console.log("Got WebGPU device, initializing sample app.")
             }
 
-            // TODO: load this earlier so we don't need to rely on GPU being non-null again
-            console.log("Got WebGPU device, initializing sample app.")
             
             // We could try to recreate the device and app, but outside of hotloading/dev that seems unnecessary
             // The user can just reload the page if a crash occurs
@@ -125,7 +127,7 @@ export const RendererComponent = memo(function RendererComponent() {
             }
 
             const presentFormat = navigator.gpu.getPreferredCanvasFormat();
-            appRef.current = sample.create(device, presentFormat);
+            appRef.current = sample.create(device, presentFormat, performance.now());
             console.log("Finished initializing app.");
 
         }, (err) => {
@@ -133,7 +135,7 @@ export const RendererComponent = memo(function RendererComponent() {
         }).finally(() => {
             setInitialized(true);
         });
-    }, [getSample]);
+    }, [searchParams, getSample]);
 
     const bodyStyle = {  
         backgroundColor: 'rgb(50, 99, 121)',

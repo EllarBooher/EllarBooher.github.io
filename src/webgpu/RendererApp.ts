@@ -9,7 +9,7 @@ export interface RendererApp
     ) => void;
 };
 
-export type RendererAppConstructor = (device: GPUDevice, presentFormat: GPUTextureFormat) => RendererApp;
+export type RendererAppConstructor = (device: GPUDevice, presentFormat: GPUTextureFormat, time: number) => RendererApp;
 
 export async function getDevice(): Promise<GPUDevice> {
     return new Promise<GPUDevice>((resolve, reject) => {

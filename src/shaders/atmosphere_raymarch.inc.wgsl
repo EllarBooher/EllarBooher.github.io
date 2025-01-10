@@ -25,6 +25,7 @@ LIGHT_ILLUMINANCE_IS_ONE
 
 fn sampleTransmittanceLUT_Sun(
     transmittance_lut: texture_2d<f32>,
+    lut_sampler: sampler,
     atmosphere: ptr<function,Atmosphere>,
     sun: ptr<function,CelestialLight>,
     radius: f32,
@@ -46,6 +47,7 @@ fn sampleTransmittanceLUT_Sun(
     // This sample makes no assumption about ground intersection
     let transmittanceThroughAtmosphere: vec3<f32> = sampleTransmittanceLUT_RadiusMu(
         transmittance_lut, 
+        lut_sampler,
         atmosphere, 
         radius, 
         cos_sunZenith
@@ -75,7 +77,8 @@ struct ScatteringResult
 // TODO: should compile-time optional parameters just be accessed by the global resource introduced before this file is included?
 fn computeLuminanceScatteringIntegral(
     atmosphere: ptr<function, Atmosphere>,
-    light:  ptr<function, CelestialLight>,                                                
+    light:  ptr<function, CelestialLight>,             
+    lut_sampler: sampler,                                   
     transmittanceLUT: texture_2d<f32>,
 //// IF MULTISCATTERING
     multiscatterLUT: texture_2d<f32>,
@@ -98,17 +101,19 @@ fn computeLuminanceScatteringIntegral(
     let hitPlanet = raySphereIntersection(inOrigin, direction, (*atmosphere).planetRadiusMm);
     let hitAtmosphere = raySphereIntersection(inOrigin, direction, (*atmosphere).atmosphereRadiusMm);
 
-    if (!hitAtmosphere.hit || (hitPlanet.hit && (hitPlanet.t0 < 0.0 && hitPlanet.t1 > 0.0)))
+    let inside_planet = hitPlanet.hit && hitPlanet.t0 < 0.0 && hitPlanet.t1 > 0.0;
+    let intersects_atmosphere = hitAtmosphere.hit && hitAtmosphere.t1 > 0.0;
+    if (!intersects_atmosphere || inside_planet)
     {
         return result;
     }
 
-    var sampleDistance: f32 = 0.0;
 
     // Assuming the planet was hit, we have hitAtmosphere.t0 < hitPlanet.t0 < hitPlanet.t1 < hitAtmosphere.t1
     // If this assumption ever fails (such as 0 atmosphere?), this method needs to be reworked anyway to skip some
     // calculations
 
+    var sampleDistance = 0.0;
     if (hitPlanet.hit && hitPlanet.t0 > 0.0)
     {
         sampleDistance = hitPlanet.t0;
@@ -173,7 +178,7 @@ fn computeLuminanceScatteringIntegral(
         //
         // But at the cost of performance, resampling the transmittance LUT is more accurate for larger step sizes
 
-        let transmittanceToBegin = sampleTransmittanceLUT_RayMarchStep(transmittanceLUT, atmosphere, originStep, t);
+        let transmittanceToBegin = sampleTransmittanceLUT_RayMarchStep(transmittanceLUT, lut_sampler, atmosphere, originStep, t);
 
         {
             let incidentCosine = dot((*light).forward, scatteringDir);
@@ -191,12 +196,12 @@ fn computeLuminanceScatteringIntegral(
 //// ENDIF
 
 //// IF MULTISCATTERING
-            let multiscatter = sampleMultiscatterLUT(multiscatterLUT, atmosphere, samplePosition, (*light).forward);
+            let multiscatter = sampleMultiscatterLUT(multiscatterLUT, lut_sampler, atmosphere, samplePosition, (*light).forward);
 //// ELSE
             let multiscatter = vec3<f32>(0.0);
 //// ENDIF
 
-            let transmittanceToSun = sampleTransmittanceLUT_Sun(transmittanceLUT, atmosphere, light, sampleStep.radius, mu_light);
+            let transmittanceToSun = sampleTransmittanceLUT_Sun(transmittanceLUT, lut_sampler, atmosphere, light, sampleStep.radius, mu_light);
 
             let shadowBegin = f32(raySphereTest(begin, -(*light).forward, (*atmosphere).planetRadiusMm));
             let shadowMiddle = f32(raySphereTest(0.5 * (begin + end), -(*light).forward, (*atmosphere).planetRadiusMm));
@@ -206,7 +211,7 @@ fn computeLuminanceScatteringIntegral(
             // Integrate transmittance := e^(-extinction(x) * ||x - begin||) from begin to end
             // This is a single interval of the integral in Equation (1) from Hillaire's paper,
             // with all constant terms factored out above
-            let transmittanceAlongPath = sampleTransmittanceLUT_Segment(transmittanceLUT, atmosphere, begin, end);
+            let transmittanceAlongPath = sampleTransmittanceLUT_Segment(transmittanceLUT, lut_sampler, atmosphere, begin, end);
             let scatteringIlluminanceIntegral = (vec3(1.0) - transmittanceAlongPath) / extinctionSample.extinction;
 
             result.luminance += 
@@ -228,8 +233,8 @@ fn computeLuminanceScatteringIntegral(
         let samplePosition = origin + hitPlanet.t0 * direction;
         let mu_light = dot(samplePosition, -(*light).forward) / length(samplePosition);
 
-        let transmittanceToSurface = sampleTransmittanceLUT_RayMarchStep(transmittanceLUT, atmosphere, originStep, hitPlanet.t0);
-        let transmittanceToSun = sampleTransmittanceLUT_Sun(transmittanceLUT, atmosphere, light, sampleStep.radius, mu_light);
+        let transmittanceToSurface = sampleTransmittanceLUT_RayMarchStep(transmittanceLUT, lut_sampler, atmosphere, originStep, hitPlanet.t0);
+        let transmittanceToSun = sampleTransmittanceLUT_Sun(transmittanceLUT, lut_sampler, atmosphere, light, sampleStep.radius, mu_light);
 
         let normalDotLight = clamp(mu_light, 0.0, 1.0);
 

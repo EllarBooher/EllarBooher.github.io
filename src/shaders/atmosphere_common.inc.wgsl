@@ -156,6 +156,7 @@ fn multiscatterLUT_UV_to_RMu(
 
 fn sampleMultiscatterLUT(
     lut: texture_2d<f32>,
+    s: sampler,
     atmosphere: ptr<function,Atmosphere>,
     position: vec3<f32>,
     incidentDirectionLight: vec3<f32>
@@ -167,13 +168,13 @@ fn sampleMultiscatterLUT(
 
     let uv: vec2<f32> = multiscatterLUT_RMu_to_UV(atmosphere, radius, mu_light);
 
-    let coord = vec2<u32>(floor(vec2<f32>(vec2<u32>(MULTISCATTER_LUT_WIDTH, MULTISCATTER_LUT_HEIGHT)) * uv));
 
-    return textureLoad(lut, coord, 0).xyz;
+    return textureSampleLevel(lut, s, uv, 0.0).xyz;
 }
 
 fn sampleTransmittanceLUT_Ray(
     lut: texture_2d<f32>, 
+    s: sampler,
     atmosphere: ptr<function,Atmosphere>, 
     position: vec3<f32>, 
     direction: vec3<f32>
@@ -184,13 +185,13 @@ fn sampleTransmittanceLUT_Ray(
 
     let uv: vec2<f32> = transmittanceLUT_RMu_to_UV(atmosphere, radius, mu);
 
-    let coord = vec2<u32>(floor(vec2<f32>(vec2<u32>(TRANSMITTANCE_LUT_WIDTH, TRANSMITTANCE_LUT_HEIGHT)) * uv));
 
-    return textureLoad(lut, coord, 0).xyz;
+    return textureSampleLevel(lut, s, uv, 0.0).xyz;
 }
 
 fn sampleTransmittanceLUT_Segment(
-    lut: texture_2d<f32>, 
+    lut: texture_2d<f32>,
+    s: sampler, 
     atmosphere: ptr<function,Atmosphere>, 
     start: vec3<f32>, 
     end: vec3<f32>
@@ -208,13 +209,13 @@ fn sampleTransmittanceLUT_Segment(
     // This check does not necessarily mean the ray hits the ground, but it is safe to flip anyway.
     if (dot(end, direction) < 0.0)
     {
-        transmittance = sampleTransmittanceLUT_Ray(lut, atmosphere, end, -direction)
-                      / sampleTransmittanceLUT_Ray(lut, atmosphere, start, -direction);
+        transmittance = sampleTransmittanceLUT_Ray(lut, s, atmosphere, end, -direction)
+                      / sampleTransmittanceLUT_Ray(lut, s, atmosphere, start, -direction);
     }
     else
     {
-        transmittance = sampleTransmittanceLUT_Ray(lut, atmosphere, start, direction)
-                      / sampleTransmittanceLUT_Ray(lut, atmosphere, end, direction);
+        transmittance = sampleTransmittanceLUT_Ray(lut, s, atmosphere, start, direction)
+                      / sampleTransmittanceLUT_Ray(lut, s, atmosphere, end, direction);
     }
 
     return clamp(transmittance, vec3<f32>(0.0), vec3<f32>(1.0));
@@ -222,6 +223,7 @@ fn sampleTransmittanceLUT_Segment(
 
 fn sampleTransmittanceLUT_RadiusMu(
     lut: texture_2d<f32>, 
+    s: sampler,
     atmosphere: ptr<function,Atmosphere>, 
     radius: f32, 
     mu: f32
@@ -229,9 +231,8 @@ fn sampleTransmittanceLUT_RadiusMu(
 {
     let uv: vec2<f32> = transmittanceLUT_RMu_to_UV(atmosphere, radius, mu);
 
-    let coord = vec2<u32>(floor(vec2<f32>(vec2<u32>(TRANSMITTANCE_LUT_WIDTH, TRANSMITTANCE_LUT_HEIGHT)) * uv));
 
-    return textureLoad(lut, coord, 0).xyz;
+    return textureSampleLevel(lut, s, uv, 0.0).xyz;
 }
 
 struct ExtinctionSample
@@ -447,6 +448,7 @@ fn stepRadiusMu(
 // Samples a segment, given in RMu coordinates
 fn sampleTransmittanceLUT_RayMarchStep(
     lut: texture_2d<f32>,
+    s: sampler,
     atmosphere: ptr<function,Atmosphere>,
     start: RaymarchStep,
     stepDistance: f32
@@ -464,15 +466,15 @@ fn sampleTransmittanceLUT_RayMarchStep(
     if (start.mu > 0.0)
     {
         // Oriented up into atmosphere, so we directly sample LUT
-        transmittance = sampleTransmittanceLUT_RadiusMu(lut, atmosphere, start.radius, start.mu)
-                      / sampleTransmittanceLUT_RadiusMu(lut, atmosphere, end.radius, end.mu);
+        transmittance = sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, start.radius, start.mu)
+                      / sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, end.radius, end.mu);
     }
     else
     {
         // Oriented down towards planet, so direct samples would be invalid
         // Instead, we flip the direction
-        transmittance = sampleTransmittanceLUT_RadiusMu(lut, atmosphere, end.radius, -end.mu)
-                      / sampleTransmittanceLUT_RadiusMu(lut, atmosphere, start.radius, -start.mu);
+        transmittance = sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, end.radius, -end.mu)
+                      / sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, start.radius, -start.mu);
     }
 
     return clamp(transmittance, vec3<f32>(0.0), vec3<f32>(1.0));

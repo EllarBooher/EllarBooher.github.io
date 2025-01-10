@@ -1,8 +1,9 @@
 //// INCLUDE atmosphere_types.inc.wgsl
 
 @group(0) @binding(0) var skyview_lut: texture_storage_2d<rgba16float, write>;
-@group(0) @binding(1) var transmittance_lut: texture_2d<f32>;
-@group(0) @binding(2) var multiscatter_lut: texture_2d<f32>;
+@group(0) @binding(1) var lut_sampler: sampler;
+@group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
+@group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
 
 @group(1) @binding(0) var<uniform> b_light: CelestialLightUBO;
 
@@ -100,6 +101,7 @@ fn computeSkyViewLuminance(@builtin(global_invocation_id) global_id : vec3<u32>,
     let luminance = computeLuminanceScatteringIntegral(
         &atmosphere, 
         &light,
+        lut_sampler,
         transmittance_lut, 
         multiscatter_lut, 
         origin, 

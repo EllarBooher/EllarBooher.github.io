@@ -6,9 +6,9 @@ import AtmosphereCameraPak from '../shaders/atmosphere_camera.wgsl';
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
 import { mat4, Mat4, vec3, Vec3, vec4, Vec4 } from 'wgpu-matrix';
 
-const transmittanceLUTDimensions = {width: 512, height: 256};
-const multiscatteringLUTDimensions = {width: 512, height: 512};
-const skyviewLUTDimensions = {width: 1024, height: 1024};
+const transmittanceLUTDimensions = {width: 1024, height: 512};
+const multiscatteringLUTDimensions = {width: 1024, height: 1024};
+const skyviewLUTDimensions = {width: 512, height: 128};
 
 interface CameraUBO
 {
@@ -166,6 +166,11 @@ function CreateMultiscatterLUTPassResources(
             {
                 binding: 1,
                 visibility: GPUShaderStage.COMPUTE,
+                sampler: { type: "filtering" },  
+            },
+            {
+                binding: 2,
+                visibility: GPUShaderStage.COMPUTE,
                 texture: {}
             },
         ],
@@ -181,6 +186,10 @@ function CreateMultiscatterLUTPassResources(
             },
             {
                 binding: 1,
+                resource: device.createSampler({magFilter: "linear", minFilter: "linear"}),  
+            },
+            {
+                binding: 2,
                 resource: transmittanceLUT,
             },
         ],
@@ -250,10 +259,15 @@ function CreateSkyViewLUTPassResources(
             {
                 binding: 1,
                 visibility: GPUShaderStage.COMPUTE,
-                texture: {}
+                sampler: {type: "filtering"}
             },
             {
                 binding: 2,
+                visibility: GPUShaderStage.COMPUTE,
+                texture: {}
+            },
+            {
+                binding: 3,
                 visibility: GPUShaderStage.COMPUTE,
                 texture: {}
             }
@@ -270,10 +284,14 @@ function CreateSkyViewLUTPassResources(
             },
             {
                 binding: 1,
-                resource: transmittanceLUT,
+                resource: device.createSampler({magFilter: "linear", minFilter: "linear"}),  
             },
             {
                 binding: 2,
+                resource: transmittanceLUT,
+            },
+            {
+                binding: 3,
                 resource: multiscatterLUT,
             }
         ],

@@ -204,11 +204,10 @@ export function packShaders(id: string, source: string) : string
     console.log(`Preprocessing shader ${id}`);
 
     const sourceOut = source.split('\n')
-        .map((line) => {return line.trim();})
         .map((line) => {
             if(line.startsWith(INCLUDE_PREFIX))
             {
-                const fragments = line.substring(INCLUDE_PREFIX.length).split(' ').map((value) => {return value.trim(); }).filter((value) => {return value.length > 0;});
+                const fragments = line.trim().substring(INCLUDE_PREFIX.length).split(' ').map((value) => {return value.trim(); }).filter((value) => {return value.length > 0;});
                 if (fragments.length == 0)
                 {
                     return "";

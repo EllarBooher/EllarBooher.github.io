@@ -1,7 +1,8 @@
 //// INCLUDE atmosphere_types.inc.wgsl
 
 @group(0) @binding(0) var multiscatter_lut: texture_storage_2d<rgba16float, write>;
-@group(0) @binding(1) var transmittance_lut: texture_2d<f32>;
+@group(0) @binding(1) var lut_sampler: sampler;
+@group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
 
 //// INCLUDE atmosphere_common.inc.wgsl
 //// INCLUDE atmosphere_raymarch.inc.wgsl ISOTROPIC_PHASE LIGHT_ILLUMINANCE_IS_ONE
@@ -118,6 +119,7 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id : vec3<u32>,)
         let scattering = computeLuminanceScatteringIntegral(
             &atmosphere, 
             &light, 
+            lut_sampler,
             transmittance_lut, 
             origin, 
             direction, 

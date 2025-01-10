@@ -4,6 +4,8 @@
 @group(0) @binding(1) var transmittance_lut: texture_2d<f32>;
 @group(0) @binding(2) var multiscatter_lut: texture_2d<f32>;
 
+@group(1) @binding(0) var<uniform> b_light: CelestialLightUBO;
+
 //// INCLUDE atmosphere_common.inc.wgsl
 //// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING
 
@@ -71,7 +73,7 @@ fn computeSkyViewLuminance(@builtin(global_invocation_id) global_id : vec3<u32>,
         return;
     }
     var atmosphere: Atmosphere = ATMOSPHERE_GLOBAL;
-    var light: CelestialLight = LIGHT_GLOBAL;
+    var light: CelestialLight = b_light.light;
 
     let offset = vec2<f32>(0.5, 0.5);
     let uv = (vec2<f32>(texel_coord) + offset) / vec2<f32>(size);

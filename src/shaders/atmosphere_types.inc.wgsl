@@ -59,6 +59,11 @@ struct CelestialLight
     angularRadius: f32,
 }
 
+struct CelestialLightUBO
+{
+    light: CelestialLight,
+}
+
 const LIGHT_GLOBAL = CelestialLight(
     vec3<f32>(1.0),
     6.0,

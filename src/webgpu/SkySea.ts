@@ -4,13 +4,58 @@ import SkyViewLUTPak from '../shaders/skyview_LUT.wgsl';
 import AtmosphereCameraPak from '../shaders/atmosphere_camera.wgsl';
 
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
-import { mat4, Mat4, vec4, Vec4 } from 'wgpu-matrix';
+import { mat4, Mat4, vec3, Vec3, vec4, Vec4 } from 'wgpu-matrix';
+
+const transmittanceLUTDimensions = {width: 512, height: 256};
+const multiscatteringLUTDimensions = {width: 512, height: 512};
+const skyviewLUTDimensions = {width: 1024, height: 1024};
 
 interface CameraUBO
 {
     inv_proj: Mat4,
     inv_view: Mat4,
     position: Vec4,
+}
+
+interface CelestialLight
+{
+    color: Vec3;
+    strength: number;
+    forward: Vec3;
+    angularRadius: number;
+}
+
+class CelestialLightUBO
+{
+    data: {light: CelestialLight } = {
+        light: {
+            color: vec3.create(1.0, 1.0, 1.0),
+            strength: 6.0,
+            forward: vec3.create(0.0, -0.1961, 0.98058),
+            angularRadius: 16.0 / 60.0 * (3.141592653589793 / 180.0),
+        }
+    };
+
+    length: number = (3 + 1 + 3 + 1); 
+    stagingBuffer: Float32Array;
+    buffer: GPUBuffer;
+
+    constructor(device: GPUDevice)
+    {
+        this.stagingBuffer = new Float32Array(this.length);
+        this.buffer = device.createBuffer({
+            size: this.stagingBuffer.byteLength,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM
+        })
+    }
+    writeToBuffer(device: GPUDevice) {
+        this.stagingBuffer.set(this.data.light.color, 0);
+        this.stagingBuffer[3] = this.data.light.strength;
+        this.stagingBuffer.set(this.data.light.forward, 4);
+        this.stagingBuffer[7] = this.data.light.angularRadius;
+
+        device.queue.writeBuffer(this.buffer, 0, this.stagingBuffer, 0, this.stagingBuffer.length);
+    }
 }
 
 interface TransmittanceLUTPassResources
@@ -170,6 +215,7 @@ interface SkyViewLUTPassResources
     texture: GPUTexture;
     view: GPUTextureView;
     group0: GPUBindGroup;
+    group1: GPUBindGroup;
     pipeline: GPUComputePipeline;
 }
 
@@ -178,6 +224,7 @@ function CreateSkyViewLUTPassResources(
     dimensions: {width: number, height: number},
     transmittanceLUT: GPUTextureView,
     multiscatterLUT: GPUTextureView,
+    lightUBO: CelestialLightUBO,
 ): SkyViewLUTPassResources
 {
     const label = "Skyview LUT";
@@ -233,6 +280,25 @@ function CreateSkyViewLUTPassResources(
         label
     });
 
+    const bindGroup1Layout = device.createBindGroupLayout({
+        entries: [
+            {
+                binding: 0,
+                visibility: GPUShaderStage.COMPUTE,
+                buffer: {}
+            }
+        ]
+    });
+    const bindGroup1 = device.createBindGroup({
+        layout: bindGroup1Layout,
+        entries: [
+            {
+                binding: 0,
+                resource: {buffer: lightUBO.buffer}
+            }
+        ]
+    });
+
     const skyviewLUTShaderModule = device.createShaderModule({
         code: SkyViewLUTPak,
         label
@@ -243,13 +309,14 @@ function CreateSkyViewLUTPassResources(
             entryPoint: "computeSkyViewLuminance",
         },
         layout: device.createPipelineLayout({
-            bindGroupLayouts: [bindGroup0Layout]
+            bindGroupLayouts: [bindGroup0Layout, bindGroup1Layout]
         }),
         label
     })
 
     return {
         group0: bindGroup0,
+        group1: bindGroup1,
         pipeline: skyviewLUTPipeline,
         texture: skyviewLUT,
         view: skyviewLUTView,
@@ -260,6 +327,8 @@ class SkySeaApp implements RendererApp {
     transmittanceLUTPassResources: TransmittanceLUTPassResources;
     multiscatterLUTPassResources: MultiscatterLUTPassResources;
     skyviewLUTPassResources: SkyViewLUTPassResources;
+
+    celestialLightUBO: CelestialLightUBO;
 
     atmosphereCameraLUTGroup: GPUBindGroup;
     cameraUBO: GPUBuffer;
@@ -276,9 +345,7 @@ class SkySeaApp implements RendererApp {
         this.device = device;
         this.presentFormat = presentFormat;
 
-        const transmittanceLUTDimensions = {width: 512, height: 256};
-        const multiscatteringLUTDimensions = {width: 512, height: 512};
-        const skyviewLUTDimensions = {width: 1920, height: 1080};
+        this.celestialLightUBO = new CelestialLightUBO(device);
 
         this.transmittanceLUTPassResources = CreateTransmittanceLUTPassResources(
             this.device, transmittanceLUTDimensions
@@ -290,7 +357,8 @@ class SkySeaApp implements RendererApp {
         this.skyviewLUTPassResources = CreateSkyViewLUTPassResources(
             this.device, skyviewLUTDimensions, 
             this.transmittanceLUTPassResources.view, 
-            this.multiscatterLUTPassResources.view
+            this.multiscatterLUTPassResources.view,
+            this.celestialLightUBO,
         );
 
         const atmosphereBindGroupLayout = device.createBindGroupLayout({
@@ -427,20 +495,28 @@ class SkySeaApp implements RendererApp {
         passEncoder.dispatchWorkgroups(multiscatteringLUTDimensions.width / 16, multiscatteringLUTDimensions.height / 16); 
         passEncoder.end();
 
-        passEncoder = commandEncoder.beginComputePass();
-        passEncoder.setPipeline(this.skyviewLUTPassResources.pipeline);
-        passEncoder.setBindGroup(0, this.skyviewLUTPassResources.group0);
-        passEncoder.dispatchWorkgroups(skyviewLUTDimensions.width / 16, skyviewLUTDimensions.height / 16, 1);
-        passEncoder.end();
-
         device.queue.submit([commandEncoder.finish()]);
     }
 
     draw(
         presentView: GPUTextureView, 
         aspectRatio: number, 
-        _time: number): void
+        time: number): void
     {
+        const commandEncoder = this.device.createCommandEncoder();
+
+        const skyviewLUTPassEncoder = commandEncoder.beginComputePass();
+        skyviewLUTPassEncoder.setPipeline(this.skyviewLUTPassResources.pipeline);
+        skyviewLUTPassEncoder.setBindGroup(0, this.skyviewLUTPassResources.group0);
+
+        const SUN_ROTATION_SPEED_RAD_PER_S = 3.1416 / 16.0;
+        vec3.rotateX(vec3.create(0.0, 1.0, 0.0), vec3.create(0.0,0.0,0.0), (time / 1000.0) * SUN_ROTATION_SPEED_RAD_PER_S, this.celestialLightUBO.data.light.forward);
+        this.celestialLightUBO.writeToBuffer(this.device);   
+        skyviewLUTPassEncoder.setBindGroup(1, this.skyviewLUTPassResources.group1);
+
+        skyviewLUTPassEncoder.dispatchWorkgroups(skyviewLUTDimensions.width / 16, skyviewLUTDimensions.height / 16, 1);
+        skyviewLUTPassEncoder.end();
+
         const fov = 60 * Math.PI / 180
         const near = 0.1;
         const far = 1000;
@@ -460,8 +536,6 @@ class SkySeaApp implements RendererApp {
         cameraUBODataBytes.set(cameraUBOData.position, 16 + 16);
         // console.log(cameraUBODataBytes.join(','));
         this.device.queue.writeBuffer(this.cameraUBO, 0, cameraUBODataBytes, 0, cameraUBODataBytes.length)
-
-        const commandEncoder = this.device.createCommandEncoder();
 
         const clearColor = {r: 1.0, g: 0.0, b: 0.0, a: 0.0};
         const fullscreenPassEncoder = commandEncoder.beginRenderPass({

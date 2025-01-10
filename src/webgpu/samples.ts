@@ -7,13 +7,12 @@ interface SampleEntry
     name: string,
     create: RendererAppConstructor,
 };
-
-export const defaultSample = "hello-cube";
+export const defaultSample = {
+    name: "Hello Cube",
+    create: HelloCube,
+};
 export const samplesByQueryParam = new Map<string, SampleEntry>([
-    ["hello-cube", {
-        name: "Hello Cube",
-        create: HelloCube,
-    }],
+    ["hello-cube", defaultSample],
     ["sky-sea", {
         name: "Sky and Sea",
         create: SkySea,

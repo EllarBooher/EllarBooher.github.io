@@ -84,33 +84,34 @@ export const RendererComponent = memo(function RendererComponent() {
     const [searchParams, _setSearchParams] = useSearchParams();
 
     const getSample = useCallback(() => {
-        let sampleID = searchParams.get("sample");
+        const sampleID = searchParams.get("sample");
 
         if (!sampleID)
         {
-            sampleID = defaultSample;
+            return defaultSample;
         }
 
         const sample = samplesByQueryParam.get(sampleID);
+        if (!sample)
+        {
+            return defaultSample;
+        }
+
         return sample;
     }, [searchParams]);
 
     useEffect(() => {
-        setInitialized(false);
-
         const sample = getSample();
-        if (!sample)
-        {
-            setInitialized(true);
-            appRef.current = undefined;
-            return;
-        }
-
         getDevice().then((device: GPUDevice) => {
-            // TODO: load this earlier so we don't need to rely on GPU being non-null again
-            const presentFormat = navigator.gpu.getPreferredCanvasFormat();
-            appRef.current = sample.create(device, presentFormat);
+            if(appRef.current)
+            {
+                console.warn("Device found, but app was already created. This is assumed to be a duplicate rerender, and this execution will be aborted. The original is untouched.");
+                return;
+            }
 
+            // TODO: load this earlier so we don't need to rely on GPU being non-null again
+            console.log("Got WebGPU device, initializing sample app.")
+            
             // We could try to recreate the device and app, but outside of hotloading/dev that seems unnecessary
             // The user can just reload the page if a crash occurs
             device.lost.then((reason) => {
@@ -122,6 +123,11 @@ export const RendererComponent = memo(function RendererComponent() {
             device.onuncapturederror = (ev) => {
                 console.error(`WebGPU device uncaptured error: ${ev.error.message}`);
             }
+
+            const presentFormat = navigator.gpu.getPreferredCanvasFormat();
+            appRef.current = sample.create(device, presentFormat);
+            console.log("Finished initializing app.");
+
         }, (err) => {
             console.error(err);
         }).finally(() => {
@@ -129,17 +135,23 @@ export const RendererComponent = memo(function RendererComponent() {
         });
     }, [getSample]);
 
-    const errorBlock =<p style={{  
+    const bodyStyle = {  
         backgroundColor: 'rgb(50, 99, 121)',
         margin: 0,
         padding: '2em',
         flexGrow: '1',
-        color: 'hsl(204, 50%, 95%)', whiteSpace: 'pre-line', fontSize: '1.5em'}}>
+        color: 'hsl(204, 50%, 95%)', whiteSpace: 'pre-line', fontSize: '1.5em'
+    };
+
+    const errorBlock =<p style={bodyStyle}>
         {`Sorry, there was an issue.
             This app uses WebGPU, which has somewhat limited support.
             Try using another browser, updating your browser, or downloading a Beta or Nightly version.
         `} 
     </p>;
+    const loadingBlock = <p style={bodyStyle}>
+        {`Loading...`}
+    </p>
 
     return <>
         {
@@ -149,7 +161,7 @@ export const RendererComponent = memo(function RendererComponent() {
                     ? <RenderingCanvas app={appRef.current}/> 
                     : errorBlock}
                 </> 
-                : null
+                : <>{loadingBlock}</>
         }
     </>
 });

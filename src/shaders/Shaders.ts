@@ -37,7 +37,7 @@ function gatherFlags(filename: string, source: string): string[]
 const includeMappings = new Map<string,ShaderInclude>();
 includeFilenames.forEach(
     (filename) => {
-        let code = fs.readFileSync(shaderRoot+filename).toString();
+        const code = fs.readFileSync(shaderRoot+filename).toString();
         includeMappings.set(filename, {
             code: code,
             flags: gatherFlags(filename, code),

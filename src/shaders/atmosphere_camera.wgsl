@@ -14,7 +14,8 @@ struct CameraUBO
     position: vec4<f32>,
 }
 
-@group(1) @binding(0) var<uniform> camera: CameraUBO;
+@group(1) @binding(0) var<uniform> b_camera: CameraUBO;
+@group(1) @binding(1) var<uniform> b_light: CelestialLightUBO;
 
 // vertex state NOT included
 // Render a quad and use this as the fragment stage
@@ -82,7 +83,7 @@ fn sampleSkyViewLUT(
         u = (azimuth / (2.0 * PI)) + 0.5;
     }
 
-    return textureSample(skyview_lut, b_sampler, vec2<f32>(u, v)).xyz;
+    return textureSampleLevel(skyview_lut, b_sampler, vec2<f32>(u, v), 0.0).xyz;
 }
 
 fn sampleSunDisk(
@@ -221,17 +222,17 @@ fn vertex_main(@builtin(vertex_index) index : u32) -> VertexOut
 fn fragment_main(fragData: VertexOut) -> @location(0) vec4<f32>
 {
     var atmosphere = ATMOSPHERE_GLOBAL;
-    var light = LIGHT_GLOBAL;
+    var light = b_light.light;
 
     let uv = fragData.uv;
 
     const METERS_PER_MM = 1000000.0;
-    let origin = vec3<f32>(0.0, atmosphere.planetRadiusMm, 0.0) + camera.position.xyz / METERS_PER_MM;
+    let origin = vec3<f32>(0.0, atmosphere.planetRadiusMm, 0.0) + b_camera.position.xyz / METERS_PER_MM;
 
     let uv_clip_space = (uv - vec2<f32>(0.5)) * 2.0;
     let near_plane_depth = 1.0;
-    let direction_view_space = camera.inv_proj * vec4(uv_clip_space, near_plane_depth, 1.0);
-    let direction_world = normalize((camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
+    let direction_view_space = b_camera.inv_proj * vec4(uv_clip_space, near_plane_depth, 1.0);
+    let direction_world = normalize((b_camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
 
     let luminance = sampleEnvironmentLuminance(&atmosphere, &light, origin, direction_world);
 

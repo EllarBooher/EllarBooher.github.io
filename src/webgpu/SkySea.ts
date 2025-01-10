@@ -332,13 +332,15 @@ class SkySeaApp implements RendererApp {
 
     atmosphereCameraLUTGroup: GPUBindGroup;
     cameraUBO: GPUBuffer;
-    cameraUBOGroup: GPUBindGroup;
+    atmosphereCameraGroup1: GPUBindGroup;
     atmosphereCameraPipeline: GPURenderPipeline;
 
     fullscreenQuadIndexBuffer: GPUBuffer;
 
     device: GPUDevice;
     presentFormat: GPUTextureFormat;
+
+    firstDrawTime: number | undefined;
 
     constructor(device: GPUDevice, presentFormat: GPUTextureFormat)
     {
@@ -410,8 +412,13 @@ class SkySeaApp implements RendererApp {
                         binding: 0,
                         visibility: GPUShaderStage.FRAGMENT,
                         buffer: {}
+                    },
+                    {
+                        binding: 1,
+                        visibility: GPUShaderStage.FRAGMENT,
+                        buffer: {}
                     }
-                ], label: "Camera UBO"
+                ], label: "Atmosphere Camera Group 1"
             })
         ];
         this.atmosphereCameraLUTGroup = device.createBindGroup({
@@ -434,22 +441,26 @@ class SkySeaApp implements RendererApp {
                     resource: this.skyviewLUTPassResources.view,
                 },
             ],
-            label: "Atmosphere Camera LUT Group"
+            label: "Atmosphere Camera Group 0"
         });
 
         this.cameraUBO = device.createBuffer({
             size: 16 * 4 + 16 * 4 + 4 * 4, // 2 mat4x4 + vec4
             usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
         });
-        this.cameraUBOGroup = device.createBindGroup({
+        this.atmosphereCameraGroup1 = device.createBindGroup({
             layout: atmosphereCameraLayouts[1],
             entries: [
                 {
                     binding: 0,
                     resource: {buffer: this.cameraUBO},
                 },
+                {
+                    binding: 1,
+                    resource: {buffer: this.celestialLightUBO.buffer},
+                },
             ],
-            label: "Atmosphere Camera CameraUBO"
+            label: "Atmosphere Camera Group 1"
         })
 
         const atmosphereCameraShaderModule = device.createShaderModule({
@@ -509,8 +520,18 @@ class SkySeaApp implements RendererApp {
         skyviewLUTPassEncoder.setPipeline(this.skyviewLUTPassResources.pipeline);
         skyviewLUTPassEncoder.setBindGroup(0, this.skyviewLUTPassResources.group0);
 
-        const SUN_ROTATION_SPEED_RAD_PER_S = 3.1416 / 16.0;
-        vec3.rotateX(vec3.create(0.0, 1.0, 0.0), vec3.create(0.0,0.0,0.0), (time / 1000.0) * SUN_ROTATION_SPEED_RAD_PER_S, this.celestialLightUBO.data.light.forward);
+        this.firstDrawTime = this.firstDrawTime ? time : this.firstDrawTime;
+        const adjustedTime = time - (this.firstDrawTime ? this.firstDrawTime : 0.0);
+
+        // offset the time so that the app starts during the day
+        const START_ROTATION = 3.1416 / 2.0 - 0.1;
+        const SUN_ROTATION_SPEED_RAD_PER_S = 3.1416 / 200.0;
+        vec3.rotateX(
+            vec3.create(0.0, 1.0, 0.0), 
+            vec3.create(0.0,0.0,0.0), 
+            (adjustedTime / 1000.0) * SUN_ROTATION_SPEED_RAD_PER_S + START_ROTATION, 
+            this.celestialLightUBO.data.light.forward
+        );
         this.celestialLightUBO.writeToBuffer(this.device);   
         skyviewLUTPassEncoder.setBindGroup(1, this.skyviewLUTPassResources.group1);
 
@@ -534,7 +555,6 @@ class SkySeaApp implements RendererApp {
         cameraUBODataBytes.set(cameraUBOData.inv_proj, 0);
         cameraUBODataBytes.set(cameraUBOData.inv_view, 16);
         cameraUBODataBytes.set(cameraUBOData.position, 16 + 16);
-        // console.log(cameraUBODataBytes.join(','));
         this.device.queue.writeBuffer(this.cameraUBO, 0, cameraUBODataBytes, 0, cameraUBODataBytes.length)
 
         const clearColor = {r: 1.0, g: 0.0, b: 0.0, a: 0.0};
@@ -553,7 +573,7 @@ class SkySeaApp implements RendererApp {
         fullscreenPassEncoder.setPipeline(this.atmosphereCameraPipeline);
         fullscreenPassEncoder.setIndexBuffer(this.fullscreenQuadIndexBuffer, "uint32", 0, this.fullscreenQuadIndexBuffer.size);
         fullscreenPassEncoder.setBindGroup(0, this.atmosphereCameraLUTGroup);
-        fullscreenPassEncoder.setBindGroup(1, this.cameraUBOGroup);
+        fullscreenPassEncoder.setBindGroup(1, this.atmosphereCameraGroup1);
         fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
     
         fullscreenPassEncoder.end();

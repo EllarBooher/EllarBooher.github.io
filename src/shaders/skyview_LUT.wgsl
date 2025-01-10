@@ -1,3 +1,5 @@
+//// INCLUDE atmosphere_types.inc.wgsl
+
 @group(0) @binding(0) var skyview_lut: texture_storage_2d<rgba16float, write>;
 
 @group(1) @binding(0) var transmittance_lut: texture_2d<f32>;

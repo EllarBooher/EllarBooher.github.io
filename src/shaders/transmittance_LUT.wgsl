@@ -1,3 +1,5 @@
+//// INCLUDE atmosphere_types.inc.wgsl
+
 @group(0) @binding(0) var transmittance_LUT: texture_storage_2d<rgba16float, write>;
 
 //// INCLUDE atmosphere_common.inc.wgsl

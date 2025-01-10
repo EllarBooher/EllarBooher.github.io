@@ -23,21 +23,6 @@ LIGHT_ILLUMINANCE_IS_ONE
 
 // Make sure to include atmosphere_common first
 
-struct CelestialLight
-{
-    color: vec3<f32>,
-    forward: vec3<f32>,
-    strength: f32,
-    angularRadius: f32,
-}
-
-const LIGHT_GLOBAL = CelestialLight(
-    vec3<f32>(1.0),
-    vec3<f32>(0.0, -0.1961, 0.98058),
-    6.0,
-    16.0 / 60.0 * (3.141592653589793 / 180.0),
-);
-
 fn sampleTransmittanceLUT_Sun(
     transmittance_lut: texture_2d<f32>,
     atmosphere: ptr<function,Atmosphere>,

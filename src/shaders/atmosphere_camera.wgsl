@@ -1,5 +1,7 @@
 // Call this in a render pass, passing in an index buffer [0, 1, 2, 0, 2, 3]
 
+//// INCLUDE atmosphere_types.inc.wgsl
+
 @group(0) @binding(0) var b_sampler: sampler;
 @group(0) @binding(1) var transmittance_lut: texture_2d<f32>;
 @group(0) @binding(2) var multiscatter_lut: texture_2d<f32>;
@@ -13,7 +15,6 @@ struct CameraUBO
 }
 
 @group(1) @binding(0) var<uniform> camera: CameraUBO;
-
 
 // vertex state NOT included
 // Render a quad and use this as the fragment stage

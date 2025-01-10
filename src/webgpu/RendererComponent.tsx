@@ -2,10 +2,13 @@ import { useEffect, useCallback, useState, useRef, memo } from "react";
 import { useSearchParams } from "react-router";
 import { defaultSample, samplesByQueryParam } from "./Samples";
 import { RendererApp, getDevice } from "./RendererApp";
+import { GUI } from "lil-gui";
 
 const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
     const animateRequestRef = useRef<number>();
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const guiPaneRef = useRef<HTMLDivElement>(null);
+    const guiRef = useRef<GUI>();
 
     const resizeCanvas = useCallback(() => {
         const canvas = canvasRef.current;
@@ -43,6 +46,16 @@ const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
     useEffect(() => {
         const context = canvasRef.current?.getContext('webgpu');
     
+        if(guiRef.current)
+        {
+            guiRef.current?.destroy();
+        }
+        if (app.setupUI)
+        {
+            guiRef.current = new GUI({container: guiPaneRef.current!});
+            app.setupUI(guiRef.current);
+        }
+
         if(!context)
         {
             console.error("'webgpu' canvas context not found, cannot animate.");
@@ -61,21 +74,23 @@ const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
         }
     }, [animate, app])
 
-    return <div 
-        style={{
-            color: 'hsl(204, 50%, 95%)', 
-            position: "relative",
-            width: '100%',
-            height: '100%',
+    return <div style={{
+        display: 'flex',  
+        color: 'hsl(204, 50%, 95%)', 
+        position: "relative",
+        width: '100%',
+        height: '100%',
     }}>
-        <canvas 
-            ref={canvasRef}
-            style={{       
-                width: '100%',
-                height: '100%',
-        }}
-    />
-    </div>
+        <div style={{flex: 1}}>
+            <canvas 
+                ref={canvasRef}
+                style={{       
+                    width: '100%',
+                    height: '100%',
+                }}/>
+        </div>
+        <div style={{flex: 0}} ref={guiPaneRef}/>
+    </div>;
 }
 
 export const RendererComponent = memo(function RendererComponent() {
@@ -128,6 +143,7 @@ export const RendererComponent = memo(function RendererComponent() {
 
             const presentFormat = navigator.gpu.getPreferredCanvasFormat();
             appRef.current = sample.create(device, presentFormat, performance.now());
+
             console.log("Finished initializing app.");
 
         }, (err) => {
@@ -160,7 +176,7 @@ export const RendererComponent = memo(function RendererComponent() {
             initialized 
                 ? <>
                     {(appRef.current) 
-                    ? <RenderingCanvas app={appRef.current}/> 
+                    ? <RenderingCanvas app={appRef.current}/>
                     : errorBlock}
                 </> 
                 : <>{loadingBlock}</>

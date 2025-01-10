@@ -2,6 +2,7 @@ import TransmittanceLUTPak from '../shaders/transmittance_LUT.wgsl';
 import MultiscatteringLUTPak from '../shaders/multiscatter_LUT.wgsl';
 import SkyViewLUTPak from '../shaders/skyview_LUT.wgsl';
 import AtmosphereCameraPak from '../shaders/atmosphere_camera.wgsl';
+import { GUI } from "lil-gui";
 
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
 import { mat4, Mat4, vec3, Vec3, vec4, Vec4 } from 'wgpu-matrix';
@@ -346,6 +347,10 @@ class SkySeaApp implements RendererApp {
     multiscatterLUTPassResources: MultiscatterLUTPassResources;
     skyviewLUTPassResources: SkyViewLUTPassResources;
 
+    settings: {
+        showSkyViewLUT: boolean,
+    };
+
     celestialLightUBO: CelestialLightUBO;
 
     atmosphereCameraLUTGroup: GPUBindGroup;
@@ -360,11 +365,17 @@ class SkySeaApp implements RendererApp {
 
     startTime: number;
 
+    setupUI(gui: GUI)
+    {
+        gui.add(this.settings, "showSkyViewLUT");
+    }
+
     constructor(device: GPUDevice, presentFormat: GPUTextureFormat, time: number)
     {
         this.device = device;
         this.presentFormat = presentFormat;
         this.startTime = time;
+        this.settings = {showSkyViewLUT: false};
 
         this.celestialLightUBO = new CelestialLightUBO(device);
 

@@ -1,3 +1,5 @@
+import { GUI } from "lil-gui";
+
 export interface RendererApp
 {
     device: GPUDevice;
@@ -6,6 +8,9 @@ export interface RendererApp
         presentView: GPUTextureView, 
         aspectRatio: number, 
         time: number
+    ) => void;
+    setupUI?: (
+        gui: GUI,
     ) => void;
 };
 

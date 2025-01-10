@@ -1,33 +1,196 @@
-// Manually update includes.
-// This isn't ideal, but I need to study how to do the build system better. 
-import atmosphereSource from './atmosphere.wgsli';
+import fs from 'fs';
 
-const includeMappings = new Map<string,string>([
-    [
-        "atmosphere.wgsli", atmosphereSource
-    ]
-]);
+const shaderRoot = "src/shaders/";
+
+// TODO: Load includes upon every shader compile, but cache them and check if the version on disk is newer. This is needed for hot reloading
+const includeFilenames = ["atmosphere_common.wgsl.inc", "atmosphere_raymarch.wgsl.inc"]; 
+
+const includeMappings = new Map<string,string>();
+includeFilenames.forEach(
+    (filename) => {
+        includeMappings.set(filename, fs.readFileSync(shaderRoot+filename).toString())
+    }
+);
+
+/*
+A conditional block looks like the following:
+
+//// IF [FLAG]
+
+//// ELSE
+
+//// ENDIF
+
+FLAG is a string, taken to be all remaining characters excluding the single space after IF
+FLAG is not any sort of conditional statement like "TEXTURE_MODE == 2", it should look more like "ENABLE_TEXTURE_MODE_TWO"
+FLAG is a boolean flag set outside of the include file, enabled/disabled before parsing the include
+
+If FLAG is enabled, only the lines between IF and ELSE are kept, the others are discarded.
+If FLAG is not enabled, only the lines between ELSE and ENDIF are kept, the others are discard.
+
+IF and ENDIF may not be omitted.
+ELSE may be omitted.
+
+At this point, nesting is not supported.
+*/
+
+function replaceConditionalBlocks(filename: string, source: string, enabledConditions: string[] = [])
+{
+    const IF_PREFIX = "//// IF ";
+    const ELSE_PREFIX = "//// ELSE";
+    const ENDIF_PREFIX = "//// ENDIF";
+
+    const enabledFlags = new Set<string>(enabledConditions);
+
+    console.log(`Including '${filename}' with flags '${enabledConditions.join(',')}'`);
+
+    enum ConditionalState {
+        Outside,
+        IF,
+        ELSE,
+    };
+    enum LinePrefix {
+        None,
+        IF,
+        ELSE,
+        ENDIF
+    };
+    const getPrefix = (line: string) => {
+        let prefix = LinePrefix.None;
+        let prefixLength = 0;
+        if (line.startsWith(IF_PREFIX))
+        {
+            prefix = LinePrefix.IF;
+            prefixLength = IF_PREFIX.length;
+        }
+        else if (line.startsWith(ELSE_PREFIX))
+        {
+            prefix = LinePrefix.ELSE;
+            prefixLength = ELSE_PREFIX.length;
+        }
+        else if (line.startsWith(ENDIF_PREFIX))
+        {
+            prefix = LinePrefix.ENDIF;
+            prefixLength = ENDIF_PREFIX.length;
+        }
+
+        return {prefix: prefix, remainder: line.substring(prefixLength).trim()};
+    };
+
+    let step = ConditionalState.Outside;
+    let currentFlag = "";
+    let keepLines = true;
+
+    const sourceOut = source.split('\n').filter((line, index) => {
+        const {prefix, remainder} = getPrefix(line);
+
+        if(step == ConditionalState.Outside)
+        {
+            if (prefix == LinePrefix.IF)
+            {
+                step = ConditionalState.IF;
+                currentFlag = remainder;
+                keepLines = enabledFlags.has(currentFlag);
+                console.log(`Found flag ${remainder}, ${keepLines}`);
+            }
+            else if (prefix != LinePrefix.None)
+            {
+                console.error(
+                    `Invalid conditional syntax: invalid conditional statement outside of conditional block. 
+                    Original line: 
+                    (${filename}:${index})
+                    ${line}`
+                );
+            }
+        }
+        else if(step == ConditionalState.IF)
+        {
+            if (prefix == LinePrefix.ELSE)
+            {
+                step = ConditionalState.ELSE;
+                keepLines = !enabledFlags.has(currentFlag);
+            }
+            else if (prefix == LinePrefix.ENDIF)
+            {
+                step = ConditionalState.Outside;
+                currentFlag = "";
+                keepLines = true;
+            }
+            else if (prefix != LinePrefix.None)
+            {
+                console.error(
+                    `(${filename}:${index}) Invalid conditional syntax in IF branch. 
+                    Original line: 
+                    (${filename}:${index})
+                    ${line}`
+                );
+            }
+        }
+        else if (step == ConditionalState.ELSE)
+        {
+            if (prefix == LinePrefix.ENDIF)
+            {
+                step = ConditionalState.Outside;
+                currentFlag = "";
+                keepLines = true;
+            }
+            else if (prefix != LinePrefix.None)
+            {
+                console.error(
+                    `(${filename}:${index}) Invalid conditional syntax in ELSE branch. 
+                    Original line: 
+                    (${filename}:${index})
+                    ${line}`
+                );
+            }
+        }
+
+        return keepLines && (prefix == LinePrefix.None);
+    }).join('\n');
+
+    if(step != ConditionalState.Outside)
+    {
+        console.error(
+            `While processing shader include conditionals, encountered end of lines without exiting a conditional.`
+        );
+    }
+
+    return sourceOut;
+}
 
 // This is utilized as a plugin in vite.config.ts, to preprocess each shader as a part of typescript compilation
-export function packShaders(source: string) : string
+export function packShaders(id: string, source: string) : string
 {
     const INCLUDE_PREFIX = "//// INCLUDE ";
 
-    const sourceOut = source.split('\n').map((line) => {
-        if(line.startsWith(INCLUDE_PREFIX))
-        {
-            const include = line.substring(INCLUDE_PREFIX.length);
+    console.log(`Preprocessing shader ${id}`);
 
-            if(!includeMappings.has(include))
+    const sourceOut = source.split('\n')
+        .map((line) => {return line.trim();})
+        .map((line) => {
+            if(line.startsWith(INCLUDE_PREFIX))
             {
-                console.error(`Unrecognized WGSL include: ${include}`);
-                return "";
+                const fragments = line.substring(INCLUDE_PREFIX.length).split(' ').map((value) => {return value.trim(); });
+                if (fragments.length == 0)
+                {
+                    return "";
+                }
+                
+                const includeFilename = fragments.shift()!;
+
+                if(!includeMappings.has(includeFilename))
+                {
+                    console.error(`Unrecognized WGSL include: ${includeFilename}`);
+                    includeMappings.forEach((value, key) => {
+                        console.error(`${key}`);
+                    })
+                    return "";
+                }
+
+                return replaceConditionalBlocks(includeFilename, includeMappings.get(includeFilename)!, fragments);
             }
 
-            return includeMappings.get(include);
-        }
-
-        return line;
+            return line;
     }).join('\n');
     
     return sourceOut;

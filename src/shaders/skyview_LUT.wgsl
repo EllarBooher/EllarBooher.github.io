@@ -1,9 +1,8 @@
 //// INCLUDE atmosphere_types.inc.wgsl
 
 @group(0) @binding(0) var skyview_lut: texture_storage_2d<rgba16float, write>;
-
-@group(1) @binding(0) var transmittance_lut: texture_2d<f32>;
-@group(2) @binding(0) var multiscatter_lut: texture_2d<f32>;
+@group(0) @binding(1) var transmittance_lut: texture_2d<f32>;
+@group(0) @binding(2) var multiscatter_lut: texture_2d<f32>;
 
 //// INCLUDE atmosphere_common.inc.wgsl
 //// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING

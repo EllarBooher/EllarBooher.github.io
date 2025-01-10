@@ -1,6 +1,5 @@
 import TransmittanceLUTPak from '../shaders/transmittance_LUT.wgsl';
 import MultiscatteringLUTPak from '../shaders/multiscatter_LUT.wgsl';
-import FullscreenQuadPak from '../shaders/fullscreen_quad.wgsl';
 import SkyViewLUTPak from '../shaders/skyview_LUT.wgsl';
 import AtmosphereCameraPak from '../shaders/atmosphere_camera.wgsl';
 
@@ -14,31 +13,253 @@ interface CameraUBO
     position: Vec4,
 }
 
+interface TransmittanceLUTPassResources
+{
+    texture: GPUTexture;
+    view: GPUTextureView;
+    group0: GPUBindGroup;
+    pipeline: GPUComputePipeline;
+}
+
+function CreateTransmittanceLUTPassResources(
+    device: GPUDevice, 
+    dimensions: {width: number, height: number},
+): TransmittanceLUTPassResources
+{
+    const label = "Transmittance LUT";
+    const transmittanceLUT = device.createTexture({
+        size: dimensions,
+        dimension: "2d",
+        format: "rgba16float",
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+        label: label,
+    });
+    const transmittanceLUTView = transmittanceLUT.createView({label: label})
+
+    const bindGroup0Layout = device.createBindGroupLayout({
+        entries: [
+            {
+                binding: 0,
+                visibility: GPUShaderStage.COMPUTE,
+                storageTexture: {
+                    access: "write-only",
+                    format: "rgba16float",
+                }
+            },
+        ],
+        label: label
+    });
+
+    const bindGroup0 = device.createBindGroup({
+        layout: bindGroup0Layout,
+        entries: [
+            {
+                binding: 0,
+                resource: transmittanceLUTView,
+            },
+        ],
+        label: label
+    });
+
+    const transmittanceLUTShaderModule = device.createShaderModule({
+        code: TransmittanceLUTPak,
+        label: label
+    });
+    const transmittanceLUTPipeline = device.createComputePipeline({
+        compute: {
+            module: transmittanceLUTShaderModule,
+            entryPoint: "computeTransmittance",
+        },
+        layout: device.createPipelineLayout({
+            bindGroupLayouts: [bindGroup0Layout]
+        }),
+        label: label
+    })
+
+    return {
+        group0: bindGroup0,
+        pipeline: transmittanceLUTPipeline,
+        texture: transmittanceLUT,
+        view: transmittanceLUTView,
+    }
+}
+
+interface MultiscatterLUTPassResources
+{
+    texture: GPUTexture;
+    view: GPUTextureView;
+    group0: GPUBindGroup;
+    pipeline: GPUComputePipeline;
+}
+
+function CreateMultiscatterLUTPassResources(
+    device: GPUDevice, 
+    dimensions: {width: number, height: number},
+    transmittanceLUT: GPUTextureView,
+): MultiscatterLUTPassResources
+{
+    const label = "Multiscatter LUT";
+    const multiscatterLUT = device.createTexture({
+        size: dimensions,
+        dimension: "2d",
+        format: "rgba16float",
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+        label: label,
+    });
+    const multiscatterLUTView = multiscatterLUT.createView({label: label})
+
+    const bindGroup0Layout = device.createBindGroupLayout({
+        entries: [
+            {
+                binding: 0,
+                visibility: GPUShaderStage.COMPUTE,
+                storageTexture: {
+                    access: "write-only",
+                    format: "rgba16float",
+                }
+            },
+            {
+                binding: 1,
+                visibility: GPUShaderStage.COMPUTE,
+                texture: {}
+            },
+        ],
+        label: label
+    });
+
+    const bindGroup0 = device.createBindGroup({
+        layout: bindGroup0Layout,
+        entries: [
+            {
+                binding: 0,
+                resource: multiscatterLUTView,
+            },
+            {
+                binding: 1,
+                resource: transmittanceLUT,
+            },
+        ],
+        label: label
+    });
+
+    const multiscatterLUTShaderModule = device.createShaderModule({
+        code: MultiscatteringLUTPak,
+        label: label
+    });
+    const multiscatterLUTPipeline = device.createComputePipeline({
+        compute: {
+            module: multiscatterLUTShaderModule,
+            entryPoint: "computeMultiscattering",
+        },
+        layout: device.createPipelineLayout({
+            bindGroupLayouts: [bindGroup0Layout]
+        }),
+        label: label
+    })
+
+    return {
+        group0: bindGroup0,
+        pipeline: multiscatterLUTPipeline,
+        texture: multiscatterLUT,
+        view: multiscatterLUTView,
+    }
+}
+
+interface SkyViewLUTPassResources
+{
+    texture: GPUTexture;
+    view: GPUTextureView;
+    group0: GPUBindGroup;
+    pipeline: GPUComputePipeline;
+}
+
+function CreateSkyViewLUTPassResources(
+    device: GPUDevice, 
+    dimensions: {width: number, height: number},
+    transmittanceLUT: GPUTextureView,
+    multiscatterLUT: GPUTextureView,
+): SkyViewLUTPassResources
+{
+    const label = "Skyview LUT";
+    const skyviewLUT = device.createTexture({
+        size: dimensions,
+        dimension: "2d",
+        format: "rgba16float",
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+        label,
+    });
+    const skyviewLUTView = skyviewLUT.createView({label})
+
+    const bindGroup0Layout = device.createBindGroupLayout({
+        entries: [
+            {
+                binding: 0,
+                visibility: GPUShaderStage.COMPUTE,
+                storageTexture: {
+                    access: "write-only",
+                    format: "rgba16float",
+                }
+            },
+            {
+                binding: 1,
+                visibility: GPUShaderStage.COMPUTE,
+                texture: {}
+            },
+            {
+                binding: 2,
+                visibility: GPUShaderStage.COMPUTE,
+                texture: {}
+            }
+        ],
+        label
+    });
+
+    const bindGroup0 = device.createBindGroup({
+        layout: bindGroup0Layout,
+        entries: [
+            {
+                binding: 0,
+                resource: skyviewLUTView,
+            },
+            {
+                binding: 1,
+                resource: transmittanceLUT,
+            },
+            {
+                binding: 2,
+                resource: multiscatterLUT,
+            }
+        ],
+        label
+    });
+
+    const skyviewLUTShaderModule = device.createShaderModule({
+        code: SkyViewLUTPak,
+        label
+    });
+    const skyviewLUTPipeline = device.createComputePipeline({
+        compute: {
+            module: skyviewLUTShaderModule,
+            entryPoint: "computeSkyViewLuminance",
+        },
+        layout: device.createPipelineLayout({
+            bindGroupLayouts: [bindGroup0Layout]
+        }),
+        label
+    })
+
+    return {
+        group0: bindGroup0,
+        pipeline: skyviewLUTPipeline,
+        texture: skyviewLUT,
+        view: skyviewLUTView,
+    }
+}
+
 class SkySeaApp implements RendererApp {
-    transmittanceLUTTexture: GPUTexture;
-    transmittanceLUTView: GPUTextureView;
-
-    transmittanceLUTWriteGroup: GPUBindGroup;
-    transmittanceLUTReadGroup: GPUBindGroup;
-
-    transmittanceLUTPipeline: GPUComputePipeline;
-
-    multiscatteringLUTTexture: GPUTexture;
-    multiscatteringLUTView: GPUTextureView;
-
-    multiscatteringLUTWriteGroup: GPUBindGroup;
-    multiscatteringLUTReadGroup: GPUBindGroup;
-
-    multiscatteringLUTPipeline: GPUComputePipeline;
-
-    skyviewLUTTexture: GPUTexture;
-    skyviewLUTView: GPUTextureView;
-
-    skyviewLUTWriteGroup: GPUBindGroup;
-    skyviewLUTPipeline: GPUComputePipeline;
-
-    samplerForFullscreenPass: GPUSampler;
-    combinedSamplerForFullscreenPass: GPUBindGroup;
+    transmittanceLUTPassResources: TransmittanceLUTPassResources;
+    multiscatterLUTPassResources: MultiscatterLUTPassResources;
+    skyviewLUTPassResources: SkyViewLUTPassResources;
 
     atmosphereCameraLUTGroup: GPUBindGroup;
     cameraUBO: GPUBuffer;
@@ -46,7 +267,6 @@ class SkySeaApp implements RendererApp {
     atmosphereCameraPipeline: GPURenderPipeline;
 
     fullscreenQuadIndexBuffer: GPUBuffer;
-    fullscreenPassPipeline: GPURenderPipeline;
 
     device: GPUDevice;
     presentFormat: GPUTextureFormat;
@@ -56,197 +276,66 @@ class SkySeaApp implements RendererApp {
         this.device = device;
         this.presentFormat = presentFormat;
 
-        const transmittanceLUTShaderModule = device.createShaderModule({
-            code: TransmittanceLUTPak,
-            label: "Transmittance LUT"
-        });
-        const multiscatteringLUTShaderModule = device.createShaderModule({
-            code: MultiscatteringLUTPak,
-            label: "Multiscattering LUT"
-        });
-        const skyviewLUTShaderModule = device.createShaderModule({
-            code: SkyViewLUTPak,
-            label: "Skyview LUT"
-        });
-        const atmosphereCameraShaderModule = device.createShaderModule({
-            code: AtmosphereCameraPak,
-            label: "Atmosphere Camera"
-        })
-
         const transmittanceLUTDimensions = {width: 512, height: 256};
         const multiscatteringLUTDimensions = {width: 512, height: 512};
         const skyviewLUTDimensions = {width: 1920, height: 1080};
-        
-        this.transmittanceLUTTexture = device.createTexture({
-            size: transmittanceLUTDimensions,
-            dimension: "2d",
-            format: "rgba16float",
-            usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-            label: "Transmittance LUT",
-        });
-        this.transmittanceLUTView = this.transmittanceLUTTexture.createView({label: "Transmittance LUT"});
 
-        this.multiscatteringLUTTexture = device.createTexture({
-            size: multiscatteringLUTDimensions,
-            dimension: "2d",
-            format: "rgba16float",
-            usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-            label: "Multiscattering LUT",
-        });
-        this.multiscatteringLUTView = this.multiscatteringLUTTexture.createView({label: "Multiscattering LUT"});
-    
-        this.skyviewLUTTexture = device.createTexture({
-            size: skyviewLUTDimensions,
-            dimension: "2d",
-            format: "rgba16float",
-            usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-            label: "Skyview LUT",
-        });
-        this.skyviewLUTView = this.skyviewLUTTexture.createView({label: "Skyview LUT"})
+        this.transmittanceLUTPassResources = CreateTransmittanceLUTPassResources(
+            this.device, transmittanceLUTDimensions
+        );
+        this.multiscatterLUTPassResources = CreateMultiscatterLUTPassResources(
+            this.device, multiscatteringLUTDimensions, 
+            this.transmittanceLUTPassResources.view
+        );
+        this.skyviewLUTPassResources = CreateSkyViewLUTPassResources(
+            this.device, skyviewLUTDimensions, 
+            this.transmittanceLUTPassResources.view, 
+            this.multiscatterLUTPassResources.view
+        );
 
-        const writeOnlyTextureGroupLayout = device.createBindGroupLayout({entries: [
-            {
-                binding: 0,
-                visibility: GPUShaderStage.COMPUTE,
-                storageTexture: {
-                    access: "write-only",
-                    format: "rgba16float",
-                    viewDimension: "2d",
-                }
-            }
-        ], label: "Write-Only Texture"});
-        const readOnlyTextureGroupLayout = device.createBindGroupLayout({entries: [
-            {
-                binding: 0,
-                visibility: GPUShaderStage.COMPUTE,
-                texture: {
-                    viewDimension: "2d",
-                }
-            }
-        ], label: "Read-Only Texture"});
-    
-        this.transmittanceLUTWriteGroup = device.createBindGroup({
-            layout: writeOnlyTextureGroupLayout,
+        const atmosphereBindGroupLayout = device.createBindGroupLayout({
             entries: [
-                {
+                { // sampler for the LUTs
                     binding: 0,
-                    resource: this.transmittanceLUTView,
-                }
-            ],
-            label: "Transmittance LUT Write-Only"
+                    visibility: GPUShaderStage.FRAGMENT,
+                    sampler: {}
+                },
+                { // transmittance
+                    binding: 1,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+                    texture: {
+                        sampleType: "float",
+                        viewDimension: "2d"
+                    }
+                },
+                { // multiscatter
+                    binding: 2,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+                    texture: {
+                        sampleType: "float",
+                        viewDimension: "2d"
+                    }
+                },
+                { // skyview
+                    binding: 3,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+                    texture: {
+                        sampleType: "float",
+                        viewDimension: "2d"
+                    }
+                },
+            ], label: "Atmosphere sampler/LUT/UBO Group"
         });
-        this.multiscatteringLUTWriteGroup = device.createBindGroup({
-            layout: writeOnlyTextureGroupLayout,
-            entries: [
-                {
-                    binding: 0,
-                    resource: this.multiscatteringLUTView,
-                }
-            ],
-            label: "Multiscattering LUT Write-Only"
-        });
-        this.skyviewLUTWriteGroup = device.createBindGroup({
-            layout: writeOnlyTextureGroupLayout,
-            entries: [
-                {
-                    binding: 0,
-                    resource: this.skyviewLUTView,
-                }
-            ],
-            label: "Skyview LUT Write-Only"
-        });
-        this.transmittanceLUTReadGroup = device.createBindGroup({
-            layout: readOnlyTextureGroupLayout,
-            entries: [
-                {
-                    binding: 0,
-                    resource: this.transmittanceLUTView,
-                }
-            ],
-            label: "Transmittance LUT Read-Only"
-        });
-        this.multiscatteringLUTReadGroup = device.createBindGroup({
-            layout: readOnlyTextureGroupLayout,
-            entries: [
-                {
-                    binding: 0,
-                    resource: this.multiscatteringLUTView,
-                }
-            ],
-            label: "Multiscattering LUT Read-Only"
-        });
-    
-        this.transmittanceLUTPipeline = device.createComputePipeline({
-            compute: {
-                module: transmittanceLUTShaderModule,
-                entryPoint: "computeTransmittance"
-            },
-            layout: device.createPipelineLayout({
-                bindGroupLayouts: [writeOnlyTextureGroupLayout]
-            }),
-        })
-        this.multiscatteringLUTPipeline = device.createComputePipeline({
-            compute: {
-                module: multiscatteringLUTShaderModule,
-                entryPoint: "computeMultiscattering"
-            },
-            layout: device.createPipelineLayout({
-                bindGroupLayouts: [writeOnlyTextureGroupLayout, readOnlyTextureGroupLayout]
-            }),
-        })
-        this.skyviewLUTPipeline = device.createComputePipeline({
-            compute: {
-                module: skyviewLUTShaderModule,
-                entryPoint: "computeSkyViewLuminance",
-            },
-            layout: device.createPipelineLayout({
-                bindGroupLayouts: [writeOnlyTextureGroupLayout, readOnlyTextureGroupLayout, readOnlyTextureGroupLayout]
-            })
-        })
-    
+
         const fullscreenQuadIndices = new Uint32Array([
             0, 1, 2,
             0, 2, 3,
         ]);
         this.fullscreenQuadIndexBuffer = device.createBuffer({size: fullscreenQuadIndices.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST});
         device.queue.writeBuffer(this.fullscreenQuadIndexBuffer, 0, fullscreenQuadIndices, 0, fullscreenQuadIndices.length);
-        
-        this.samplerForFullscreenPass = device.createSampler();
-    
+
         const atmosphereCameraLayouts = [
-            device.createBindGroupLayout({
-                entries: [
-                    { // sampler for the LUTs
-                        binding: 0,
-                        visibility: GPUShaderStage.FRAGMENT,
-                        sampler: {}
-                    },
-                    { // transmittance
-                        binding: 1,
-                        visibility: GPUShaderStage.FRAGMENT,
-                        texture: {
-                            sampleType: "float",
-                            viewDimension: "2d"
-                        }
-                    },
-                    { // multiscatter
-                        binding: 2,
-                        visibility: GPUShaderStage.FRAGMENT,
-                        texture: {
-                            sampleType: "float",
-                            viewDimension: "2d"
-                        }
-                    },
-                    { // skyview
-                        binding: 3,
-                        visibility: GPUShaderStage.FRAGMENT,
-                        texture: {
-                            sampleType: "float",
-                            viewDimension: "2d"
-                        }
-                    },
-                ], label: "Atmosphere Camera LUT Group"
-            }),
+            atmosphereBindGroupLayout,
             device.createBindGroupLayout({
                 entries: [
                     {
@@ -258,28 +347,27 @@ class SkySeaApp implements RendererApp {
             })
         ];
         this.atmosphereCameraLUTGroup = device.createBindGroup({
-            layout: atmosphereCameraLayouts[0],
+            layout: atmosphereBindGroupLayout,
             entries: [
                 {
                     binding: 0,
-                    resource: this.samplerForFullscreenPass,
+                    resource: device.createSampler(),
                 },
                 {
                     binding: 1,
-                    resource: this.transmittanceLUTView,
+                    resource: this.transmittanceLUTPassResources.view,
                 },
                 {
                     binding: 2,
-                    resource: this.multiscatteringLUTView,
+                    resource: this.multiscatterLUTPassResources.view,
                 },
                 {
                     binding: 3,
-                    resource: this.skyviewLUTView,
+                    resource: this.skyviewLUTPassResources.view,
                 },
             ],
             label: "Atmosphere Camera LUT Group"
         });
-
 
         this.cameraUBO = device.createBuffer({
             size: 16 * 4 + 16 * 4 + 4 * 4, // 2 mat4x4 + vec4
@@ -296,6 +384,10 @@ class SkySeaApp implements RendererApp {
             label: "Atmosphere Camera CameraUBO"
         })
 
+        const atmosphereCameraShaderModule = device.createShaderModule({
+            code: AtmosphereCameraPak,
+            label: "Atmosphere Camera",
+        });
         this.atmosphereCameraPipeline = device.createRenderPipeline({
             vertex: {
                 module: atmosphereCameraShaderModule,
@@ -318,89 +410,26 @@ class SkySeaApp implements RendererApp {
             layout: device.createPipelineLayout({
                 bindGroupLayouts: atmosphereCameraLayouts,
             }),
+            label: "Atmosphere Camera"
         })
-
-        const fullscreenPassGroupLayout = device.createBindGroupLayout({
-            entries: [
-                {
-                    binding: 0,
-                    visibility: GPUShaderStage.FRAGMENT,
-                    texture: {
-                        sampleType: "float",
-                        viewDimension: "2d"
-                    }
-                },
-                {
-                    binding: 1,
-                    visibility: GPUShaderStage.FRAGMENT,
-                    sampler: {
-                        type: "filtering"
-                    }
-                }
-            ]
-        });
-        this.combinedSamplerForFullscreenPass = device.createBindGroup({
-            layout: fullscreenPassGroupLayout,
-            entries: [
-                {
-                    binding: 0,
-                    resource: this.skyviewLUTView,
-                },
-                {
-                    binding: 1,
-                    resource: this.samplerForFullscreenPass,
-                }
-            ]
-        });
-    
-        const fullscreenPassShaderModule = device.createShaderModule({
-            code: FullscreenQuadPak
-        });
-    
-        this.fullscreenPassPipeline = device.createRenderPipeline({
-            vertex: {
-                module: fullscreenPassShaderModule,
-                entryPoint: "vertex_main",
-            },
-            fragment: {
-                module: fullscreenPassShaderModule,
-                entryPoint: "fragment_main",
-                targets: [
-                    {
-                        format: presentFormat
-                    },
-                ]
-            },
-            primitive: {
-                topology: "triangle-list",
-                cullMode: "back",
-                frontFace: "ccw",
-            },
-            layout: device.createPipelineLayout({
-                bindGroupLayouts: [fullscreenPassGroupLayout],
-            }),
-        });
 
         const commandEncoder = device.createCommandEncoder();
     
         let passEncoder = commandEncoder.beginComputePass();
-        passEncoder.setPipeline(this.transmittanceLUTPipeline);
-        passEncoder.setBindGroup(0, this.transmittanceLUTWriteGroup);
+        passEncoder.setPipeline(this.transmittanceLUTPassResources.pipeline);
+        passEncoder.setBindGroup(0, this.transmittanceLUTPassResources.group0);
         passEncoder.dispatchWorkgroups(transmittanceLUTDimensions.width / 16, transmittanceLUTDimensions.height / 16);
         passEncoder.end();
 
         passEncoder = commandEncoder.beginComputePass();
-        passEncoder.setPipeline(this.multiscatteringLUTPipeline);
-        passEncoder.setBindGroup(0, this.multiscatteringLUTWriteGroup);
-        passEncoder.setBindGroup(1, this.transmittanceLUTReadGroup);
+        passEncoder.setPipeline(this.multiscatterLUTPassResources.pipeline);
+        passEncoder.setBindGroup(0, this.multiscatterLUTPassResources.group0);
         passEncoder.dispatchWorkgroups(multiscatteringLUTDimensions.width / 16, multiscatteringLUTDimensions.height / 16); 
         passEncoder.end();
 
         passEncoder = commandEncoder.beginComputePass();
-        passEncoder.setPipeline(this.skyviewLUTPipeline);
-        passEncoder.setBindGroup(0, this.skyviewLUTWriteGroup);
-        passEncoder.setBindGroup(1, this.transmittanceLUTReadGroup);
-        passEncoder.setBindGroup(2, this.multiscatteringLUTReadGroup);
+        passEncoder.setPipeline(this.skyviewLUTPassResources.pipeline);
+        passEncoder.setBindGroup(0, this.skyviewLUTPassResources.group0);
         passEncoder.dispatchWorkgroups(skyviewLUTDimensions.width / 16, skyviewLUTDimensions.height / 16, 1);
         passEncoder.end();
 

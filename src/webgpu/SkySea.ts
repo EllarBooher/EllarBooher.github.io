@@ -426,7 +426,9 @@ class SkySeaApp implements RendererApp {
             entries: [
                 {
                     binding: 0,
-                    resource: device.createSampler(),
+                    resource: device.createSampler({
+                        magFilter: "linear",
+                    }),
                 },
                 {
                     binding: 1,

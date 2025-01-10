@@ -7,7 +7,7 @@ import { packShaders } from './src/shaders/Shaders';
 const wgslPlugin = () => ({
   name: 'wgsl-plugin',
   transform: (src: string, id: string) => {
-    if (id.endsWith('.wgsl')) {
+    if ((!id.endsWith('.inc.wgsl') && id.endsWith('.wgsl'))) {
       return {
         code: `
           export default \`${packShaders(id,src)}\`;

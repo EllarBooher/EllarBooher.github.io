@@ -3,7 +3,7 @@ import fs from 'fs';
 const shaderRoot = "src/shaders/";
 
 // TODO: Load includes upon every shader compile, but cache them and check if the version on disk is newer. This is needed for hot reloading
-const includeFilenames = ["atmosphere_common.wgsl.inc", "atmosphere_raymarch.wgsl.inc"]; 
+const includeFilenames = ["atmosphere_common.inc.wgsl", "atmosphere_raymarch.inc.wgsl"]; 
 
 const includeMappings = new Map<string,string>();
 includeFilenames.forEach(
@@ -91,7 +91,6 @@ function replaceConditionalBlocks(filename: string, source: string, enabledCondi
                 step = ConditionalState.IF;
                 currentFlag = remainder;
                 keepLines = enabledFlags.has(currentFlag);
-                console.log(`Found flag ${remainder}, ${keepLines}`);
             }
             else if (prefix != LinePrefix.None)
             {

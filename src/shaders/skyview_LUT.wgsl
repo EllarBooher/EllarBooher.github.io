@@ -3,8 +3,8 @@
 @group(1) @binding(0) var transmittance_lut: texture_2d<f32>;
 @group(2) @binding(0) var multiscatter_lut: texture_2d<f32>;
 
-//// INCLUDE atmosphere_common.wgsl.inc
-//// INCLUDE atmosphere_raymarch.wgsl.inc MULTISCATTERING
+//// INCLUDE atmosphere_common.inc.wgsl
+//// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING
 
 // All units are Mm/megameters (10^6 meters) unless marked km/kilometers (10^3 meters)
 

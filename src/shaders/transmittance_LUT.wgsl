@@ -1,6 +1,6 @@
 @group(0) @binding(0) var transmittance_LUT: texture_storage_2d<rgba16float, write>;
 
-//// INCLUDE atmosphere_common.wgsl.inc
+//// INCLUDE atmosphere_common.inc.wgsl
 
 const SAMPLE_COUNT: u32 = 500;
 

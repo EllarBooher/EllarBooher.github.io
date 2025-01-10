@@ -33,5 +33,5 @@ fn vertex_main(@builtin(vertex_index) index : u32) -> VertexOut
 @fragment
 fn fragment_main(fragData: VertexOut) -> @location(0) vec4<f32>
 {
-    return 5.0 * textureSample(b_texture, b_sampler, fragData.uv);
+    return textureSample(b_texture, b_sampler, fragData.uv);
 }

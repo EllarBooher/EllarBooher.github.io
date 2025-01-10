@@ -2,8 +2,17 @@ import TransmittanceLUTPak from '../shaders/transmittance_LUT.wgsl';
 import MultiscatteringLUTPak from '../shaders/multiscatter_LUT.wgsl';
 import FullscreenQuadPak from '../shaders/fullscreen_quad.wgsl';
 import SkyViewLUTPak from '../shaders/skyview_LUT.wgsl';
+import AtmosphereCameraPak from '../shaders/atmosphere_camera.wgsl';
 
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
+import { mat4, Mat4, vec4, Vec4 } from 'wgpu-matrix';
+
+interface CameraUBO
+{
+    inv_proj: Mat4,
+    inv_view: Mat4,
+    position: Vec4,
+}
 
 class SkySeaApp implements RendererApp {
     transmittanceLUTTexture: GPUTexture;
@@ -31,6 +40,11 @@ class SkySeaApp implements RendererApp {
     samplerForFullscreenPass: GPUSampler;
     combinedSamplerForFullscreenPass: GPUBindGroup;
 
+    atmosphereCameraLUTGroup: GPUBindGroup;
+    cameraUBO: GPUBuffer;
+    cameraUBOGroup: GPUBindGroup;
+    atmosphereCameraPipeline: GPURenderPipeline;
+
     fullscreenQuadIndexBuffer: GPUBuffer;
     fullscreenPassPipeline: GPURenderPipeline;
 
@@ -53,6 +67,10 @@ class SkySeaApp implements RendererApp {
         const skyviewLUTShaderModule = device.createShaderModule({
             code: SkyViewLUTPak,
             label: "Skyview LUT"
+        });
+        const atmosphereCameraShaderModule = device.createShaderModule({
+            code: AtmosphereCameraPak,
+            label: "Atmosphere Camera"
         })
 
         const transmittanceLUTDimensions = {width: 512, height: 256};
@@ -64,6 +82,7 @@ class SkySeaApp implements RendererApp {
             dimension: "2d",
             format: "rgba16float",
             usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+            label: "Transmittance LUT",
         });
         this.transmittanceLUTView = this.transmittanceLUTTexture.createView({label: "Transmittance LUT"});
 
@@ -72,6 +91,7 @@ class SkySeaApp implements RendererApp {
             dimension: "2d",
             format: "rgba16float",
             usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+            label: "Multiscattering LUT",
         });
         this.multiscatteringLUTView = this.multiscatteringLUTTexture.createView({label: "Multiscattering LUT"});
     
@@ -80,6 +100,7 @@ class SkySeaApp implements RendererApp {
             dimension: "2d",
             format: "rgba16float",
             usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+            label: "Skyview LUT",
         });
         this.skyviewLUTView = this.skyviewLUTTexture.createView({label: "Skyview LUT"})
 
@@ -192,6 +213,113 @@ class SkySeaApp implements RendererApp {
         
         this.samplerForFullscreenPass = device.createSampler();
     
+        const atmosphereCameraLayouts = [
+            device.createBindGroupLayout({
+                entries: [
+                    { // sampler for the LUTs
+                        binding: 0,
+                        visibility: GPUShaderStage.FRAGMENT,
+                        sampler: {}
+                    },
+                    { // transmittance
+                        binding: 1,
+                        visibility: GPUShaderStage.FRAGMENT,
+                        texture: {
+                            sampleType: "float",
+                            viewDimension: "2d"
+                        }
+                    },
+                    { // multiscatter
+                        binding: 2,
+                        visibility: GPUShaderStage.FRAGMENT,
+                        texture: {
+                            sampleType: "float",
+                            viewDimension: "2d"
+                        }
+                    },
+                    { // skyview
+                        binding: 3,
+                        visibility: GPUShaderStage.FRAGMENT,
+                        texture: {
+                            sampleType: "float",
+                            viewDimension: "2d"
+                        }
+                    },
+                ], label: "Atmosphere Camera LUT Group"
+            }),
+            device.createBindGroupLayout({
+                entries: [
+                    {
+                        binding: 0,
+                        visibility: GPUShaderStage.FRAGMENT,
+                        buffer: {}
+                    }
+                ], label: "Camera UBO"
+            })
+        ];
+        this.atmosphereCameraLUTGroup = device.createBindGroup({
+            layout: atmosphereCameraLayouts[0],
+            entries: [
+                {
+                    binding: 0,
+                    resource: this.samplerForFullscreenPass,
+                },
+                {
+                    binding: 1,
+                    resource: this.transmittanceLUTView,
+                },
+                {
+                    binding: 2,
+                    resource: this.multiscatteringLUTView,
+                },
+                {
+                    binding: 3,
+                    resource: this.skyviewLUTView,
+                },
+            ],
+            label: "Atmosphere Camera LUT Group"
+        });
+
+
+        this.cameraUBO = device.createBuffer({
+            size: 16 * 4 + 16 * 4 + 4 * 4, // 2 mat4x4 + vec4
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
+        });
+        this.cameraUBOGroup = device.createBindGroup({
+            layout: atmosphereCameraLayouts[1],
+            entries: [
+                {
+                    binding: 0,
+                    resource: {buffer: this.cameraUBO},
+                },
+            ],
+            label: "Atmosphere Camera CameraUBO"
+        })
+
+        this.atmosphereCameraPipeline = device.createRenderPipeline({
+            vertex: {
+                module: atmosphereCameraShaderModule,
+                entryPoint: "vertex_main",
+            },
+            fragment: {
+                module: atmosphereCameraShaderModule,
+                entryPoint: "fragment_main",
+                targets: [
+                    {
+                        format: presentFormat
+                    },
+                ]
+            },
+            primitive: {
+                topology: "triangle-list",
+                cullMode: "back",
+                frontFace: "ccw",
+            },
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: atmosphereCameraLayouts,
+            }),
+        })
+
         const fullscreenPassGroupLayout = device.createBindGroupLayout({
             entries: [
                 {
@@ -281,9 +409,29 @@ class SkySeaApp implements RendererApp {
 
     draw(
         presentView: GPUTextureView, 
-        _aspectRatio: number, 
+        aspectRatio: number, 
         _time: number): void
     {
+        const fov = 60 * Math.PI / 180
+        const near = 0.1;
+        const far = 1000;
+        const perspective = mat4.perspective(fov, aspectRatio, near, far);
+        
+        const camera_pos = [0, 10, 0];
+        const view = mat4.translation(camera_pos);
+
+        const cameraUBOData: CameraUBO = {
+            inv_proj: mat4.inverse(perspective),
+            inv_view: mat4.inverse(view),
+            position: vec4.create(...camera_pos),
+        };
+        const cameraUBODataBytes = new Float32Array(16 + 16 + 4);
+        cameraUBODataBytes.set(cameraUBOData.inv_proj, 0);
+        cameraUBODataBytes.set(cameraUBOData.inv_view, 16);
+        cameraUBODataBytes.set(cameraUBOData.position, 16 + 16);
+        // console.log(cameraUBODataBytes.join(','));
+        this.device.queue.writeBuffer(this.cameraUBO, 0, cameraUBODataBytes, 0, cameraUBODataBytes.length)
+
         const commandEncoder = this.device.createCommandEncoder();
 
         const clearColor = {r: 1.0, g: 0.0, b: 0.0, a: 0.0};
@@ -296,10 +444,13 @@ class SkySeaApp implements RendererApp {
                     view: presentView
                 },
             ],
+            label: "Atmosphere Camera"
         });
-        fullscreenPassEncoder.setPipeline(this.fullscreenPassPipeline);
+
+        fullscreenPassEncoder.setPipeline(this.atmosphereCameraPipeline);
         fullscreenPassEncoder.setIndexBuffer(this.fullscreenQuadIndexBuffer, "uint32", 0, this.fullscreenQuadIndexBuffer.size);
-        fullscreenPassEncoder.setBindGroup(0, this.combinedSamplerForFullscreenPass);
+        fullscreenPassEncoder.setBindGroup(0, this.atmosphereCameraLUTGroup);
+        fullscreenPassEncoder.setBindGroup(1, this.cameraUBOGroup);
         fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
     
         fullscreenPassEncoder.end();

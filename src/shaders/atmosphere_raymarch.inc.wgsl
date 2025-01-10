@@ -33,13 +33,13 @@ struct CelestialLight
 
 const LIGHT_GLOBAL = CelestialLight(
     vec3<f32>(1.0),
-    vec3<f32>(0.0, -1.0, 0.0),
-    1.0,
+    vec3<f32>(0.0, -0.1961, 0.98058),
+    6.0,
     16.0 / 60.0 * (3.141592653589793 / 180.0),
 );
 
 fn sampleTransmittanceLUT_Sun(
-    lut: texture_2d<f32>,
+    transmittance_lut: texture_2d<f32>,
     atmosphere: ptr<function,Atmosphere>,
     sun: ptr<function,CelestialLight>,
     radius: f32,
@@ -60,7 +60,7 @@ fn sampleTransmittanceLUT_Sun(
 
     // This sample makes no assumption about ground intersection
     let transmittanceThroughAtmosphere: vec3<f32> = sampleTransmittanceLUT_RadiusMu(
-        lut, 
+        transmittance_lut, 
         atmosphere, 
         radius, 
         cos_sunZenith

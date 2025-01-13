@@ -9,6 +9,7 @@ const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const guiPaneRef = useRef<HTMLDivElement>(null);
     const guiRef = useRef<GUI>();
+    const lastTimeRef = useRef<number>();
 
     const resizeCanvas = useCallback(() => {
         const canvas = canvasRef.current;
@@ -33,10 +34,14 @@ const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
         const drawContext = canvasRef.current?.getContext("webgpu");
 
         if (drawContext) {
+            const deltaTime = time - (lastTimeRef.current ? lastTimeRef.current : 0.0);
+            lastTimeRef.current = time;
+
             app.draw(
                 drawContext.getCurrentTexture().createView(),
                 canvasRef.current!.width / canvasRef.current!.height,
-                time
+                time,
+                deltaTime
             );
 
             animateRequestRef.current = requestAnimationFrame(animate);

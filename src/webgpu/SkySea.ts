@@ -433,6 +433,9 @@ class SkySeaApp implements RendererApp {
 
     settings: {
         showSkyViewLUT: boolean,
+        timeHours: number,
+        timeSpeedupFactor: number,
+        skipNight: boolean,
     };
     fullscreenQuadPassResources: FullscreenQuadPassResources;
 
@@ -452,7 +455,10 @@ class SkySeaApp implements RendererApp {
 
     setupUI(gui: GUI)
     {
-        gui.add(this.settings, "showSkyViewLUT");
+        gui.add(this.settings, 'showSkyViewLUT').name('Show Sky-view Lookup Table');
+        gui.add(this.settings, 'timeHours').min(0.0).max(24.0).name('Time in Hours').listen();
+        gui.add(this.settings, 'timeSpeedupFactor').min(1.0).max(50000).step(1.0).name('Time Speed Multiplier');
+        gui.add(this.settings, 'skipNight').name('Skip Night');
     }
 
     constructor(device: GPUDevice, presentFormat: GPUTextureFormat, time: number)
@@ -460,7 +466,12 @@ class SkySeaApp implements RendererApp {
         this.device = device;
         this.presentFormat = presentFormat;
         this.startTime = time;
-        this.settings = {showSkyViewLUT: false};
+        this.settings = {
+            showSkyViewLUT: false, 
+            timeHours: 5.5, 
+            timeSpeedupFactor: 1000.0,
+            skipNight: true,
+        };
 
         this.celestialLightUBO = new CelestialLightUBO(device);
 
@@ -632,7 +643,8 @@ class SkySeaApp implements RendererApp {
     draw(
         presentView: GPUTextureView, 
         aspectRatio: number, 
-        time: number): void
+        _timeMilliseconds: number,
+        deltaTimeMilliseconds: number): void
     {
         const commandEncoder = this.device.createCommandEncoder();
 
@@ -640,15 +652,27 @@ class SkySeaApp implements RendererApp {
         skyviewLUTPassEncoder.setPipeline(this.skyviewLUTPassResources.pipeline);
         skyviewLUTPassEncoder.setBindGroup(0, this.skyviewLUTPassResources.group0);
 
-        const adjustedTime = time - this.startTime;
+        const HOURS_TO_MILLISECONDS = 60.0 * 60.0 * 1000.0;
+
+        this.settings.timeHours += this.settings.timeSpeedupFactor * deltaTimeMilliseconds / HOURS_TO_MILLISECONDS;
+        this.settings.timeHours = this.settings.timeHours - Math.floor(this.settings.timeHours / 24.0) * 24.0;
+
+        const NIGHT_START_HOURS = (12.0 + 6.0) + 0.25;
+        const NIGHT_END_HOURS = 6.0 - 0.25;
+        if(this.settings.skipNight && (this.settings.timeHours > NIGHT_START_HOURS || this.settings.timeHours < NIGHT_END_HOURS))
+        {
+            // time is between 0.0 and 24.0
+            // Skip from ~7 PM to 5 AM (1 hour after sunset to 1 hour before sunrise)
+            this.settings.timeHours = NIGHT_END_HOURS;
+        }
 
         // offset the time so that the app starts during the day
-        const START_ROTATION = 3.1416 / 2.0 - 0.1;
-        const SUN_ROTATION_SPEED_RAD_PER_S = 3.1416 / 200.0;
+        const MIDNIGHT_ROTATION = 0.0;
+        const SUN_ROTATION_RAD_PER_HOUR = (2.0 * Math.PI) / 24.0;
         vec3.rotateX(
             vec3.create(0.0, 1.0, 0.0), 
             vec3.create(0.0,0.0,0.0), 
-            (adjustedTime / 1000.0) * SUN_ROTATION_SPEED_RAD_PER_S + START_ROTATION, 
+            this.settings.timeHours * SUN_ROTATION_RAD_PER_HOUR + MIDNIGHT_ROTATION, 
             this.celestialLightUBO.data.light.forward
         );
         this.celestialLightUBO.writeToBuffer(this.device);   

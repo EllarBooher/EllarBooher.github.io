@@ -7,7 +7,8 @@ export interface RendererApp
     draw: (
         presentView: GPUTextureView, 
         aspectRatio: number, 
-        time: number
+        timeMilliseconds: number,
+        deltaTimeMilliseconds: number
     ) => void;
     setupUI?: (
         gui: GUI,

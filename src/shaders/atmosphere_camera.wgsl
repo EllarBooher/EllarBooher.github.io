@@ -21,7 +21,9 @@ struct CameraUBO
 // Render a quad and use this as the fragment stage
 
 //// INCLUDE atmosphere_common.inc.wgsl
-//// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING
+//// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING LIGHT_ILLUMINANCE_IS_ONE
+
+//// INCLUDE tonemap.inc.wgsl
 
 fn sampleSkyViewLUT(
     atmosphere: ptr<function, Atmosphere>, 
@@ -192,39 +194,6 @@ fn sampleEnvironmentLuminance(
     }
 }
 
-fn tonemapPBRNeutral(color: vec3<f32>) -> vec3<f32>
-{
-    // Implementation of https://github.com/KhronosGroup/ToneMapping/tree/main/PBR_Neutral
-    let x = min(min(color.r, color.g), color.b);
-
-    // 4% Fresnel Reflection for a standard 1.5 IoR material
-    let F_normal = 0.04;
-
-    var f = F_normal;
-    if (x <= 2.0 * F_normal)
-    {
-        f = x - x * x / (4.0 * F_normal);
-    }
-
-    var color_minus_f = color - vec3<f32>(f);
-
-    // Parameter that controls when highlight compression starts
-    let K_s = 0.8 - F_normal;
-
-    let p = max(max(color_minus_f.r, color_minus_f.g), color_minus_f.b);
-    if (p <= K_s)
-    {
-        return color_minus_f;
-    }
-
-    // Speed of desaturation
-    let K_d = 0.15;
-
-    let p_n = 1.0 - (1.0 - K_s) * (1.0 - K_s) / (p + 1.0 - 2.0 * K_s);
-    let g = 1.0 / (K_d * (p - p_n) + 1.0);
-
-    return mix(vec3(p_n), color_minus_f * p_n / p, g); 
-}
 
 const QUAD_VERTICES: array<vec4<f32>, 4> = array<vec4<f32>,4>(
     vec4<f32>(-1.0, -1.0, 0.0, 1.0),
@@ -269,9 +238,7 @@ fn fragment_main(fragData: VertexOut) -> @location(0) vec4<f32>
     let direction_view_space = b_camera.inv_proj * vec4(uv_clip_space, near_plane_depth, 1.0);
     let direction_world = normalize((b_camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
 
-    let luminance = sampleEnvironmentLuminance(&atmosphere, &light, origin, direction_world);
+    let luminance = light.strength * sampleEnvironmentLuminance(&atmosphere, &light, origin, direction_world);
 
-    let color = tonemapPBRNeutral(luminance);
-
-    return vec4<f32>(color,1.0);
+    return vec4<f32>(tonemapACES(luminance),1.0);
 }

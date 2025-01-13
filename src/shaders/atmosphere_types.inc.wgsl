@@ -40,7 +40,7 @@ const ATMOSPHERE_GLOBAL: Atmosphere = Atmosphere(
 
     6.420,
 
-    vec3<f32>(1.0),
+    0.3 * vec3<f32>(1.0, 0.75, 0.4),
     0.0,
 
     vec3<f32>(0.0),

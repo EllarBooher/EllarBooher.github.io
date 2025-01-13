@@ -32,8 +32,8 @@ class CelestialLightUBO
     data: {light: CelestialLight } = {
         light: {
             color: vec3.create(1.0, 1.0, 1.0),
-            strength: 6.0,
-            forward: vec3.create(0.0, -0.1961, 0.98058),
+            strength: 100.0,
+            forward: vec3.create(0.0, 1.0, 0.0),
             angularRadius: 16.0 / 60.0 * (3.141592653589793 / 180.0),
         }
     };
@@ -657,8 +657,8 @@ class SkySeaApp implements RendererApp {
         this.settings.timeHours += this.settings.timeSpeedupFactor * deltaTimeMilliseconds / HOURS_TO_MILLISECONDS;
         this.settings.timeHours = this.settings.timeHours - Math.floor(this.settings.timeHours / 24.0) * 24.0;
 
-        const NIGHT_START_HOURS = (12.0 + 6.0) + 0.25;
-        const NIGHT_END_HOURS = 6.0 - 0.25;
+        const NIGHT_START_HOURS = (12.0 + 6.0) + 0.5;
+        const NIGHT_END_HOURS = 6.0 - 0.5;
         if(this.settings.skipNight && (this.settings.timeHours > NIGHT_START_HOURS || this.settings.timeHours < NIGHT_END_HOURS))
         {
             // time is between 0.0 and 24.0

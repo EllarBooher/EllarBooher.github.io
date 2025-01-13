@@ -3,7 +3,12 @@ import fs from 'fs';
 const shaderRoot = "src/shaders/";
 
 // TODO: Load includes upon every shader compile, but cache them and check if the version on disk is newer. This is needed for hot reloading
-const includeFilenames = ["atmosphere_types.inc.wgsl", "atmosphere_common.inc.wgsl", "atmosphere_raymarch.inc.wgsl"]; 
+const includeFilenames = [
+    "atmosphere_types.inc.wgsl", 
+    "atmosphere_common.inc.wgsl", 
+    "atmosphere_raymarch.inc.wgsl",
+    "tonemap.inc.wgsl",
+]; 
 
 interface ShaderInclude {
     code: string,

@@ -3,6 +3,7 @@ import MultiscatteringLUTPak from '../shaders/multiscatter_LUT.wgsl';
 import SkyViewLUTPak from '../shaders/skyview_LUT.wgsl';
 import AtmosphereCameraPak from '../shaders/atmosphere_camera.wgsl';
 import { GUI } from "lil-gui";
+import FullscreenQuadPak from '../shaders/fullscreen_quad.wgsl';
 
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
 import { mat4, Mat4, vec3, Vec3, vec4, Vec4 } from 'wgpu-matrix';
@@ -342,6 +343,89 @@ function CreateSkyViewLUTPassResources(
     }
 }
 
+interface FullscreenQuadPassResources
+{
+    group0Layout: GPUBindGroupLayout;
+    group0: GPUBindGroup;
+
+    pipeline: GPURenderPipeline;
+}
+
+// For showing a single texture stretched across the screen
+function CreateFullscreenQuadPassResources(
+    device: GPUDevice,
+    texture: GPUTextureView, 
+    outputFormat: GPUTextureFormat,
+)
+{
+    const label = "Fullscreen Quad";
+    const group0Layout = 
+        device.createBindGroupLayout({
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    texture: {}
+                },
+                {
+                    binding: 1,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    sampler: {}
+                }
+            ], label
+        });
+
+    const group0 = device.createBindGroup({
+        layout: group0Layout,
+        entries: [
+            {
+                binding: 0,
+                resource: texture,
+            },
+            {
+                binding: 1,
+                resource: device.createSampler({magFilter: "nearest", minFilter: "nearest"}),
+            },
+        ],
+        label
+    })
+
+    const shaderModule = device.createShaderModule({
+        code: FullscreenQuadPak,
+        label
+    });
+    const pipeline = device.createRenderPipeline({
+        vertex: {
+            module: shaderModule,
+            entryPoint: "vertex_main",
+        },
+        fragment: {
+            module: shaderModule,
+            entryPoint: "fragment_main",
+            targets: [
+                {
+                    format: outputFormat
+                },
+            ]
+        },
+        primitive: {
+            topology: "triangle-list",
+            cullMode: "none",
+            frontFace: "ccw",
+        },
+        layout: device.createPipelineLayout({
+            bindGroupLayouts: [ group0Layout ],
+        }),
+        label
+    })
+
+    return {
+        pipeline,
+        group0,
+        group0Layout,
+    };
+}
+
 class SkySeaApp implements RendererApp {
     transmittanceLUTPassResources: TransmittanceLUTPassResources;
     multiscatterLUTPassResources: MultiscatterLUTPassResources;
@@ -350,6 +434,7 @@ class SkySeaApp implements RendererApp {
     settings: {
         showSkyViewLUT: boolean,
     };
+    fullscreenQuadPassResources: FullscreenQuadPassResources;
 
     celestialLightUBO: CelestialLightUBO;
 
@@ -391,6 +476,9 @@ class SkySeaApp implements RendererApp {
             this.transmittanceLUTPassResources.view, 
             this.multiscatterLUTPassResources.view,
             this.celestialLightUBO,
+        );
+        this.fullscreenQuadPassResources = CreateFullscreenQuadPassResources(
+            this.device, this.skyviewLUTPassResources.view, presentFormat
         );
 
         const atmosphereBindGroupLayout = device.createBindGroupLayout({
@@ -598,15 +686,25 @@ class SkySeaApp implements RendererApp {
                     view: presentView
                 },
             ],
-            label: "Atmosphere Camera"
+            label: "Fullscreen Pass"
         });
 
-        fullscreenPassEncoder.setPipeline(this.atmosphereCameraPipeline);
-        fullscreenPassEncoder.setIndexBuffer(this.fullscreenQuadIndexBuffer, "uint32", 0, this.fullscreenQuadIndexBuffer.size);
-        fullscreenPassEncoder.setBindGroup(0, this.atmosphereCameraLUTGroup);
-        fullscreenPassEncoder.setBindGroup(1, this.atmosphereCameraGroup1);
-        fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
-    
+        if(this.settings.showSkyViewLUT)
+        {
+            fullscreenPassEncoder.setPipeline(this.fullscreenQuadPassResources.pipeline);
+            fullscreenPassEncoder.setIndexBuffer(this.fullscreenQuadIndexBuffer, "uint32", 0, this.fullscreenQuadIndexBuffer.size);
+            fullscreenPassEncoder.setBindGroup(0, this.fullscreenQuadPassResources.group0);
+            fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
+        }
+        else
+        {
+            fullscreenPassEncoder.setPipeline(this.atmosphereCameraPipeline);
+            fullscreenPassEncoder.setIndexBuffer(this.fullscreenQuadIndexBuffer, "uint32", 0, this.fullscreenQuadIndexBuffer.size);
+            fullscreenPassEncoder.setBindGroup(0, this.atmosphereCameraLUTGroup);
+            fullscreenPassEncoder.setBindGroup(1, this.atmosphereCameraGroup1);
+            fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
+        }
+        
         fullscreenPassEncoder.end();
     
         this.device.queue.submit([commandEncoder.finish()]);

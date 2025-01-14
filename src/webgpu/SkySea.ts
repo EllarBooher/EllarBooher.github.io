@@ -528,7 +528,7 @@ class SkySeaApp implements RendererApp {
                 [RenderOutput.MultiscatterLUT, this.multiscatterLUTPassResources.view], 
                 [RenderOutput.SkyviewLUT, this.skyviewLUTPassResources.view]
             ]), 
-            presentFormat
+            this.presentFormat
         );
 
         const atmosphereBindGroupLayout = device.createBindGroupLayout({
@@ -648,7 +648,7 @@ class SkySeaApp implements RendererApp {
                 entryPoint: "fragment_main",
                 targets: [
                     {
-                        format: presentFormat
+                        format: this.presentFormat
                     },
                 ]
             },

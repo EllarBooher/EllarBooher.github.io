@@ -527,6 +527,10 @@ class SkySeaApp implements RendererApp {
                 b: number,
             }
         },
+        orbit: {
+            inclinationRadians: number,
+            sunsetAzimuthRadians: number,
+        }
     };
     fullscreenQuadPassResources: FullscreenQuadPassResources;
 
@@ -583,6 +587,9 @@ class SkySeaApp implements RendererApp {
         gui.add(this.settings, 'paused').name('Pause Time');
         gui.add({ fn: () => { this.settings.timeHours = 6.0 - 0.5 }}, 'fn').name('Skip to Sunrise');
         gui.add({ fn: () => { this.settings.timeHours = 18.0 - 0.5 }}, 'fn').name('Skip to Sunset');
+
+        gui.add(this.settings.orbit, 'sunsetAzimuthRadians').name("Sun Azimuth").min(0.0).max(2.0 * Math.PI);
+        gui.add(this.settings.orbit, 'inclinationRadians').name("Sun Inclination").min(0.0).max(Math.PI);
     }
 
     constructor(device: GPUDevice, presentFormat: GPUTextureFormat, time: number)
@@ -600,6 +607,10 @@ class SkySeaApp implements RendererApp {
                 gain: {
                     r: 1.0, g: 1.0, b: 1.0
                 }
+            },
+            orbit: {
+                inclinationRadians: Math.PI / 2,
+                sunsetAzimuthRadians: 0.0,
             }
         };
 
@@ -809,14 +820,24 @@ class SkySeaApp implements RendererApp {
         }
 
         // offset the time so that the app starts during the day
-        const MIDNIGHT_ROTATION = 0.0;
         const SUN_ROTATION_RAD_PER_HOUR = (2.0 * Math.PI) / 24.0;
-        vec3.rotateX(
-            vec3.create(0.0, 1.0, 0.0), 
-            vec3.create(0.0,0.0,0.0), 
-            this.settings.timeHours * SUN_ROTATION_RAD_PER_HOUR + MIDNIGHT_ROTATION, 
-            this.celestialLightUBO.data.light.forward
+        const SUN_ANOMALY = (12.0 - this.settings.timeHours) * SUN_ROTATION_RAD_PER_HOUR;
+        const orbit = this.settings.orbit;
+        const sunsetDirection = vec3.create(
+            -Math.sin(orbit.sunsetAzimuthRadians), 
+            0.0, 
+            Math.cos(orbit.sunsetAzimuthRadians)
         );
+        const noonDirection = vec3.create(
+            Math.cos(orbit.sunsetAzimuthRadians) * Math.cos(orbit.inclinationRadians),
+            Math.sin(orbit.inclinationRadians),
+            Math.sin(orbit.sunsetAzimuthRadians) * Math.cos(orbit.inclinationRadians)
+        );
+        const sunDirection = vec3.add(
+            vec3.scale(sunsetDirection, Math.sin(SUN_ANOMALY)), 
+            vec3.scale(noonDirection, Math.cos(SUN_ANOMALY))
+        );
+        vec3.scale(sunDirection, -1.0, this.celestialLightUBO.data.light.forward);
         this.celestialLightUBO.writeToBuffer(this.device);   
         skyviewLUTPassEncoder.setBindGroup(1, this.skyviewLUTPassResources.group1);
 

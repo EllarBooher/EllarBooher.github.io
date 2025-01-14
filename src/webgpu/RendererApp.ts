@@ -15,25 +15,35 @@ export interface RendererApp
     ) => void;
 };
 
-export type RendererAppConstructor = (device: GPUDevice, presentFormat: GPUTextureFormat, time: number) => RendererApp;
+export type RendererAppConstructor = (device: GPUDevice, supportedFeatures: GPUSupportedFeatures, presentFormat: GPUTextureFormat, time: number) => RendererApp;
 
-export async function getDevice(): Promise<GPUDevice> {
-    return new Promise<GPUDevice>((resolve, reject) => {
+export async function getDevice(): Promise<{adapter: GPUAdapter, device: GPUDevice}> {
+    return new Promise<{adapter: GPUAdapter, device: GPUDevice}>(async (resolve, reject) => {
         console.log("Starting WebGPU");
         if(!('gpu' in navigator)) {
             reject(new Error("WebGPU is not available in this browser.", {cause: new Error("navigator.gpu is null")}));
         }
     
-        navigator.gpu.requestAdapter().then(adapter => {
-            return adapter?.requestDevice();
-        }).then(device => {
-            if(device)
-            {
-                resolve(device);
-            }
-            reject(new Error(`No WebGPU device.`));
-        }).catch(reason => {
-            reject(new Error("Unable to get WebGPU Device", {cause: reason}));
+        const adapter = await navigator.gpu.requestAdapter().catch(reason => {
+            reject(new Error("Unable to get WebGPU Adapter", {cause: reason}));
         });
+
+        if(!adapter)
+        {
+            reject(new Error("Unable to get WebGPU Adapter"));
+            return;
+        }
+        
+        const device = await adapter.requestDevice().catch(reason => {
+                reject(new Error("Unable to get WebGPU Device", {cause: reason}));
+            });
+
+        if(!device)
+        {
+            reject(new Error("Unable to get WebGPU Device"));
+            return;
+        }
+
+        resolve({adapter, device});
     });
 }

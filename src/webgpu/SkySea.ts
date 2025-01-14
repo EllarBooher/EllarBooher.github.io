@@ -731,6 +731,6 @@ class SkySeaApp implements RendererApp {
     }
 };
 
-export const SkySeaAppConstructor: RendererAppConstructor = (device, presentFormat, time) => {
+export const SkySeaAppConstructor: RendererAppConstructor = (device, _supportedFeatures, presentFormat, time) => {
     return new SkySeaApp(device, presentFormat, time);
 };

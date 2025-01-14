@@ -1,8 +1,28 @@
 import HelloCubePak from '../shaders/hello_cube.wgsl';
 import { mat4 } from 'wgpu-matrix';
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
+import { GUI } from "lil-gui";
 
 // Draw a simple cube
+
+const POSSIBLE_WEBGPU_FEATURES = new Set<string>([
+    "depth-clip-control",
+    "depth32float-stencil8",
+    "texture-compression-bc",
+    "texture-compression-bc-sliced-3d",
+    "texture-compression-etc2",
+    "texture-compression-astc",
+    "texture-compression-astc-sliced-3d",
+    "timestamp-query",
+    "indirect-first-instance",
+    "shader-f16",
+    "rg11b10ufloat-renderable",
+    "bgra8unorm-storage",
+    "float32-filterable",
+    "float32-blendable",
+    "clip-distances",
+    "dual-source-blending",
+]);
 
 export class HelloCubeApp implements RendererApp {
     device: GPUDevice;
@@ -18,9 +38,12 @@ export class HelloCubeApp implements RendererApp {
     projViewModelBuffer: GPUBuffer;
     projViewModelBindGroup: GPUBindGroup;
 
-    constructor(device: GPUDevice, presentFormat: GPUTextureFormat) {
+    supportedFeatures: GPUSupportedFeatures;
+
+    constructor(device: GPUDevice, supportedFeatures: GPUSupportedFeatures, presentFormat: GPUTextureFormat) {
         this.device = device;
         this.presentFormat = presentFormat;
+        this.supportedFeatures = supportedFeatures;
 
         const shaderModule = this.device.createShaderModule({
             code: HelloCubePak,
@@ -137,6 +160,15 @@ export class HelloCubeApp implements RendererApp {
         };
         this.pipeline = this.device.createRenderPipeline(pipelineDescriptor);
     };
+
+    setupUI(gui: GUI)
+    {
+        POSSIBLE_WEBGPU_FEATURES.forEach((feature) => {
+            const supported = this.supportedFeatures.has(feature);
+            gui.add({enabled: supported},'enabled').name(feature).disable(true);
+        });
+    }
+
     draw(
         presentView: GPUTextureView, 
         aspectRatio: number, 
@@ -182,6 +214,6 @@ export class HelloCubeApp implements RendererApp {
     }
 }
 
-export const HelloCubeAppConstructor: RendererAppConstructor = (device, presentFormat, _time) => {
-    return new HelloCubeApp(device, presentFormat);
+export const HelloCubeAppConstructor: RendererAppConstructor = (device, supportedFeatures, presentFormat, _time) => {
+    return new HelloCubeApp(device, supportedFeatures, presentFormat);
 }

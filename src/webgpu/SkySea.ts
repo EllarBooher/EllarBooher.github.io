@@ -1,5 +1,5 @@
 import TransmittanceLUTPak from '../shaders/transmittance_LUT.wgsl';
-import MultiscatteringLUTPak from '../shaders/multiscatter_LUT.wgsl';
+import MultiscatterLUTPak from '../shaders/multiscatter_LUT.wgsl';
 import SkyViewLUTPak from '../shaders/skyview_LUT.wgsl';
 import AtmosphereCameraPak from '../shaders/atmosphere_camera.wgsl';
 import { GUI } from "lil-gui";
@@ -17,7 +17,7 @@ const MULTISCATTER_LUT_SAMPLE_TYPE: GPUTextureSampleType = 'float';
 const SKYVIEW_LUT_FORMAT: GPUTextureFormat = 'rgba32float';
 const SKYVIEW_LUT_SAMPLE_TYPE: GPUTextureSampleType = 'float';
 
-const multiscatteringLUTDimensions = {width: 1024, height: 1024};
+const multiscatterLUTDimensions = {width: 1024, height: 1024};
 const skyviewLUTDimensions = {width: 1024, height: 256};
 
 interface CameraUBO
@@ -238,7 +238,7 @@ function CreateMultiscatterLUTPassResources(
     });
 
     const multiscatterLUTShaderModule = device.createShaderModule({
-        code: MultiscatteringLUTPak,
+        code: MultiscatterLUTPak,
         label: label
     });
     const multiscatterLUTPipeline = device.createComputePipeline({
@@ -609,7 +609,7 @@ class SkySeaApp implements RendererApp {
             this.device, transmittanceLUTDimensions
         );
         this.multiscatterLUTPassResources = CreateMultiscatterLUTPassResources(
-            this.device, multiscatteringLUTDimensions, 
+            this.device, multiscatterLUTDimensions, 
             this.transmittanceLUTPassResources.view
         );
         this.skyviewLUTPassResources = CreateSkyViewLUTPassResources(
@@ -783,7 +783,7 @@ class SkySeaApp implements RendererApp {
         passEncoder = commandEncoder.beginComputePass();
         passEncoder.setPipeline(this.multiscatterLUTPassResources.pipeline);
         passEncoder.setBindGroup(0, this.multiscatterLUTPassResources.group0);
-        passEncoder.dispatchWorkgroups(multiscatteringLUTDimensions.width / 16, multiscatteringLUTDimensions.height / 16); 
+        passEncoder.dispatchWorkgroups(multiscatterLUTDimensions.width / 16, multiscatterLUTDimensions.height / 16); 
         passEncoder.end();
 
         device.queue.submit([commandEncoder.finish()]);

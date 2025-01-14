@@ -548,8 +548,17 @@ class SkySeaApp implements RendererApp {
 
     startTime: number;
 
+    deltaTimeRecord: {
+        milliseconds: number[],
+        index: number,
+        count: number,
+        runningSum: number,
+        averageFPS: number,
+    };
+
     setupUI(gui: GUI)
     {
+        gui.add(this.deltaTimeRecord, 'averageFPS').decimals(3).disable().name('Average FPS').listen();
         const outputTextureController = gui.add(this.settings, 'outputTexture', 
             {
                 'Scene': RenderOutput.Scene, 
@@ -559,14 +568,14 @@ class SkySeaApp implements RendererApp {
             }
         ).name('Render Output');
         const displayGainFolder = gui.addFolder('Display Gain').hide();
-        displayGainFolder.add({gain: 0.0}, 'gain').name('RGB').min(0.0).max(20.0).onChange((v: number) => {
+        displayGainFolder.add({gain: 0.0}, 'gain').name('RGB').min(0.0).max(100.0).onChange((v: number) => {
             this.settings.fullscreenQuadUBO.gain.r = v;
             this.settings.fullscreenQuadUBO.gain.g = v;
             this.settings.fullscreenQuadUBO.gain.b = v;
         });
-        displayGainFolder.add(this.settings.fullscreenQuadUBO.gain, 'r').name('R').min(0.0).max(20.0).listen();
-        displayGainFolder.add(this.settings.fullscreenQuadUBO.gain, 'g').name('G').min(0.0).max(20.0).listen();
-        displayGainFolder.add(this.settings.fullscreenQuadUBO.gain, 'b').name('B').min(0.0).max(20.0).listen();
+        displayGainFolder.add(this.settings.fullscreenQuadUBO.gain, 'r').name('R').min(0.0).max(100.0).listen();
+        displayGainFolder.add(this.settings.fullscreenQuadUBO.gain, 'g').name('G').min(0.0).max(100.0).listen();
+        displayGainFolder.add(this.settings.fullscreenQuadUBO.gain, 'b').name('B').min(0.0).max(100.0).listen();
         outputTextureController.onFinishChange((v: RenderOutput) => {
             if(v != RenderOutput.Scene && this.fullscreenQuadPassResources.uboDataByOutputTexture.has(v))
             {
@@ -614,6 +623,13 @@ class SkySeaApp implements RendererApp {
                 inclinationRadians: Math.PI / 2,
                 sunsetAzimuthRadians: 0.0,
             }
+        };
+        this.deltaTimeRecord = {
+            milliseconds: new Array<number>(100).fill(0.0),
+            count: 0,
+            index: 0,
+            runningSum: 0.0,
+            averageFPS: 0.0,
         };
 
         this.celestialLightUBO = new CelestialLightUBO(device);
@@ -837,6 +853,24 @@ class SkySeaApp implements RendererApp {
         vec3.scale(sunDirection, -1.0, this.celestialLightUBO.data.light.forward);
     }
 
+    updateFPSValues(deltaTimeMilliseconds: number)
+    {
+        const record = this.deltaTimeRecord;
+        if(record.index >= record.milliseconds.length)
+        {
+            record.index = 0;
+        }
+        if(record.index < record.count)
+        {
+            record.runningSum -= 1000.0 / record.milliseconds[record.index];
+        }
+        record.milliseconds[record.index] = deltaTimeMilliseconds;
+        record.runningSum += 1000.0 / deltaTimeMilliseconds;
+        record.count = Math.min(record.milliseconds.length, record.count + 1);
+        record.averageFPS = record.runningSum / record.count;
+        record.index += 1;
+    }
+
     draw(
         presentView: GPUTextureView, 
         aspectRatio: number, 
@@ -850,11 +884,12 @@ class SkySeaApp implements RendererApp {
         skyviewLUTPassEncoder.setBindGroup(0, this.skyviewLUTPassResources.group0);
 
         this.updateOrbit(deltaTimeMilliseconds);
-
+        this.updateFPSValues(deltaTimeMilliseconds);
+        
         this.celestialLightUBO.writeToBuffer(this.device);   
         skyviewLUTPassEncoder.setBindGroup(1, this.skyviewLUTPassResources.group1);
 
-        skyviewLUTPassEncoder.dispatchWorkgroups(skyviewLUTDimensions.width / 16, skyviewLUTDimensions.height / 16, 1);
+        skyviewLUTPassEncoder.dispatchWorkgroups(skyviewLUTDimensions.width / 16, skyviewLUTDimensions.height / 32, 1);
         skyviewLUTPassEncoder.end();
 
         const fov = 60 * Math.PI / 180
@@ -863,7 +898,7 @@ class SkySeaApp implements RendererApp {
         const perspective = mat4.perspective(fov, aspectRatio, near, far);
         
         const camera_pos = [0, 10, 0];
-        const view = mat4.translation(camera_pos);
+        const view = mat4.lookAt(camera_pos, [0, 20, 100], [0, 1, 0]);
 
         const cameraUBOData: CameraUBO = {
             inv_proj: mat4.inverse(perspective),

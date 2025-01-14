@@ -94,7 +94,7 @@ fn computeLuminanceScatteringIntegral(
 
     const ISOTROPIC_PHASE: f32 = 1.0 / (4.0 * PI);
 
-    const SAMPLE_COUNT: u32 = 32;
+    const SAMPLE_COUNT: u32 = 12;
 
     let dSampleDistance: f32 = sampleDistance / f32(SAMPLE_COUNT);
     for (var i = 0u; i < SAMPLE_COUNT; i++)

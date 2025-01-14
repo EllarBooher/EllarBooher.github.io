@@ -94,7 +94,7 @@ const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
                     height: '100%',
                 }}/>
         </div>
-        <div style={{flex: 0}} ref={guiPaneRef}/>
+        <div style={{flex: 0, position: 'absolute', right: 0}} ref={guiPaneRef}  />
     </div>;
 }
 

@@ -21,7 +21,7 @@ struct CameraUBO
 // Render a quad and use this as the fragment stage
 
 //// INCLUDE atmosphere_common.inc.wgsl
-//// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING LIGHT_ILLUMINANCE_IS_ONE SCATTERING_NONLINEAR_SAMPLE
+//// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING LIGHT_ILLUMINANCE_IS_ONE
 
 //// INCLUDE tonemap.inc.wgsl
 

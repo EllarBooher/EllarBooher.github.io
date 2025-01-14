@@ -421,12 +421,17 @@ struct RaymarchStep
     radius: f32,
     // Cosine of the angle between (0, radius, 0) and implicit direction vector
     mu: f32,
+    // Cosine of the angle with the direction to the sun
+    mu_light: f32,
+    // Cosine of travel direction vector and sun direction vector
+    nu: f32,
 };
 
 // Returns 'start' moved 'stepDistance' units along the implicit direction vector 
+// nu is the dot product between normalized direction and sun direction vector
 fn stepRadiusMu(
     start: RaymarchStep, 
-    stepDistance: f32
+    stepDistance: f32,
 ) -> RaymarchStep
 {
     // Consider starting position (0, radius, 0)
@@ -441,6 +446,8 @@ fn stepRadiusMu(
             + start.radius * start.radius
     );
     result.mu = (start.radius * start.mu + stepDistance) / result.radius;
+    result.nu = start.nu;
+    result.mu_light = (start.radius * start.mu_light + stepDistance * start.nu) / result.radius;
 
     return result;
 }

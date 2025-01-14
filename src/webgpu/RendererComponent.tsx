@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { defaultSample, samplesByQueryParam } from "./Samples";
 import { RendererApp, getDevice } from "./RendererApp";
 import { GUI } from "lil-gui";
+import "./RendererComponent.css"
 
 const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
     const animateRequestRef = useRef<number>();

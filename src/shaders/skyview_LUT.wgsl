@@ -8,7 +8,7 @@
 @group(1) @binding(0) var<uniform> b_light: CelestialLightUBO;
 
 //// INCLUDE atmosphere_common.inc.wgsl
-//// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING LIGHT_ILLUMINANCE_IS_ONE
+//// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE
 
 // All units are Mm/megameters (10^6 meters) unless marked km/kilometers (10^3 meters)
 

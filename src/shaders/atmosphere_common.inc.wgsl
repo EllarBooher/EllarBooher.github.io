@@ -158,14 +158,10 @@ fn sampleMultiscatterLUT(
     lut: texture_2d<f32>,
     s: sampler,
     atmosphere: ptr<function,Atmosphere>,
-    position: vec3<f32>,
-    incidentDirectionLight: vec3<f32>
+    radius: f32,
+    mu_light: f32
 ) -> vec3<f32>
 {
-    let radius: f32 = length(position);
-    let mu_light: f32 = dot(position, -incidentDirectionLight) 
-        / (length(position) * length(incidentDirectionLight));
-
     let uv: vec2<f32> = multiscatterLUT_RMu_to_UV(atmosphere, radius, mu_light);
 
     return textureSampleLevel(lut, s, uv, 0.0).xyz;

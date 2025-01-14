@@ -18,32 +18,32 @@ export interface RendererApp
 export type RendererAppConstructor = (device: GPUDevice, supportedFeatures: GPUSupportedFeatures, presentFormat: GPUTextureFormat, time: number) => RendererApp;
 
 export async function getDevice(): Promise<{adapter: GPUAdapter, device: GPUDevice}> {
-    return new Promise<{adapter: GPUAdapter, device: GPUDevice}>(async (resolve, reject) => {
-        console.log("Starting WebGPU");
-        if(!('gpu' in navigator)) {
-            reject(new Error("WebGPU is not available in this browser.", {cause: new Error("navigator.gpu is null")}));
+    console.log("Starting WebGPU");
+    if(!('gpu' in navigator)) {
+        return Promise.reject(new Error("WebGPU is not available in this browser.", {cause: new Error("navigator.gpu is null")}));
+    }
+
+    const adapterPromise = navigator.gpu.requestAdapter().then((value) => {
+        if(!value)
+        {
+            return Promise.reject(new Error("Requested WebGPU Adapter is not available."));
         }
+        return Promise.resolve(value);
+    }).catch(reason => {
+        return Promise.reject(new Error("Unable to get WebGPU Adapter", {cause: reason}));
+    });
     
-        const adapter = await navigator.gpu.requestAdapter().catch(reason => {
-            reject(new Error("Unable to get WebGPU Adapter", {cause: reason}));
+    const devicePromise = adapterPromise.then(adapter => {
+        return adapter.requestDevice({requiredFeatures: ['float32-filterable']}).catch(reason => {
+            return Promise.reject(new Error("Unable to get WebGPU Device", {cause: reason}));
         });
+    });
 
-        if(!adapter)
-        {
-            reject(new Error("Unable to get WebGPU Adapter"));
-            return;
+    return Promise.all([adapterPromise, devicePromise]).then(value => {
+        const [adapter, device] = value;
+        return {
+            adapter,
+            device,
         }
-        
-        const device = await adapter.requestDevice({requiredFeatures: ['float32-filterable']}).catch(reason => {
-                reject(new Error("Unable to get WebGPU Device", {cause: reason}));
-            });
-
-        if(!device)
-        {
-            reject(new Error("Unable to get WebGPU Device"));
-            return;
-        }
-
-        resolve({adapter, device});
     });
 }

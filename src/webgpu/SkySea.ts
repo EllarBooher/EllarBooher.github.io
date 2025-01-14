@@ -534,6 +534,7 @@ class SkySeaApp implements RendererApp {
     };
     fullscreenQuadPassResources: FullscreenQuadPassResources;
 
+
     celestialLightUBO: CelestialLightUBO;
 
     atmosphereCameraLUTGroup: GPUBindGroup;
@@ -547,6 +548,7 @@ class SkySeaApp implements RendererApp {
     presentFormat: GPUTextureFormat;
 
     startTime: number;
+    dummyFrameCounter: number;
 
     deltaTimeRecord: {
         milliseconds: number[],
@@ -631,6 +633,7 @@ class SkySeaApp implements RendererApp {
             runningSum: 0.0,
             averageFPS: 0.0,
         };
+        this.dummyFrameCounter = 10.0;
 
         this.celestialLightUBO = new CelestialLightUBO(device);
 
@@ -877,6 +880,13 @@ class SkySeaApp implements RendererApp {
         _timeMilliseconds: number,
         deltaTimeMilliseconds: number): void
     {
+        // Workaround for firefox stalling
+        if(this.dummyFrameCounter > 0)
+        {
+            this.dummyFrameCounter -= 1;
+            return;
+        }
+
         const commandEncoder = this.device.createCommandEncoder();
 
         const skyviewLUTPassEncoder = commandEncoder.beginComputePass();

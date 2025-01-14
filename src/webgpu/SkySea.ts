@@ -515,10 +515,6 @@ class SkySeaApp implements RendererApp {
     skyviewLUTPassResources: SkyViewLUTPassResources;
 
     settings: {
-        showSkyViewLUT: boolean,
-        timeHours: number,
-        timeSpeedupFactor: number,
-        paused: boolean,
         outputTexture: RenderOutput,
         fullscreenQuadUBO: {
             gain: {
@@ -528,6 +524,10 @@ class SkySeaApp implements RendererApp {
             }
         },
         orbit: {
+            timeHours: number,
+            timeSpeedupFactor: number,
+            reversed: boolean,
+            paused: boolean,
             inclinationRadians: number,
             sunsetAzimuthRadians: number,
         }
@@ -582,12 +582,14 @@ class SkySeaApp implements RendererApp {
             }
         })
         
-        gui.add(this.settings, 'timeHours').min(0.0).max(24.0).name('Time in Hours').listen();
-        gui.add(this.settings, 'timeSpeedupFactor').min(1.0).max(50000).step(1.0).name('Time Multiplier');
-        gui.add(this.settings, 'paused').name('Pause Time');
-        gui.add({ fn: () => { this.settings.timeHours = 6.0 - 0.5 }}, 'fn').name('Skip to Sunrise');
-        gui.add({ fn: () => { this.settings.timeHours = 18.0 - 0.5 }}, 'fn').name('Skip to Sunset');
+        gui.add(this.settings.orbit, 'timeHours').min(0.0).max(24.0).name('Time in Hours').listen();
+        gui.add(this.settings.orbit, 'timeSpeedupFactor').min(1.0).max(50000).step(1.0).name('Time Multiplier');
+        gui.add(this.settings.orbit, 'paused').name('Pause Time');
 
+        gui.add({ fn: () => { this.settings.orbit.timeHours = this.settings.orbit.reversed ? (18.0 + 0.5) : (6.0 - 0.5)}}, 'fn').name('Skip to Sunrise');
+        gui.add({ fn: () => { this.settings.orbit.timeHours = this.settings.orbit.reversed ? (6.0 + 0.5) : (18.0 - 0.5)}}, 'fn').name('Skip to Sunset');
+        
+        gui.add(this.settings.orbit, 'reversed').name('Reverse Sun');
         gui.add(this.settings.orbit, 'sunsetAzimuthRadians').name("Sun Azimuth").min(0.0).max(2.0 * Math.PI);
         gui.add(this.settings.orbit, 'inclinationRadians').name("Sun Inclination").min(0.0).max(Math.PI);
     }
@@ -598,10 +600,6 @@ class SkySeaApp implements RendererApp {
         this.presentFormat = presentFormat;
         this.startTime = time;
         this.settings = {
-            showSkyViewLUT: false, 
-            timeHours: 5.5, 
-            timeSpeedupFactor: 1000.0,
-            paused: false,
             outputTexture: RenderOutput.Scene,
             fullscreenQuadUBO: {
                 gain: {
@@ -609,6 +607,10 @@ class SkySeaApp implements RendererApp {
                 }
             },
             orbit: {
+                timeHours: 5.5, 
+                timeSpeedupFactor: 1000.0,
+                paused: false,
+                reversed: false,
                 inclinationRadians: Math.PI / 2,
                 sunsetAzimuthRadians: 0.0,
             }
@@ -800,29 +802,24 @@ class SkySeaApp implements RendererApp {
         device.queue.submit([commandEncoder.finish()]);
     }
 
-    draw(
-        presentView: GPUTextureView, 
-        aspectRatio: number, 
-        _timeMilliseconds: number,
-        deltaTimeMilliseconds: number): void
+    updateOrbit(deltaTimeMilliseconds: number)
     {
-        const commandEncoder = this.device.createCommandEncoder();
+        const orbit = this.settings.orbit;
 
-        const skyviewLUTPassEncoder = commandEncoder.beginComputePass();
-        skyviewLUTPassEncoder.setPipeline(this.skyviewLUTPassResources.pipeline);
-        skyviewLUTPassEncoder.setBindGroup(0, this.skyviewLUTPassResources.group0);
- 
-        if(!this.settings.paused)
+        if(!this.settings.orbit.paused)
         {
             const HOURS_TO_MILLISECONDS = 60.0 * 60.0 * 1000.0;
-            this.settings.timeHours += this.settings.timeSpeedupFactor * deltaTimeMilliseconds / HOURS_TO_MILLISECONDS;
-            this.settings.timeHours = this.settings.timeHours - Math.floor(this.settings.timeHours / 24.0) * 24.0;
+            orbit.timeHours += (orbit.reversed ? -1.0 : 1.0) 
+                * orbit.timeSpeedupFactor 
+                * deltaTimeMilliseconds 
+                / HOURS_TO_MILLISECONDS;
+            orbit.timeHours = orbit.timeHours - Math.floor(orbit.timeHours / 24.0) * 24.0;
         }
 
         // offset the time so that the app starts during the day
         const SUN_ROTATION_RAD_PER_HOUR = (2.0 * Math.PI) / 24.0;
-        const SUN_ANOMALY = (12.0 - this.settings.timeHours) * SUN_ROTATION_RAD_PER_HOUR;
-        const orbit = this.settings.orbit;
+        const SUN_ANOMALY = (12.0 - orbit.timeHours) * SUN_ROTATION_RAD_PER_HOUR;
+
         const sunsetDirection = vec3.create(
             -Math.sin(orbit.sunsetAzimuthRadians), 
             0.0, 
@@ -838,6 +835,22 @@ class SkySeaApp implements RendererApp {
             vec3.scale(noonDirection, Math.cos(SUN_ANOMALY))
         );
         vec3.scale(sunDirection, -1.0, this.celestialLightUBO.data.light.forward);
+    }
+
+    draw(
+        presentView: GPUTextureView, 
+        aspectRatio: number, 
+        _timeMilliseconds: number,
+        deltaTimeMilliseconds: number): void
+    {
+        const commandEncoder = this.device.createCommandEncoder();
+
+        const skyviewLUTPassEncoder = commandEncoder.beginComputePass();
+        skyviewLUTPassEncoder.setPipeline(this.skyviewLUTPassResources.pipeline);
+        skyviewLUTPassEncoder.setBindGroup(0, this.skyviewLUTPassResources.group0);
+
+        this.updateOrbit(deltaTimeMilliseconds);
+
         this.celestialLightUBO.writeToBuffer(this.device);   
         skyviewLUTPassEncoder.setBindGroup(1, this.skyviewLUTPassResources.group1);
 

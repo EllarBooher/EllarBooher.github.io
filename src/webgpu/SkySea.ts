@@ -435,7 +435,7 @@ class SkySeaApp implements RendererApp {
         showSkyViewLUT: boolean,
         timeHours: number,
         timeSpeedupFactor: number,
-        skipNight: boolean,
+        paused: boolean,
     };
     fullscreenQuadPassResources: FullscreenQuadPassResources;
 
@@ -456,9 +456,12 @@ class SkySeaApp implements RendererApp {
     setupUI(gui: GUI)
     {
         gui.add(this.settings, 'showSkyViewLUT').name('Show Sky-view Lookup Table');
+        
         gui.add(this.settings, 'timeHours').min(0.0).max(24.0).name('Time in Hours').listen();
-        gui.add(this.settings, 'timeSpeedupFactor').min(1.0).max(50000).step(1.0).name('Time Speed Multiplier');
-        gui.add(this.settings, 'skipNight').name('Skip Night');
+        gui.add(this.settings, 'timeSpeedupFactor').min(1.0).max(50000).step(1.0).name('Time Multiplier');
+        gui.add(this.settings, 'paused').name('Pause Time');
+        gui.add({ fn: () => { this.settings.timeHours = 6.0 - 0.5 }}, 'fn').name('Skip to Sunrise');
+        gui.add({ fn: () => { this.settings.timeHours = 18.0 - 0.5 }}, 'fn').name('Skip to Sunset');
     }
 
     constructor(device: GPUDevice, presentFormat: GPUTextureFormat, time: number)
@@ -470,7 +473,7 @@ class SkySeaApp implements RendererApp {
             showSkyViewLUT: false, 
             timeHours: 5.5, 
             timeSpeedupFactor: 1000.0,
-            skipNight: true,
+            paused: false
         };
 
         this.celestialLightUBO = new CelestialLightUBO(device);
@@ -651,19 +654,12 @@ class SkySeaApp implements RendererApp {
         const skyviewLUTPassEncoder = commandEncoder.beginComputePass();
         skyviewLUTPassEncoder.setPipeline(this.skyviewLUTPassResources.pipeline);
         skyviewLUTPassEncoder.setBindGroup(0, this.skyviewLUTPassResources.group0);
-
-        const HOURS_TO_MILLISECONDS = 60.0 * 60.0 * 1000.0;
-
-        this.settings.timeHours += this.settings.timeSpeedupFactor * deltaTimeMilliseconds / HOURS_TO_MILLISECONDS;
-        this.settings.timeHours = this.settings.timeHours - Math.floor(this.settings.timeHours / 24.0) * 24.0;
-
-        const NIGHT_START_HOURS = (12.0 + 6.0) + 0.5;
-        const NIGHT_END_HOURS = 6.0 - 0.5;
-        if(this.settings.skipNight && (this.settings.timeHours > NIGHT_START_HOURS || this.settings.timeHours < NIGHT_END_HOURS))
+ 
+        if(!this.settings.paused)
         {
-            // time is between 0.0 and 24.0
-            // Skip from ~7 PM to 5 AM (1 hour after sunset to 1 hour before sunrise)
-            this.settings.timeHours = NIGHT_END_HOURS;
+            const HOURS_TO_MILLISECONDS = 60.0 * 60.0 * 1000.0;
+            this.settings.timeHours += this.settings.timeSpeedupFactor * deltaTimeMilliseconds / HOURS_TO_MILLISECONDS;
+            this.settings.timeHours = this.settings.timeHours - Math.floor(this.settings.timeHours / 24.0) * 24.0;
         }
 
         // offset the time so that the app starts during the day

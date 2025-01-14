@@ -132,9 +132,21 @@ function replaceConditionalBlocks(filename: string, source: ShaderInclude, enabl
         {
             if (prefix == LinePrefix.IF)
             {
-                step = ConditionalState.IF;
-                currentFlag = remainder;
-                keepLines = enabledFlags.has(currentFlag);
+                if(source.flags.includes(remainder))
+                {
+                    step = ConditionalState.IF;
+                    currentFlag = remainder;
+                    keepLines = enabledFlags.has(currentFlag);
+                }
+                else
+                {
+                    console.error(
+                        `Invalid conditional syntax: invalid flag. 
+                        Original line: 
+                        (${filename}:${index})
+                        ${line}`
+                    );
+                }
             }
             else if (prefix != LinePrefix.None)
             {

@@ -124,7 +124,7 @@ export const RendererComponent = memo(function RendererComponent() {
     useEffect(() => {
         setInitialized(false);
         const sample = getSample();
-        getDevice().then(({adapter, device}) => {
+        getDevice(sample.requiredFeatures).then(({adapter, device}) => {
             if(appRef.current)
             {
                 console.warn("Device found, but app was already created. This is due to either a duplicate component rerender, or the sample changing without a full page refresh. Overriding the original.");

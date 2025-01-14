@@ -35,6 +35,36 @@ interface CelestialLight
     angularRadius: number;
 }
 
+interface FullscreenQuadUBOData
+{
+    gain: Vec4
+}
+
+class FullscreenQuadUBO
+{
+    data: FullscreenQuadUBOData = {
+        gain: vec4.create(1.0,1.0,1.0,1.0),
+    };
+
+    public readonly lengthFloat32: number = 4
+    stagingBuffer: Float32Array;
+    buffer: GPUBuffer;
+
+    constructor(device: GPUDevice)
+    {
+        this.stagingBuffer = new Float32Array(this.lengthFloat32);
+        this.buffer = device.createBuffer({
+            size: this.stagingBuffer.byteLength,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM
+        })
+    }
+    writeToBuffer(device: GPUDevice) {
+        this.stagingBuffer.set(this.data.gain);
+
+        device.queue.writeBuffer(this.buffer, 0, this.stagingBuffer, 0, this.stagingBuffer.length);
+    }
+}
+
 class CelestialLightUBO
 {
     data: {light: CelestialLight } = {
@@ -46,13 +76,14 @@ class CelestialLightUBO
         }
     };
 
-    length: number = (3 + 1 + 3 + 1); 
+    
+    public readonly lengthFloat32: number = 3 + 1 + 3 + 1;
     stagingBuffer: Float32Array;
     buffer: GPUBuffer;
 
     constructor(device: GPUDevice)
     {
-        this.stagingBuffer = new Float32Array(this.length);
+        this.stagingBuffer = new Float32Array(this.lengthFloat32);
         this.buffer = device.createBuffer({
             size: this.stagingBuffer.byteLength,
             usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM
@@ -357,13 +388,18 @@ interface FullscreenQuadPassResources
 
     group0ByOutputTexture: Map<RenderOutput, GPUBindGroup>;
 
+    uboDataByOutputTexture: Map<RenderOutput, FullscreenQuadUBOData>;
+    ubo: FullscreenQuadUBO;
+
+    group1: GPUBindGroup;
+
     pipeline: GPURenderPipeline;
 }
 
 // For showing a single texture stretched across the screen
 function CreateFullscreenQuadPassResources(
     device: GPUDevice,
-    textures: Map<RenderOutput, GPUTextureView>,
+    textures: Map<RenderOutput, {view: GPUTextureView, defaultUBO: FullscreenQuadUBOData}>,
     outputFormat: GPUTextureFormat,
 )
 {
@@ -385,13 +421,16 @@ function CreateFullscreenQuadPassResources(
         });
 
     const group0ByOutputTexture = new Map<RenderOutput, GPUBindGroup>();
-    textures.forEach((value, key) => {
+
+    const uboDataByOutputTexture = new Map<RenderOutput, FullscreenQuadUBOData>();
+
+    textures.forEach(({view, defaultUBO}, key) => {
         group0ByOutputTexture.set(key, device.createBindGroup({
             layout: group0Layout,
             entries: [
                 {
                     binding: 0,
-                    resource: value,
+                    resource: view,
                 },
                 {
                     binding: 1,
@@ -400,6 +439,28 @@ function CreateFullscreenQuadPassResources(
             ],
             label: label + key.toString()
         }))
+        uboDataByOutputTexture.set(key, defaultUBO);
+    });
+
+    const ubo = new FullscreenQuadUBO(device);
+
+    const group1Layout = device.createBindGroupLayout({
+        entries: [
+            {
+                binding: 0,
+                visibility: GPUShaderStage.FRAGMENT,
+                buffer: {type: 'uniform' }
+            }
+        ], label
+    });
+    const group1 = device.createBindGroup({
+        layout: group1Layout,
+        entries: [
+            {
+                binding: 0,
+                resource: {buffer: ubo.buffer }
+            }
+        ]
     });
 
     const shaderModule = device.createShaderModule({
@@ -426,15 +487,18 @@ function CreateFullscreenQuadPassResources(
             frontFace: "ccw",
         },
         layout: device.createPipelineLayout({
-            bindGroupLayouts: [ group0Layout ],
+            bindGroupLayouts: [ group0Layout, group1Layout ],
         }),
         label
     })
 
     return {
-        pipeline,
-        group0ByOutputTexture,
         group0Layout,
+        group0ByOutputTexture,
+        uboDataByOutputTexture,
+        ubo,
+        group1,
+        pipeline,
     };
 }
 
@@ -456,6 +520,13 @@ class SkySeaApp implements RendererApp {
         timeSpeedupFactor: number,
         paused: boolean,
         outputTexture: RenderOutput,
+        fullscreenQuadUBO: {
+            gain: {
+                r: number,
+                g: number,
+                b: number,
+            }
+        },
     };
     fullscreenQuadPassResources: FullscreenQuadPassResources;
 
@@ -475,7 +546,7 @@ class SkySeaApp implements RendererApp {
 
     setupUI(gui: GUI)
     {
-        gui.add(this.settings, 'outputTexture', 
+        const outputTextureController = gui.add(this.settings, 'outputTexture', 
             {
                 'Scene': RenderOutput.Scene, 
                 'Transmittance LUT': RenderOutput.TransmittanceLUT, 
@@ -483,6 +554,29 @@ class SkySeaApp implements RendererApp {
                 'Skyview LUT': RenderOutput.SkyviewLUT
             }
         ).name('Render Output');
+        const displayGainFolder = gui.addFolder('Display Gain').hide();
+        displayGainFolder.add({gain: 0.0}, 'gain').name('RGB').min(0.0).max(20.0).onChange((v: number) => {
+            this.settings.fullscreenQuadUBO.gain.r = v;
+            this.settings.fullscreenQuadUBO.gain.g = v;
+            this.settings.fullscreenQuadUBO.gain.b = v;
+        });
+        displayGainFolder.add(this.settings.fullscreenQuadUBO.gain, 'r').name('R').min(0.0).max(20.0).listen();
+        displayGainFolder.add(this.settings.fullscreenQuadUBO.gain, 'g').name('G').min(0.0).max(20.0).listen();
+        displayGainFolder.add(this.settings.fullscreenQuadUBO.gain, 'b').name('B').min(0.0).max(20.0).listen();
+        outputTextureController.onFinishChange((v: RenderOutput) => {
+            if(v != RenderOutput.Scene && this.fullscreenQuadPassResources.uboDataByOutputTexture.has(v))
+            {
+                const sourceUBO = this.fullscreenQuadPassResources.uboDataByOutputTexture.get(v)!;
+                this.settings.fullscreenQuadUBO.gain.r = sourceUBO.gain.at(0) ?? 1.0;
+                this.settings.fullscreenQuadUBO.gain.g = sourceUBO.gain.at(1) ?? 1.0;
+                this.settings.fullscreenQuadUBO.gain.b = sourceUBO.gain.at(2) ?? 1.0;
+                displayGainFolder.show();
+            }
+            else
+            {
+                displayGainFolder.hide();
+            }
+        })
         
         gui.add(this.settings, 'timeHours').min(0.0).max(24.0).name('Time in Hours').listen();
         gui.add(this.settings, 'timeSpeedupFactor').min(1.0).max(50000).step(1.0).name('Time Multiplier');
@@ -501,7 +595,12 @@ class SkySeaApp implements RendererApp {
             timeHours: 5.5, 
             timeSpeedupFactor: 1000.0,
             paused: false,
-            outputTexture: RenderOutput.Scene
+            outputTexture: RenderOutput.Scene,
+            fullscreenQuadUBO: {
+                gain: {
+                    r: 1.0, g: 1.0, b: 1.0
+                }
+            }
         };
 
         this.celestialLightUBO = new CelestialLightUBO(device);
@@ -521,10 +620,22 @@ class SkySeaApp implements RendererApp {
         );
         this.fullscreenQuadPassResources = CreateFullscreenQuadPassResources(
             this.device, 
-            new Map<RenderOutput, GPUTextureView>([
-                [RenderOutput.TransmittanceLUT, this.transmittanceLUTPassResources.view], 
-                [RenderOutput.MultiscatterLUT, this.multiscatterLUTPassResources.view], 
-                [RenderOutput.SkyviewLUT, this.skyviewLUTPassResources.view]
+            new Map<RenderOutput, {view: GPUTextureView, defaultUBO: FullscreenQuadUBOData}>([
+                [RenderOutput.TransmittanceLUT, 
+                    { 
+                        view: this.transmittanceLUTPassResources.view, 
+                        defaultUBO: {gain: vec4.create(1.0,1.0,1.0,1.0) } 
+                    }], 
+                [RenderOutput.MultiscatterLUT, 
+                    { 
+                        view: this.multiscatterLUTPassResources.view, 
+                        defaultUBO: {gain: vec4.create(15.0,15.0,15.0,15.0) }
+                    }], 
+                [RenderOutput.SkyviewLUT, 
+                    { 
+                        view: this.skyviewLUTPassResources.view, 
+                        defaultUBO: {gain: vec4.create(8.0,8.0,8.0,8.0) }
+                    }]
             ]), 
             this.presentFormat
         );
@@ -744,6 +855,12 @@ class SkySeaApp implements RendererApp {
             label: "Fullscreen Pass"
         });
 
+        if(this.fullscreenQuadPassResources.uboDataByOutputTexture.has(this.settings.outputTexture))
+        {
+            const gain = this.settings.fullscreenQuadUBO.gain;
+            this.fullscreenQuadPassResources.uboDataByOutputTexture.get(this.settings.outputTexture)!.gain = vec4.create(gain.r,gain.g,gain.b,1.0);
+        }
+
         if(this.settings.outputTexture === RenderOutput.Scene)
         {
             fullscreenPassEncoder.setPipeline(this.atmosphereCameraPipeline);
@@ -757,6 +874,19 @@ class SkySeaApp implements RendererApp {
             fullscreenPassEncoder.setPipeline(this.fullscreenQuadPassResources.pipeline);
             fullscreenPassEncoder.setIndexBuffer(this.fullscreenQuadIndexBuffer, "uint32", 0, this.fullscreenQuadIndexBuffer.size);
             fullscreenPassEncoder.setBindGroup(0, this.fullscreenQuadPassResources.group0ByOutputTexture.get(this.settings.outputTexture));
+            const uboData = this.fullscreenQuadPassResources.uboDataByOutputTexture.get(this.settings.outputTexture);
+            if(uboData)
+            {
+                this.fullscreenQuadPassResources.ubo.data = uboData;
+            }
+            else
+            {
+                this.fullscreenQuadPassResources.ubo.data = {
+                    gain: vec4.create(1.0,1.0,1.0,1.0)
+                };
+            }
+            this.fullscreenQuadPassResources.ubo.writeToBuffer(this.device);
+            fullscreenPassEncoder.setBindGroup(1, this.fullscreenQuadPassResources.group1);
             fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
         }
         

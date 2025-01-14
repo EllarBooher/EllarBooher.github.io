@@ -8,9 +8,17 @@ import FullscreenQuadPak from '../shaders/fullscreen_quad.wgsl';
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
 import { mat4, Mat4, vec3, Vec3, vec4, Vec4 } from 'wgpu-matrix';
 
-const transmittanceLUTDimensions = {width: 1024, height: 512};
+const transmittanceLUTDimensions = {width: 2048, height: 1024};
+
+const TRANSMITTANCE_LUT_FORMAT: GPUTextureFormat = 'rgba32float';
+const TRANSMITTANCE_LUT_SAMPLE_TYPE: GPUTextureSampleType = 'float';
+const MULTISCATTER_LUT_FORMAT: GPUTextureFormat = 'rgba32float';
+const MULTISCATTER_LUT_SAMPLE_TYPE: GPUTextureSampleType = 'float';
+const SKYVIEW_LUT_FORMAT: GPUTextureFormat = 'rgba32float';
+const SKYVIEW_LUT_SAMPLE_TYPE: GPUTextureSampleType = 'float';
+
 const multiscatteringLUTDimensions = {width: 1024, height: 1024};
-const skyviewLUTDimensions = {width: 512, height: 128};
+const skyviewLUTDimensions = {width: 1024, height: 256};
 
 interface CameraUBO
 {
@@ -77,7 +85,7 @@ function CreateTransmittanceLUTPassResources(
     const transmittanceLUT = device.createTexture({
         size: dimensions,
         dimension: "2d",
-        format: "rgba16float",
+        format: TRANSMITTANCE_LUT_FORMAT,
         usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         label: label,
     });
@@ -90,7 +98,7 @@ function CreateTransmittanceLUTPassResources(
                 visibility: GPUShaderStage.COMPUTE,
                 storageTexture: {
                     access: "write-only",
-                    format: "rgba16float",
+                    format: TRANSMITTANCE_LUT_FORMAT,
                 }
             },
         ],
@@ -149,7 +157,7 @@ function CreateMultiscatterLUTPassResources(
     const multiscatterLUT = device.createTexture({
         size: dimensions,
         dimension: "2d",
-        format: "rgba16float",
+        format: MULTISCATTER_LUT_FORMAT,
         usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         label: label,
     });
@@ -162,7 +170,7 @@ function CreateMultiscatterLUTPassResources(
                 visibility: GPUShaderStage.COMPUTE,
                 storageTexture: {
                     access: "write-only",
-                    format: "rgba16float",
+                    format: MULTISCATTER_LUT_FORMAT,
                 }
             },
             {
@@ -173,7 +181,7 @@ function CreateMultiscatterLUTPassResources(
             {
                 binding: 2,
                 visibility: GPUShaderStage.COMPUTE,
-                texture: {}
+                texture: {sampleType: TRANSMITTANCE_LUT_SAMPLE_TYPE}
             },
         ],
         label: label
@@ -242,7 +250,7 @@ function CreateSkyViewLUTPassResources(
     const skyviewLUT = device.createTexture({
         size: dimensions,
         dimension: "2d",
-        format: "rgba16float",
+        format: SKYVIEW_LUT_FORMAT,
         usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         label,
     });
@@ -255,7 +263,7 @@ function CreateSkyViewLUTPassResources(
                 visibility: GPUShaderStage.COMPUTE,
                 storageTexture: {
                     access: "write-only",
-                    format: "rgba16float",
+                    format: SKYVIEW_LUT_FORMAT,
                 }
             },
             {
@@ -266,12 +274,12 @@ function CreateSkyViewLUTPassResources(
             {
                 binding: 2,
                 visibility: GPUShaderStage.COMPUTE,
-                texture: {}
+                texture: {sampleType: TRANSMITTANCE_LUT_SAMPLE_TYPE}
             },
             {
                 binding: 3,
                 visibility: GPUShaderStage.COMPUTE,
-                texture: {}
+                texture: {sampleType: MULTISCATTER_LUT_SAMPLE_TYPE}
             }
         ],
         label
@@ -346,7 +354,8 @@ function CreateSkyViewLUTPassResources(
 interface FullscreenQuadPassResources
 {
     group0Layout: GPUBindGroupLayout;
-    group0: GPUBindGroup;
+
+    group0ByOutputTexture: Map<RenderOutput, GPUBindGroup>;
 
     pipeline: GPURenderPipeline;
 }
@@ -354,7 +363,7 @@ interface FullscreenQuadPassResources
 // For showing a single texture stretched across the screen
 function CreateFullscreenQuadPassResources(
     device: GPUDevice,
-    texture: GPUTextureView, 
+    textures: Map<RenderOutput, GPUTextureView>,
     outputFormat: GPUTextureFormat,
 )
 {
@@ -365,30 +374,33 @@ function CreateFullscreenQuadPassResources(
                 {
                     binding: 0,
                     visibility: GPUShaderStage.FRAGMENT,
-                    texture: {}
+                    texture: {sampleType: 'float'}
                 },
                 {
                     binding: 1,
                     visibility: GPUShaderStage.FRAGMENT,
-                    sampler: {}
+                    sampler: { type: 'filtering' }
                 }
             ], label
         });
 
-    const group0 = device.createBindGroup({
-        layout: group0Layout,
-        entries: [
-            {
-                binding: 0,
-                resource: texture,
-            },
-            {
-                binding: 1,
-                resource: device.createSampler({magFilter: "nearest", minFilter: "nearest"}),
-            },
-        ],
-        label
-    })
+    const group0ByOutputTexture = new Map<RenderOutput, GPUBindGroup>();
+    textures.forEach((value, key) => {
+        group0ByOutputTexture.set(key, device.createBindGroup({
+            layout: group0Layout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: value,
+                },
+                {
+                    binding: 1,
+                    resource: device.createSampler({magFilter: 'linear', minFilter: 'linear'}),
+                },
+            ],
+            label: label + key.toString()
+        }))
+    });
 
     const shaderModule = device.createShaderModule({
         code: FullscreenQuadPak,
@@ -421,10 +433,17 @@ function CreateFullscreenQuadPassResources(
 
     return {
         pipeline,
-        group0,
+        group0ByOutputTexture,
         group0Layout,
     };
 }
+
+enum RenderOutput {
+    SkyviewLUT,
+    TransmittanceLUT,
+    MultiscatterLUT,
+    Scene,
+};
 
 class SkySeaApp implements RendererApp {
     transmittanceLUTPassResources: TransmittanceLUTPassResources;
@@ -436,6 +455,7 @@ class SkySeaApp implements RendererApp {
         timeHours: number,
         timeSpeedupFactor: number,
         paused: boolean,
+        outputTexture: RenderOutput,
     };
     fullscreenQuadPassResources: FullscreenQuadPassResources;
 
@@ -456,6 +476,15 @@ class SkySeaApp implements RendererApp {
     setupUI(gui: GUI)
     {
         gui.add(this.settings, 'showSkyViewLUT').name('Show Sky-view Lookup Table');
+
+        gui.add(this.settings, 'outputTexture', 
+            {
+                'Scene': RenderOutput.Scene, 
+                'Transmittance LUT': RenderOutput.TransmittanceLUT, 
+                'Multiscatter LUT': RenderOutput.MultiscatterLUT, 
+                'Skyview LUT': RenderOutput.SkyviewLUT
+            }
+        ).name('Render Output');
         
         gui.add(this.settings, 'timeHours').min(0.0).max(24.0).name('Time in Hours').listen();
         gui.add(this.settings, 'timeSpeedupFactor').min(1.0).max(50000).step(1.0).name('Time Multiplier');
@@ -473,7 +502,8 @@ class SkySeaApp implements RendererApp {
             showSkyViewLUT: false, 
             timeHours: 5.5, 
             timeSpeedupFactor: 1000.0,
-            paused: false
+            paused: false,
+            outputTexture: RenderOutput.Scene
         };
 
         this.celestialLightUBO = new CelestialLightUBO(device);
@@ -492,7 +522,13 @@ class SkySeaApp implements RendererApp {
             this.celestialLightUBO,
         );
         this.fullscreenQuadPassResources = CreateFullscreenQuadPassResources(
-            this.device, this.skyviewLUTPassResources.view, presentFormat
+            this.device, 
+            new Map<RenderOutput, GPUTextureView>([
+                [RenderOutput.TransmittanceLUT, this.transmittanceLUTPassResources.view], 
+                [RenderOutput.MultiscatterLUT, this.multiscatterLUTPassResources.view], 
+                [RenderOutput.SkyviewLUT, this.skyviewLUTPassResources.view]
+            ]), 
+            presentFormat
         );
 
         const atmosphereBindGroupLayout = device.createBindGroupLayout({
@@ -500,13 +536,13 @@ class SkySeaApp implements RendererApp {
                 { // sampler for the LUTs
                     binding: 0,
                     visibility: GPUShaderStage.FRAGMENT,
-                    sampler: {}
+                    sampler: {type: 'filtering'}
                 },
                 { // transmittance
                     binding: 1,
                     visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                     texture: {
-                        sampleType: "float",
+                        sampleType: TRANSMITTANCE_LUT_SAMPLE_TYPE,
                         viewDimension: "2d"
                     }
                 },
@@ -514,7 +550,7 @@ class SkySeaApp implements RendererApp {
                     binding: 2,
                     visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                     texture: {
-                        sampleType: "float",
+                        sampleType: MULTISCATTER_LUT_SAMPLE_TYPE,
                         viewDimension: "2d"
                     }
                 },
@@ -522,7 +558,7 @@ class SkySeaApp implements RendererApp {
                     binding: 3,
                     visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                     texture: {
-                        sampleType: "float",
+                        sampleType: SKYVIEW_LUT_SAMPLE_TYPE,
                         viewDimension: "2d"
                     }
                 },
@@ -559,7 +595,8 @@ class SkySeaApp implements RendererApp {
                 {
                     binding: 0,
                     resource: device.createSampler({
-                        magFilter: "linear",
+                        magFilter: 'linear',
+                        minFilter: 'linear',
                     }),
                 },
                 {
@@ -709,19 +746,19 @@ class SkySeaApp implements RendererApp {
             label: "Fullscreen Pass"
         });
 
-        if(this.settings.showSkyViewLUT)
-        {
-            fullscreenPassEncoder.setPipeline(this.fullscreenQuadPassResources.pipeline);
-            fullscreenPassEncoder.setIndexBuffer(this.fullscreenQuadIndexBuffer, "uint32", 0, this.fullscreenQuadIndexBuffer.size);
-            fullscreenPassEncoder.setBindGroup(0, this.fullscreenQuadPassResources.group0);
-            fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
-        }
-        else
+        if(this.settings.outputTexture === RenderOutput.Scene)
         {
             fullscreenPassEncoder.setPipeline(this.atmosphereCameraPipeline);
             fullscreenPassEncoder.setIndexBuffer(this.fullscreenQuadIndexBuffer, "uint32", 0, this.fullscreenQuadIndexBuffer.size);
             fullscreenPassEncoder.setBindGroup(0, this.atmosphereCameraLUTGroup);
             fullscreenPassEncoder.setBindGroup(1, this.atmosphereCameraGroup1);
+            fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
+        }
+        else
+        {
+            fullscreenPassEncoder.setPipeline(this.fullscreenQuadPassResources.pipeline);
+            fullscreenPassEncoder.setIndexBuffer(this.fullscreenQuadIndexBuffer, "uint32", 0, this.fullscreenQuadIndexBuffer.size);
+            fullscreenPassEncoder.setBindGroup(0, this.fullscreenQuadPassResources.group0ByOutputTexture.get(this.settings.outputTexture));
             fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
         }
         

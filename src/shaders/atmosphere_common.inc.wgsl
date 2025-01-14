@@ -7,11 +7,11 @@
 // "Precomputed Atmospheric Scattering: a New Implementation" by Eric Bruneton (2017)
 // https://ebruneton.github.io/precomputed_atmospheric_scattering
 
-const TRANSMITTANCE_LUT_WIDTH: u32 = 512;
-const TRANSMITTANCE_LUT_HEIGHT: u32 = 256;
+const TRANSMITTANCE_LUT_WIDTH: u32 = 2048;
+const TRANSMITTANCE_LUT_HEIGHT: u32 = 1024;
 
-const MULTISCATTER_LUT_WIDTH: u32 = 512;
-const MULTISCATTER_LUT_HEIGHT: u32 = 512;
+const MULTISCATTER_LUT_WIDTH: u32 = 1024;
+const MULTISCATTER_LUT_HEIGHT: u32 = 1024;
 
 const METERS_PER_MM: f32 = 1000000;
 const PI: f32 = 3.141592653589793;
@@ -168,8 +168,22 @@ fn sampleMultiscatterLUT(
 
     let uv: vec2<f32> = multiscatterLUT_RMu_to_UV(atmosphere, radius, mu_light);
 
-
     return textureSampleLevel(lut, s, uv, 0.0).xyz;
+}
+
+fn sampleTransmittanceLUT_RadiusMu(
+    lut: texture_2d<f32>, 
+    s: sampler,
+    atmosphere: ptr<function,Atmosphere>, 
+    radius: f32, 
+    mu: f32
+) -> vec3<f32>
+{
+    let uv: vec2<f32> = transmittanceLUT_RMu_to_UV(atmosphere, radius, mu);
+
+    let sample = textureSampleLevel(lut, s, uv, 0.0).xyz;
+
+    return sample;
 }
 
 fn sampleTransmittanceLUT_Ray(
@@ -183,56 +197,42 @@ fn sampleTransmittanceLUT_Ray(
     let radius: f32 = length(position);
     let mu: f32 = (dot(position, direction) / (length(position) * length(direction)));
 
-    let uv: vec2<f32> = transmittanceLUT_RMu_to_UV(atmosphere, radius, mu);
+    return sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, radius, mu);
 
-
-    return textureSampleLevel(lut, s, uv, 0.0).xyz;
 }
 
 fn sampleTransmittanceLUT_Segment(
     lut: texture_2d<f32>,
     s: sampler, 
     atmosphere: ptr<function,Atmosphere>, 
-    start: vec3<f32>, 
-    end: vec3<f32>
+    r_start: f32,
+    mu_start: f32,
+    d: f32,
+    intersects_ground: bool
 ) -> vec3<f32>
 {
-    // Floats do not have enough range to store the very low transmittance of a ray crossing the longest distances.
-    // Thus, a sliver of the transmittance LUT near the horizon is zero when it should be a very small value.
-    // Also, rays that point at the planet return a transmittance of exactly 0 making it impossible to use such samples.
-    // Thus, we sometimes swap the rays depending on how they are oriented.
+    let r_end = clamp(
+        safeSqrt(d * d + 2.0 * r_start * mu_start * d + r_start * r_start),
+        (*atmosphere).planetRadiusMm, (*atmosphere).atmosphereRadiusMm
+    );
+    let mu_end = clamp((r_start * mu_start + d) / r_end, -1.0, 1.0);
 
-    var transmittance = vec3<f32>(0.0);
-    let direction: vec3<f32> = normalize(end - start);
-
-    // Proxy for hitting the ground.
-    // This check does not necessarily mean the ray hits the ground, but it is safe to flip anyway.
-    if (dot(end, direction) < 0.0)
+    if(intersects_ground)
     {
-        transmittance = sampleTransmittanceLUT_Ray(lut, s, atmosphere, end, -direction)
-                      / sampleTransmittanceLUT_Ray(lut, s, atmosphere, start, -direction);
+        return min(
+            sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, r_end, -mu_end)
+            / sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, r_start, -mu_start),
+            vec3<f32>(1.0)
+        );
     }
     else
     {
-        transmittance = sampleTransmittanceLUT_Ray(lut, s, atmosphere, start, direction)
-                      / sampleTransmittanceLUT_Ray(lut, s, atmosphere, end, direction);
+        return min(
+            sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, r_start, mu_start)
+            / sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, r_end, mu_end),
+            vec3<f32>(1.0)
+        );
     }
-
-    return clamp(transmittance, vec3<f32>(0.0), vec3<f32>(1.0));
-}
-
-fn sampleTransmittanceLUT_RadiusMu(
-    lut: texture_2d<f32>, 
-    s: sampler,
-    atmosphere: ptr<function,Atmosphere>, 
-    radius: f32, 
-    mu: f32
-) -> vec3<f32>
-{
-    let uv: vec2<f32> = transmittanceLUT_RMu_to_UV(atmosphere, radius, mu);
-
-
-    return textureSampleLevel(lut, s, uv, 0.0).xyz;
 }
 
 struct ExtinctionSample

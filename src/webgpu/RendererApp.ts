@@ -34,7 +34,7 @@ export async function getDevice(): Promise<{adapter: GPUAdapter, device: GPUDevi
             return;
         }
         
-        const device = await adapter.requestDevice().catch(reason => {
+        const device = await adapter.requestDevice({requiredFeatures: ['float32-filterable']}).catch(reason => {
                 reject(new Error("Unable to get WebGPU Device", {cause: reason}));
             });
 

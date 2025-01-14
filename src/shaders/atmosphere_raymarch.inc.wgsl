@@ -104,13 +104,11 @@ fn computeLuminanceScatteringIntegral(
 
 //// IF SCATTERING_NONLINEAR_SAMPLE
         tBegin = tBegin * tBegin;
-        tEnd *= tEnd * tEnd;
+        tEnd = tEnd * tEnd;
 //// ENDIF
 
         tBegin = tBegin * sampleDistance;
         tEnd = min(tEnd * sampleDistance, sampleDistance);
-        tBegin = f32(i) * dSampleDistance;
-        tEnd = f32(i + 1) * dSampleDistance;
 
         let t: f32 = mix(tBegin, tEnd, 0.5);
         let begin = origin - tBegin * scatteringDir;
@@ -166,7 +164,7 @@ fn computeLuminanceScatteringIntegral(
             // Integrate transmittance := e^(-extinction(x) * ||x - begin||) from begin to end
             // This is a single interval of the integral in Equation (1) from Hillaire's paper,
             // with all constant terms factored out above
-            let transmittanceAlongPath = sampleTransmittanceLUT_Segment(transmittanceLUT, lut_sampler, atmosphere, begin, end);
+            let transmittanceAlongPath = sampleTransmittanceLUT_Segment(transmittanceLUT, lut_sampler, atmosphere, sampleStep.radius, sampleStep.mu, dSampleDistance, hitPlanet.hit && hitPlanet.t0 > 0.0);
             let scatteringIlluminanceIntegral = (vec3(1.0) - transmittanceAlongPath) / extinctionSample.extinction;
 
             result.luminance += 

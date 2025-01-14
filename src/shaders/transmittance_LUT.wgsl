@@ -1,6 +1,6 @@
 //// INCLUDE atmosphere_types.inc.wgsl
 
-@group(0) @binding(0) var transmittance_LUT: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(0) var transmittance_LUT: texture_storage_2d<rgba32float, write>;
 
 //// INCLUDE atmosphere_common.inc.wgsl
 
@@ -32,7 +32,7 @@ fn computeTransmittance(@builtin(global_invocation_id) global_id : vec3<u32>,)
     // Could maybe skip this check, since our parameters guarantee we start within the atmosphere
     if(!atmosphereHit.hit)
     {
-        textureStore(transmittance_LUT, texel_coord, vec4<f32>(1.0, 0.0, 0.0, 1.0));
+        textureStore(transmittance_LUT, texel_coord, vec4<f32>(1.0, 1.0, 1.0, 1.0));
         return;
     }
 

@@ -21,7 +21,7 @@ struct CameraUBO
 // Render a quad and use this as the fragment stage
 
 //// INCLUDE atmosphere_common.inc.wgsl
-//// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING LIGHT_ILLUMINANCE_IS_ONE
+//// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING LIGHT_ILLUMINANCE_IS_ONE SCATTERING_NONLINEAR_SAMPLE
 
 //// INCLUDE tonemap.inc.wgsl
 
@@ -111,7 +111,6 @@ fn sampleSunDisk(
 
     let transmittanceToSun = sampleTransmittanceLUT_Ray(transmittance_lut, lut_sampler, atmosphere, position, direction);
 
-    // return vec3<f32>(sinDirectionSun);
     return transmittanceToSun * (1.0 - smoothstep(0.2 * sinSunRadius, sinSunRadius, sinDirectionSun));
 }
 

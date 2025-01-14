@@ -23,51 +23,6 @@ LIGHT_ILLUMINANCE_IS_ONE
 
 // Make sure to include atmosphere_common first
 
-fn sampleTransmittanceLUT_Sun(
-    transmittance_lut: texture_2d<f32>,
-    lut_sampler: sampler,
-    atmosphere: ptr<function,Atmosphere>,
-    sun: ptr<function,CelestialLight>,
-    radius: f32,
-    cos_sunZenith: f32) -> vec3<f32>
-{
-    let sin_sunRadius: f32 = sin((*sun).angularRadius);
-    let cos_sunRadius: f32 = cos((*sun).angularRadius);
-
-    /*
-    Possible small angle approximation
-    const float sin_sunRadius = SUN_ANGULAR_RADIUS_RADIANS;
-    const float cos_sunRadius = 1.0;
-    */
-
-    // Cos is negative since the horizon zenith varies from PI/2 to PI
-    let sin_horizonZenith: f32 = (*atmosphere).planetRadiusMm / radius;
-    let cos_horizonZenith: f32 = -safeSqrt(1.0 - sin_horizonZenith * sin_horizonZenith);
-
-    // This sample makes no assumption about ground intersection
-    let transmittanceThroughAtmosphere: vec3<f32> = sampleTransmittanceLUT_RadiusMu(
-        transmittance_lut, 
-        lut_sampler,
-        atmosphere, 
-        radius, 
-        cos_sunZenith
-    );
-
-    // angularFactor goes from 1 to 0 as sunZenith varies from horizonZenith - sunRadius to horizonZenith + sunRadius
-    // Or as cos(sunZenith) varies from cos(horizonZenith - sunRadius) to cos(horizonZenith + sunRadius)
-    // Using angle sum identity, we get that:
-    // cos(horizonZenith - sunRadius) = cos(horizonZenith)cos(sunRadius) + sin(sunRadius)sin(horizonZenith)
-    // cos(horizonZenith + sunRadius) = cos(horizonZenith)cos(sunRadius) - sin(sunRadius)sin(horizonZenith)
-
-    let angularFactor: f32 = smoothstep(
-        -sin_horizonZenith * sin_sunRadius,
-        sin_horizonZenith * sin_sunRadius,
-        cos_sunZenith - cos_horizonZenith * cos_sunRadius
-    );
-
-    return transmittanceThroughAtmosphere * angularFactor;
-}
-
 struct ScatteringResult
 {
     luminance: vec3<f32>,

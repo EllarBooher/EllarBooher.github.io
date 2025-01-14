@@ -475,8 +475,6 @@ class SkySeaApp implements RendererApp {
 
     setupUI(gui: GUI)
     {
-        gui.add(this.settings, 'showSkyViewLUT').name('Show Sky-view Lookup Table');
-
         gui.add(this.settings, 'outputTexture', 
             {
                 'Scene': RenderOutput.Scene, 

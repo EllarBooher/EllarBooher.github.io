@@ -4,6 +4,7 @@ export interface RendererApp
 {
     device: GPUDevice;
     presentFormat: GPUTextureFormat;
+    quit: boolean;
     draw: (
         presentView: GPUTextureView, 
         aspectRatio: number, 

@@ -27,6 +27,7 @@ const POSSIBLE_WEBGPU_FEATURES = new Set<string>([
 export class HelloCubeApp implements RendererApp {
     device: GPUDevice;
     presentFormat: GPUTextureFormat;
+    quit = false;
 
     pipeline: GPURenderPipeline;
 

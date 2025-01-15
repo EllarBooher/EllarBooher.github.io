@@ -513,6 +513,7 @@ class SkySeaApp implements RendererApp {
     transmittanceLUTPassResources: TransmittanceLUTPassResources;
     multiscatterLUTPassResources: MultiscatterLUTPassResources;
     skyviewLUTPassResources: SkyViewLUTPassResources;
+    quit = false;
 
     settings: {
         outputTexture: RenderOutput,

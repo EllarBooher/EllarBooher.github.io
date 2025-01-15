@@ -45,7 +45,10 @@ const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
                 deltaTime
             );
 
-            animateRequestRef.current = requestAnimationFrame(animate);
+            if(!app.quit)
+            {
+                animateRequestRef.current = requestAnimationFrame(animate);
+            }
         }
     }, [app]);
 
@@ -127,7 +130,10 @@ export const RendererComponent = memo(function RendererComponent() {
         getDevice(sample.requiredFeatures).then(({adapter, device}) => {
             if(appRef.current)
             {
+                // We need to override, since a rerender due to refresh vs due to strict mode is indistinguishable
+                // I am not 100% certain of this
                 console.warn("Device found, but app was already created. This is due to either a duplicate component rerender, or the sample changing without a full page refresh. Overriding the original.");
+                appRef.current.quit = true;
             }
             else
             {
@@ -144,13 +150,17 @@ export const RendererComponent = memo(function RendererComponent() {
             })
             device.onuncapturederror = (ev) => {
                 console.error(`WebGPU device uncaptured error: ${ev.error.message}`);
+                if(appRef.current)
+                {
+                    appRef.current.quit = true;
+                }
+                appRef.current = undefined;
             }
 
             const presentFormat = navigator.gpu.getPreferredCanvasFormat();
             appRef.current = sample.create(device, adapter.features, presentFormat, performance.now());
 
             console.log("Finished initializing app.");
-
         }, (err) => {
             console.error(err);
         }).finally(() => {

@@ -4,6 +4,7 @@ import SkyViewLUTPak from '../shaders/skyview_LUT.wgsl';
 import AtmosphereCameraPak from '../shaders/atmosphere_camera.wgsl';
 import { GUI } from "lil-gui";
 import FullscreenQuadPak from '../shaders/fullscreen_quad.wgsl';
+import HeightmapPak from '../shaders/heightmap.wgsl';
 
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
 import { mat4, Mat4, vec3, Vec3, vec4, Vec4 } from 'wgpu-matrix';
@@ -411,6 +412,76 @@ function CreateSkyViewLUTPassResources(
     }
 }
 
+interface HeightmapPassResources
+{
+    group0: GPUBindGroup;
+    pipeline: GPURenderPipeline;
+    texture: GPUTexture;
+    view: GPUTextureView;
+}
+
+function CreateHeightmapPassResources(
+    device: GPUDevice,
+    cameraUBO: CameraUBO,
+    outputFormat: GPUTextureFormat,
+)
+{
+    const label = "Heightmap Pass";
+
+    const format = SKYVIEW_LUT_FORMAT;
+
+    const texture = device.createTexture({
+        size: [1024, 1024],
+        dimension: "2d",
+        format: format,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        label,
+    });
+    const view = texture.createView({label})
+
+    const group0Layout = device.createBindGroupLayout({                    
+        entries: [{
+            binding: 0,
+            visibility: GPUShaderStage.FRAGMENT,
+            buffer: {}
+        }], label
+    });
+    const group0 = device.createBindGroup({
+        layout: group0Layout,
+        entries: [{
+            binding: 0,
+            resource: {buffer: cameraUBO.buffer }
+        }]
+    });
+
+    const shaderModule = device.createShaderModule({code: HeightmapPak, label});
+
+    const pipeline = device.createRenderPipeline({
+        layout: device.createPipelineLayout({
+            bindGroupLayouts: [group0Layout],
+        }),
+        vertex: {
+            module: shaderModule,
+            entryPoint: 'vertex_main'
+        },
+        fragment: {
+            module: shaderModule,
+            entryPoint: 'fragment_main',
+            targets: [{
+                format: format
+            }]
+        },
+        label
+    })
+
+    return {
+        group0,
+        pipeline,
+        texture,
+        view,
+    };
+}
+
 interface FullscreenQuadPassResources
 {
     group0Layout: GPUBindGroupLayout;
@@ -536,6 +607,7 @@ enum RenderOutput {
     TransmittanceLUT,
     MultiscatterLUT,
     Scene,
+    Heightmap,
 };
 
 
@@ -569,7 +641,7 @@ class SkySeaApp implements RendererApp {
         }
     };
     fullscreenQuadPassResources: FullscreenQuadPassResources;
-
+    heightmapPassResources: HeightmapPassResources;
 
     celestialLightUBO: CelestialLightUBO;
 
@@ -602,7 +674,8 @@ class SkySeaApp implements RendererApp {
                 'Scene': RenderOutput.Scene, 
                 'Transmittance LUT': RenderOutput.TransmittanceLUT, 
                 'Multiscatter LUT': RenderOutput.MultiscatterLUT, 
-                'Skyview LUT': RenderOutput.SkyviewLUT
+                'Skyview LUT': RenderOutput.SkyviewLUT,
+                'Heightmap': RenderOutput.Heightmap,
             }
         ).name('Render Output').listen();
         const outputTextureFolder = gui.addFolder('Display Gain').hide();
@@ -698,8 +771,9 @@ class SkySeaApp implements RendererApp {
             }
         };
 
-        {
+        if (this.settings.outputTextureSettings.has(this.settings.outputTexture)) {
             const newSettings = this.settings.outputTextureSettings.get(this.settings.outputTexture)!;
+            console.log(newSettings);
             this.settings.currentOutputTextureSettings.flip = newSettings.flip;
             this.settings.currentOutputTextureSettings.color_gain.r = newSettings.color_gain.r;
             this.settings.currentOutputTextureSettings.color_gain.g = newSettings.color_gain.g;
@@ -732,6 +806,11 @@ class SkySeaApp implements RendererApp {
             this.multiscatterLUTPassResources.view,
             this.celestialLightUBO,
         );
+
+        this.heightmapPassResources = CreateHeightmapPassResources(
+            this.device, this.cameraUBO, presentFormat
+        );
+
         this.fullscreenQuadPassResources = CreateFullscreenQuadPassResources(
             this.device, 
             new Map<RenderOutput, {view: GPUTextureView, defaultUBO: FullscreenQuadUBOData}>([
@@ -749,6 +828,11 @@ class SkySeaApp implements RendererApp {
                     { 
                         view: this.skyviewLUTPassResources.view, 
                         defaultUBO: {vertex_scale: vec4.create(1.0,-1.0,1.0,1.0), color_gain: vec4.create(8.0,8.0,8.0,8.0) }
+                    }],
+                [RenderOutput.Heightmap,
+                    {
+                        view: this.heightmapPassResources.view,
+                        defaultUBO: {vertex_scale: vec4.create(1.0,-1.0,1.0,1.0), color_gain: vec4.create(1.0,1.0,1.0,1.0)}
                     }]
             ]), 
             this.presentFormat
@@ -990,6 +1074,23 @@ class SkySeaApp implements RendererApp {
         const clearColor = {r: 1.0, g: 0.0, b: 0.0, a: 0.0};
 
         const commandEncoder = this.device.createCommandEncoder();
+
+        const heightmapPassEncoder = commandEncoder.beginRenderPass({
+            colorAttachments: [
+                { 
+                    clearValue: clearColor, 
+                    loadOp: "clear", 
+                    storeOp: "store", 
+                    view: this.heightmapPassResources.view
+                },
+            ],
+            label: "Heightmap Pass"
+        });
+        heightmapPassEncoder.setPipeline(this.heightmapPassResources.pipeline);
+        heightmapPassEncoder.setIndexBuffer(this.fullscreenQuadIndexBuffer, "uint32", 0, this.fullscreenQuadIndexBuffer.size);
+        heightmapPassEncoder.setBindGroup(0, this.heightmapPassResources.group0);
+        heightmapPassEncoder.drawIndexed(6, 1, 0, 0, 0);
+        heightmapPassEncoder.end();
 
         const skyviewLUTPassEncoder = commandEncoder.beginComputePass();
         skyviewLUTPassEncoder.setPipeline(this.skyviewLUTPassResources.pipeline);

@@ -1055,7 +1055,7 @@ class SkySeaApp implements RendererApp {
     }
 
     draw(
-        presentView: GPUTextureView, 
+        presentTexture: GPUTexture, 
         aspectRatio: number, 
         _timeMilliseconds: number,
         deltaTimeMilliseconds: number): void
@@ -1066,6 +1066,8 @@ class SkySeaApp implements RendererApp {
             this.dummyFrameCounter -= 1;
             return;
         }
+     
+        const presentView = presentTexture.createView();
         
         this.updateCamera(aspectRatio);
         this.updateOrbit(deltaTimeMilliseconds);

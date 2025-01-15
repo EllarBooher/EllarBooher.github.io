@@ -38,8 +38,10 @@ const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
             const deltaTime = time - (lastTimeRef.current ? lastTimeRef.current : 0.0);
             lastTimeRef.current = time;
 
+            const drawTexture = drawContext.getCurrentTexture();
+
             app.draw(
-                drawContext.getCurrentTexture().createView(),
+                drawTexture,
                 canvasRef.current!.width / canvasRef.current!.height,
                 time,
                 deltaTime

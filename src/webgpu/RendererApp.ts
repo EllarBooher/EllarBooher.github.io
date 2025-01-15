@@ -6,7 +6,7 @@ export interface RendererApp
     presentFormat: GPUTextureFormat;
     quit: boolean;
     draw: (
-        presentView: GPUTextureView, 
+        presentTexture: GPUTexture, 
         aspectRatio: number, 
         timeMilliseconds: number,
         deltaTimeMilliseconds: number

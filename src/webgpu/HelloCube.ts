@@ -171,10 +171,12 @@ export class HelloCubeApp implements RendererApp {
     }
 
     draw(
-        presentView: GPUTextureView, 
+        presentTexture: GPUTexture, 
         aspectRatio: number, 
         time: number): void
     {
+        const presentView = presentTexture.createView();
+
         const fov = 60 * Math.PI / 180
         const near = 0.1;
         const far = 1000;

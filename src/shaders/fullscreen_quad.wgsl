@@ -5,7 +5,8 @@
 
 struct FullscreenQuadUBO
 {
-    gain: vec4<f32>,
+    color_gain: vec4<f32>,
+    vertex_scale: vec4<f32>,
 }
 
 @group(1) @binding(0) var<uniform> b_ubo: FullscreenQuadUBO;
@@ -32,7 +33,7 @@ struct VertexOut {
 fn vertex_main(@builtin(vertex_index) index : u32) -> VertexOut
 {
     var output : VertexOut;
-    output.position = QUAD_VERTICES[index];
+    output.position = b_ubo.vertex_scale * QUAD_VERTICES[index];
     output.uv = QUAD_UVS[index];
     return output; 
 }
@@ -40,5 +41,5 @@ fn vertex_main(@builtin(vertex_index) index : u32) -> VertexOut
 @fragment
 fn fragment_main(fragData: VertexOut) -> @location(0) vec4<f32>
 {
-    return b_ubo.gain * textureSample(b_texture, b_sampler, fragData.uv);
+    return b_ubo.color_gain * textureSample(b_texture, b_sampler, fragData.uv);
 }

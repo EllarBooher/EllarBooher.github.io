@@ -20,13 +20,6 @@ const SKYVIEW_LUT_SAMPLE_TYPE: GPUTextureSampleType = 'float';
 const multiscatterLUTDimensions = {width: 1024, height: 1024};
 const skyviewLUTDimensions = {width: 1024, height: 256};
 
-interface CameraUBO
-{
-    inv_proj: Mat4,
-    inv_view: Mat4,
-    position: Vec4,
-}
-
 interface CelestialLight
 {
     color: Vec3;
@@ -37,16 +30,23 @@ interface CelestialLight
 
 interface FullscreenQuadUBOData
 {
-    gain: Vec4
+    color_gain: Vec4,
+    vertex_scale: Vec4,
 }
 
-class FullscreenQuadUBO
+class CameraUBO
 {
-    data: FullscreenQuadUBOData = {
-        gain: vec4.create(1.0,1.0,1.0,1.0),
+    data: {
+        inv_proj: Mat4,
+        inv_view: Mat4,
+        position: Vec4,
+    } = {
+        inv_proj: mat4.identity(),
+        inv_view: mat4.identity(),
+        position: vec4.create(0.0,0.0,0.0,1.0),
     };
 
-    public readonly lengthFloat32: number = 4
+    public readonly lengthFloat32: number = 16 + 16 + 4;
     stagingBuffer: Float32Array;
     buffer: GPUBuffer;
 
@@ -59,7 +59,36 @@ class FullscreenQuadUBO
         })
     }
     writeToBuffer(device: GPUDevice) {
-        this.stagingBuffer.set(this.data.gain);
+        this.stagingBuffer.set(this.data.inv_proj, 0);
+        this.stagingBuffer.set(this.data.inv_view, 16);
+        this.stagingBuffer.set(this.data.position, 32);
+
+        device.queue.writeBuffer(this.buffer, 0, this.stagingBuffer, 0, this.stagingBuffer.length);
+    }
+}
+
+class FullscreenQuadUBO
+{
+    data: FullscreenQuadUBOData = {
+        color_gain: vec4.create(1.0,1.0,1.0,1.0),
+        vertex_scale: vec4.create(1.0,1.0,1.0,1.0),
+    };
+
+    public readonly lengthFloat32: number = 4 + 4;
+    stagingBuffer: Float32Array;
+    buffer: GPUBuffer;
+
+    constructor(device: GPUDevice)
+    {
+        this.stagingBuffer = new Float32Array(this.lengthFloat32);
+        this.buffer = device.createBuffer({
+            size: this.stagingBuffer.byteLength,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM
+        })
+    }
+    writeToBuffer(device: GPUDevice) {
+        this.stagingBuffer.set(this.data.color_gain, 0);
+        this.stagingBuffer.set(this.data.vertex_scale, 4);
 
         device.queue.writeBuffer(this.buffer, 0, this.stagingBuffer, 0, this.stagingBuffer.length);
     }
@@ -448,7 +477,7 @@ function CreateFullscreenQuadPassResources(
         entries: [
             {
                 binding: 0,
-                visibility: GPUShaderStage.FRAGMENT,
+                visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.VERTEX,
                 buffer: {type: 'uniform' }
             }
         ], label
@@ -509,6 +538,17 @@ enum RenderOutput {
     Scene,
 };
 
+
+interface OutputTexturePostProcessSettings
+{
+    flip: boolean;
+    color_gain: {
+        r: number,
+        g: number,
+        b: number,
+    };
+};
+
 class SkySeaApp implements RendererApp {
     transmittanceLUTPassResources: TransmittanceLUTPassResources;
     multiscatterLUTPassResources: MultiscatterLUTPassResources;
@@ -517,13 +557,8 @@ class SkySeaApp implements RendererApp {
 
     settings: {
         outputTexture: RenderOutput,
-        fullscreenQuadUBO: {
-            gain: {
-                r: number,
-                g: number,
-                b: number,
-            }
-        },
+        outputTextureSettings: Map<RenderOutput, OutputTexturePostProcessSettings>,
+        currentOutputTextureSettings: OutputTexturePostProcessSettings,
         orbit: {
             timeHours: number,
             timeSpeedupFactor: number,
@@ -539,7 +574,7 @@ class SkySeaApp implements RendererApp {
     celestialLightUBO: CelestialLightUBO;
 
     atmosphereCameraLUTGroup: GPUBindGroup;
-    cameraUBO: GPUBuffer;
+    cameraUBO: CameraUBO;
     atmosphereCameraGroup1: GPUBindGroup;
     atmosphereCameraPipeline: GPURenderPipeline;
 
@@ -569,30 +604,42 @@ class SkySeaApp implements RendererApp {
                 'Multiscatter LUT': RenderOutput.MultiscatterLUT, 
                 'Skyview LUT': RenderOutput.SkyviewLUT
             }
-        ).name('Render Output');
-        const displayGainFolder = gui.addFolder('Display Gain').hide();
-        displayGainFolder.add({gain: 0.0}, 'gain').name('RGB').min(0.0).max(100.0).onChange((v: number) => {
-            this.settings.fullscreenQuadUBO.gain.r = v;
-            this.settings.fullscreenQuadUBO.gain.g = v;
-            this.settings.fullscreenQuadUBO.gain.b = v;
+        ).name('Render Output').listen();
+        const outputTextureFolder = gui.addFolder('Display Gain').hide();
+        outputTextureFolder.add(this.settings.currentOutputTextureSettings, 'flip').name('Flip Image').listen();
+        outputTextureFolder.add({gain: 0.0}, 'gain').name('RGB').min(0.0).max(100.0).onChange((v: number) => {
+            this.settings.currentOutputTextureSettings.color_gain.r = v;
+            this.settings.currentOutputTextureSettings.color_gain.g = v;
+            this.settings.currentOutputTextureSettings.color_gain.b = v;
         });
-        displayGainFolder.add(this.settings.fullscreenQuadUBO.gain, 'r').name('R').min(0.0).max(100.0).listen();
-        displayGainFolder.add(this.settings.fullscreenQuadUBO.gain, 'g').name('G').min(0.0).max(100.0).listen();
-        displayGainFolder.add(this.settings.fullscreenQuadUBO.gain, 'b').name('B').min(0.0).max(100.0).listen();
-        outputTextureController.onFinishChange((v: RenderOutput) => {
-            if(v != RenderOutput.Scene && this.fullscreenQuadPassResources.uboDataByOutputTexture.has(v))
+        outputTextureFolder.add(this.settings.currentOutputTextureSettings.color_gain, 'r').name('R').min(0.0).max(100.0).listen();
+        outputTextureFolder.add(this.settings.currentOutputTextureSettings.color_gain, 'g').name('G').min(0.0).max(100.0).listen();
+        outputTextureFolder.add(this.settings.currentOutputTextureSettings.color_gain, 'b').name('B').min(0.0).max(100.0).listen();
+        outputTextureController.onChange((v: RenderOutput) => {
+            if(this.fullscreenQuadPassResources.uboDataByOutputTexture.has(v))
             {
-                const sourceUBO = this.fullscreenQuadPassResources.uboDataByOutputTexture.get(v)!;
-                this.settings.fullscreenQuadUBO.gain.r = sourceUBO.gain.at(0) ?? 1.0;
-                this.settings.fullscreenQuadUBO.gain.g = sourceUBO.gain.at(1) ?? 1.0;
-                this.settings.fullscreenQuadUBO.gain.b = sourceUBO.gain.at(2) ?? 1.0;
-                displayGainFolder.show();
+                // UI is bound to suboject so we can't just reassign in one statement, need to recursively set fields
+                this.settings.currentOutputTextureSettings.flip = false;
+                this.settings.currentOutputTextureSettings.color_gain.r = 1.0;
+                this.settings.currentOutputTextureSettings.color_gain.g = 1.0;
+                this.settings.currentOutputTextureSettings.color_gain.b = 1.0;
+    
+                if(this.settings.outputTextureSettings.has(v))
+                {
+                    const newSettings = this.settings.outputTextureSettings.get(v)!;
+                    this.settings.currentOutputTextureSettings.flip = newSettings.flip;
+                    this.settings.currentOutputTextureSettings.color_gain.r = newSettings.color_gain.r;
+                    this.settings.currentOutputTextureSettings.color_gain.g = newSettings.color_gain.g;
+                    this.settings.currentOutputTextureSettings.color_gain.b = newSettings.color_gain.b;
+                }
+
+                outputTextureFolder.show();
             }
             else
             {
-                displayGainFolder.hide();
+                outputTextureFolder.hide();
             }
-        })
+        });
         
         gui.add(this.settings.orbit, 'timeHours').min(0.0).max(24.0).name('Time in Hours').listen();
         gui.add(this.settings.orbit, 'timeSpeedupFactor').min(1.0).max(50000).step(1.0).name('Time Multiplier');
@@ -613,8 +660,31 @@ class SkySeaApp implements RendererApp {
         this.startTime = time;
         this.settings = {
             outputTexture: RenderOutput.Scene,
-            fullscreenQuadUBO: {
-                gain: {
+            outputTextureSettings: new Map<RenderOutput, OutputTexturePostProcessSettings>([
+                [RenderOutput.TransmittanceLUT, 
+                    {
+                        flip: false, 
+                        color_gain: {r: 1.0, g: 1.0, b: 1.0}
+                    }], 
+                [RenderOutput.MultiscatterLUT, 
+                    { 
+                        flip: false,
+                        color_gain: {r: 15.0, g: 15.0, b: 15.0}
+                    }], 
+                [RenderOutput.SkyviewLUT, 
+                    { 
+                        flip: true,
+                        color_gain: {r: 8.0, g: 8.0, b: 8.0}
+                    }],
+                [RenderOutput.Heightmap,
+                    {
+                        flip: true,
+                        color_gain: {r: 1.0, g: 1.0, b: 1.0}
+                    }]
+            ]),
+            currentOutputTextureSettings: {
+                flip: false,
+                color_gain: {
                     r: 1.0, g: 1.0, b: 1.0
                 }
             },
@@ -627,6 +697,15 @@ class SkySeaApp implements RendererApp {
                 sunsetAzimuthRadians: 0.0,
             }
         };
+
+        {
+            const newSettings = this.settings.outputTextureSettings.get(this.settings.outputTexture)!;
+            this.settings.currentOutputTextureSettings.flip = newSettings.flip;
+            this.settings.currentOutputTextureSettings.color_gain.r = newSettings.color_gain.r;
+            this.settings.currentOutputTextureSettings.color_gain.g = newSettings.color_gain.g;
+            this.settings.currentOutputTextureSettings.color_gain.b = newSettings.color_gain.b;
+        }
+
         this.deltaTimeRecord = {
             milliseconds: new Array<number>(100).fill(0.0),
             count: 0,
@@ -635,6 +714,8 @@ class SkySeaApp implements RendererApp {
             averageFPS: 0.0,
         };
         this.dummyFrameCounter = 10.0;
+
+        this.cameraUBO = new CameraUBO(device);
 
         this.celestialLightUBO = new CelestialLightUBO(device);
 
@@ -657,17 +738,17 @@ class SkySeaApp implements RendererApp {
                 [RenderOutput.TransmittanceLUT, 
                     { 
                         view: this.transmittanceLUTPassResources.view, 
-                        defaultUBO: {gain: vec4.create(1.0,1.0,1.0,1.0) } 
+                        defaultUBO: {vertex_scale: vec4.create(1.0,1.0,1.0,1.0), color_gain: vec4.create(1.0,1.0,1.0,1.0) } 
                     }], 
                 [RenderOutput.MultiscatterLUT, 
                     { 
                         view: this.multiscatterLUTPassResources.view, 
-                        defaultUBO: {gain: vec4.create(15.0,15.0,15.0,15.0) }
+                        defaultUBO: {vertex_scale: vec4.create(1.0,1.0,1.0,1.0), color_gain: vec4.create(15.0,15.0,15.0,15.0) }
                     }], 
                 [RenderOutput.SkyviewLUT, 
                     { 
                         view: this.skyviewLUTPassResources.view, 
-                        defaultUBO: {gain: vec4.create(8.0,8.0,8.0,8.0) }
+                        defaultUBO: {vertex_scale: vec4.create(1.0,-1.0,1.0,1.0), color_gain: vec4.create(8.0,8.0,8.0,8.0) }
                     }]
             ]), 
             this.presentFormat
@@ -757,16 +838,12 @@ class SkySeaApp implements RendererApp {
             label: "Atmosphere Camera Group 0"
         });
 
-        this.cameraUBO = device.createBuffer({
-            size: 16 * 4 + 16 * 4 + 4 * 4, // 2 mat4x4 + vec4
-            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
-        });
         this.atmosphereCameraGroup1 = device.createBindGroup({
             layout: atmosphereCameraLayouts[1],
             entries: [
                 {
                     binding: 0,
-                    resource: {buffer: this.cameraUBO},
+                    resource: {buffer: this.cameraUBO.buffer},
                 },
                 {
                     binding: 1,
@@ -875,6 +952,24 @@ class SkySeaApp implements RendererApp {
         record.index += 1;
     }
 
+    updateCamera(aspectRatio: number)
+    {
+        const fov = 60 * Math.PI / 180
+        const near = 0.1;
+        const far = 1000;
+        const perspective = mat4.perspective(fov, aspectRatio, near, far);
+        
+        const camera_pos = [0, 10, 0];
+        const view = mat4.lookAt(camera_pos, [0, 20, 100], [0, 1, 0]);
+
+        this.cameraUBO.data = {
+            inv_proj: mat4.inverse(perspective),
+            inv_view: mat4.inverse(view),
+            position: vec4.create(...camera_pos),
+        };
+        this.cameraUBO.writeToBuffer(this.device);
+    }
+
     draw(
         presentView: GPUTextureView, 
         aspectRatio: number, 
@@ -887,6 +982,12 @@ class SkySeaApp implements RendererApp {
             this.dummyFrameCounter -= 1;
             return;
         }
+        
+        this.updateCamera(aspectRatio);
+        this.updateOrbit(deltaTimeMilliseconds);
+        this.updateFPSValues(deltaTimeMilliseconds);
+
+        const clearColor = {r: 1.0, g: 0.0, b: 0.0, a: 0.0};
 
         const commandEncoder = this.device.createCommandEncoder();
 
@@ -894,35 +995,12 @@ class SkySeaApp implements RendererApp {
         skyviewLUTPassEncoder.setPipeline(this.skyviewLUTPassResources.pipeline);
         skyviewLUTPassEncoder.setBindGroup(0, this.skyviewLUTPassResources.group0);
 
-        this.updateOrbit(deltaTimeMilliseconds);
-        this.updateFPSValues(deltaTimeMilliseconds);
-        
         this.celestialLightUBO.writeToBuffer(this.device);   
         skyviewLUTPassEncoder.setBindGroup(1, this.skyviewLUTPassResources.group1);
 
         skyviewLUTPassEncoder.dispatchWorkgroups(skyviewLUTDimensions.width / 16, skyviewLUTDimensions.height / 32, 1);
         skyviewLUTPassEncoder.end();
 
-        const fov = 60 * Math.PI / 180
-        const near = 0.1;
-        const far = 1000;
-        const perspective = mat4.perspective(fov, aspectRatio, near, far);
-        
-        const camera_pos = [0, 10, 0];
-        const view = mat4.lookAt(camera_pos, [0, 20, 100], [0, 1, 0]);
-
-        const cameraUBOData: CameraUBO = {
-            inv_proj: mat4.inverse(perspective),
-            inv_view: mat4.inverse(view),
-            position: vec4.create(...camera_pos),
-        };
-        const cameraUBODataBytes = new Float32Array(16 + 16 + 4);
-        cameraUBODataBytes.set(cameraUBOData.inv_proj, 0);
-        cameraUBODataBytes.set(cameraUBOData.inv_view, 16);
-        cameraUBODataBytes.set(cameraUBOData.position, 16 + 16);
-        this.device.queue.writeBuffer(this.cameraUBO, 0, cameraUBODataBytes, 0, cameraUBODataBytes.length)
-
-        const clearColor = {r: 1.0, g: 0.0, b: 0.0, a: 0.0};
         const fullscreenPassEncoder = commandEncoder.beginRenderPass({
             colorAttachments: [
                 { 
@@ -937,8 +1015,10 @@ class SkySeaApp implements RendererApp {
 
         if(this.fullscreenQuadPassResources.uboDataByOutputTexture.has(this.settings.outputTexture))
         {
-            const gain = this.settings.fullscreenQuadUBO.gain;
-            this.fullscreenQuadPassResources.uboDataByOutputTexture.get(this.settings.outputTexture)!.gain = vec4.create(gain.r,gain.g,gain.b,1.0);
+            const settings = this.settings.currentOutputTextureSettings;
+            const uboData = this.fullscreenQuadPassResources.uboDataByOutputTexture.get(this.settings.outputTexture)!;
+            uboData.color_gain = vec4.create(settings.color_gain.r,settings.color_gain.g,settings.color_gain.b,1.0);
+            uboData.vertex_scale = vec4.create(1.0, settings.flip ? -1.0 : 1.0, 1.0, 1.0);
         }
 
         if(this.settings.outputTexture === RenderOutput.Scene)
@@ -962,7 +1042,8 @@ class SkySeaApp implements RendererApp {
             else
             {
                 this.fullscreenQuadPassResources.ubo.data = {
-                    gain: vec4.create(1.0,1.0,1.0,1.0)
+                    color_gain: vec4.create(1.0,1.0,1.0,1.0),
+                    vertex_scale: vec4.create(1.0,1.0,1.0,1.0),
                 };
             }
             this.fullscreenQuadPassResources.ubo.writeToBuffer(this.device);

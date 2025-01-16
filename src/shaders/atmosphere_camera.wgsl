@@ -1,5 +1,3 @@
-// Call this in a render pass, passing in an index buffer [0, 1, 2, 0, 2, 3]
-
 //// INCLUDE atmosphere_types.inc.wgsl
 
 @group(0) @binding(0) var output_color: texture_storage_2d<rgba32float, write>;
@@ -28,6 +26,7 @@ struct CameraUBO
 //// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE
 
 //// INCLUDE tonemap.inc.wgsl
+//// INCLUDE pbr.inc.wgsl
 
 fn sampleSkyViewLUT(
     atmosphere: ptr<function, Atmosphere>, 
@@ -36,10 +35,10 @@ fn sampleSkyViewLUT(
 ) -> vec3<f32>
 {
     // Horizon zenith cannot be less than PI/2, so we use sin and assume it is a quadrant 2 angle
-    let sinHorizonZenith = (*atmosphere).planetRadiusMm / length(position);
+    let sinHorizonZenith = clamp((*atmosphere).planetRadiusMm / length(position), -1.0, 1.0);
     let horizonZenith = PI - asin(sinHorizonZenith);
 
-    let cosViewZenith = dot(position, direction) / (length(position) * length(direction));
+    let cosViewZenith = clamp(dot(position, direction) / (length(position) * length(direction)), -1.0, 1.0);
     let cosHorizonZenith = -safeSqrt(1.0 - sinHorizonZenith * sinHorizonZenith);
 
     let viewZenith = acos(cosViewZenith);
@@ -169,13 +168,91 @@ fn sampleEnvironmentLuminance(
     direction: vec3<f32>
 ) -> vec3<f32>
 {
-    if (raySphereTest(position, direction, (*atmosphere).planetRadiusMm))
+    var luminance = sampleSkyViewLUT(atmosphere, position, direction);
+    if(direction.y >= 0.0)
     {
-        let include_ground = true;
+        let light_direction = normalize(-(*light).forward);
+        let radius = length(position);
+        let mu_light = dot(position, light_direction) / radius;
 
-        // Ray intersects the ground, so the sky view LUT is not valid
+        let transmittance_to_light = sampleTransmittanceLUT_Sun(
+            transmittance_lut, 
+            lut_sampler,
+            atmosphere, 
+            light, 
+            radius,
+            mu_light
+        );
 
-        return computeLuminanceScatteringIntegral(
+        luminance += transmittance_to_light * sampleSunDisk(atmosphere, light, position, direction) * (*light).color.rgb * (*light).strength;
+    }
+    return luminance;
+}
+
+fn sampleGeometryLuminance(
+    atmosphere: ptr<function, Atmosphere>,
+    light: ptr<function, CelestialLight>,
+    material: PBRTexel,
+    position: vec3<f32>,
+    direction: vec3<f32>,
+    distance: f32,
+    intersects_ground: bool
+) -> vec3<f32>
+{
+    let light_direction = normalize(-(*light).forward);
+
+    var origin_step = RaymarchStep();
+    origin_step.radius = length(position);
+    origin_step.mu = dot(position, direction) / origin_step.radius;
+    origin_step.mu_light = dot(position, light_direction) / origin_step.radius;
+    origin_step.nu = dot(direction, light_direction);
+
+    let surface_step: RaymarchStep = stepRadiusMu(origin_step, distance);
+    let transmittance_to_surface = sampleTransmittanceLUT_Segment(
+        transmittance_lut, 
+        lut_sampler,
+        atmosphere, 
+        origin_step.radius,
+        origin_step.mu,
+        distance,
+        intersects_ground
+    );
+
+    var light_luminance_transfer = vec3<f32>(0.0);
+
+    // TODO: shadowmap, occlusion texture
+
+    // Model water as perfect reflections with some diffuse scattering to emulate light coming up from underwater
+
+    let diffuse = diffuseBRDF(material);
+
+    // shift reflection vector up to make up for the lack of secondary bounces
+    // Otherwise, the environmental luminance will be 0 and we get random black patches
+    var reflection_direction = reflect(normalize(direction), normalize(material.normal));
+    reflection_direction.y = max(reflection_direction.y, 0.001); 
+    reflection_direction = normalize(reflection_direction);
+
+    let surface_position = position + direction * distance;
+
+    light_luminance_transfer += 
+        transmittance_to_surface
+        * sampleEnvironmentLuminance(atmosphere, light, surface_position, reflection_direction) 
+        * mix(
+            diffuse, 
+            vec3<f32>(1.0), 
+            computeFresnelPerfectReflection(material, reflection_direction)
+        );
+
+    light_luminance_transfer += 
+        transmittance_to_surface
+        * diffuse
+        * sampleMultiscatterLUT(multiscatter_lut, lut_sampler, atmosphere, surface_step.radius, surface_step.mu_light);
+
+    { 
+        // Aerial perspective, the light scattered by air between viewer and the surface
+        // TODO: aerial perspective LUT
+        let include_ground = false;
+        light_luminance_transfer += computeLuminanceScatteringIntegral(
             atmosphere, 
             light, 
             lut_sampler,
@@ -186,43 +263,8 @@ fn sampleEnvironmentLuminance(
             include_ground
         ).luminance;
     }
-    else
-    {
-        // If sun is above horizon, the sun disk and sky is visible so the sky view LUT is valid.
-       
-        let luminance = sampleSkyViewLUT(atmosphere, position, direction)
-            + sampleSunDisk(atmosphere, light, position, direction) * (*light).color.rgb * (*light).strength;
 
-        return luminance;
-    }
-}
-
-
-const QUAD_VERTICES: array<vec4<f32>, 4> = array<vec4<f32>,4>(
-    vec4<f32>(-1.0, -1.0, 0.0, 1.0),
-    vec4<f32>(1.0, -1.0, 0.0, 1.0),
-    vec4<f32>(1.0, 1.0, 0.0, 1.0),
-    vec4<f32>(-1.0, 1.0, 0.0, 1.0),
-);
-const QUAD_UVS: array<vec2<f32>,4> = array<vec2<f32>,4>(
-    vec2<f32>(0.0, 0.0),
-    vec2<f32>(1.0, 0.0),
-    vec2<f32>(1.0, 1.0),
-    vec2<f32>(0.0, 1.0),
-);
-
-struct VertexOut {
-    @builtin(position) position : vec4<f32>,
-    @location(0) uv : vec2<f32>
-}
-
-@vertex
-fn vertex_main(@builtin(vertex_index) index : u32) -> VertexOut
-{
-    var output : VertexOut;
-    output.position = QUAD_VERTICES[index];
-    output.uv = QUAD_UVS[index];
-    return output; 
+    return light_luminance_transfer;
 }
 
 @compute @workgroup_size(16,16,1)
@@ -249,7 +291,55 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     let direction_view_space = b_camera.inv_proj * vec4(uv_clip_space, near_plane_depth, 1.0);
     let direction_world = normalize((b_camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
 
-    let luminance = light.strength * sampleEnvironmentLuminance(&atmosphere, &light, origin, direction_world);
+    let color_with_depth_in_alpha = textureLoad(gbuffer_color_with_depth_in_alpha, texel_coord, 0);
+    let normal = textureLoad(gbuffer_normal, texel_coord, 0); 
 
-    textureStore(output_color, texel_coord, vec4<f32>(tonemapACES(luminance),1.0));
+    let material: PBRTexel = convertPBRProperties(color_with_depth_in_alpha.xyz, normal.xyz);
+    let depth = color_with_depth_in_alpha.a / METERS_PER_MM;
+
+    var luminance_transfer = vec3<f32>(0.0);
+
+    // TODO: Use radius/mu to test if mu is below horizon instead?
+    let intersects_ground = raySphereTest(origin, direction_world, atmosphere.planetRadiusMm);
+
+    if (depth <= 0.0)
+    {
+        // Unobscured view of the virtual environment, i.e. sky or ground
+
+        /*
+        This should not occur if the virtual ground is obscured by otherwise rendered terrain/geometry
+        Uncomment if needed at some point
+        if (intersects_ground)
+        {
+            let include_ground = true;
+
+            // Ray intersects the ground, so the sky view LUT is not valid
+
+            luminance_transfer = computeLuminanceScatteringIntegral(
+                &atmosphere, 
+                &light, 
+                lut_sampler,
+                transmittance_lut, 
+                multiscatter_lut, 
+                origin, 
+                direction_world, 
+                include_ground
+            ).luminance;
+        }
+        else
+        */
+        {
+            luminance_transfer = sampleEnvironmentLuminance(&atmosphere, &light, origin, direction_world);
+        }
+    }
+    else
+    {
+        luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, intersects_ground);
+    }
+
+    let luminance = light.strength * light.color * luminance_transfer;
+
+    let output = vec4<f32>(tonemapACES(luminance),1.0);
+
+    textureStore(output_color, texel_coord, output);
 }

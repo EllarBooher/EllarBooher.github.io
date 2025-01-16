@@ -71,6 +71,7 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id : vec3<u32>,)
     // PORTING NOTE: should y be negative? I'm getting flipped around with the coordinates 
     let sun_direction = vec3<f32>(0.0, cos_sun_zenith, sin_sun_zenith);
 
+    // TODO: remove this
     var light: CelestialLight = LIGHT_GLOBAL;
     light.forward = -sun_direction;
 

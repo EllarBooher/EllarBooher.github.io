@@ -8,6 +8,7 @@ const includeFilenames = [
     "atmosphere_common.inc.wgsl", 
     "atmosphere_raymarch.inc.wgsl",
     "tonemap.inc.wgsl",
+    "pbr.inc.wgsl"
 ]; 
 
 interface ShaderInclude {
@@ -235,6 +236,7 @@ export function packShaders(id: string, source: string) : string
                 if(!includeMappings.has(includeFilename))
                 {
                     console.error(`Unrecognized WGSL include: ${includeFilename}`);
+                    console.error(`Known are:`);
                     includeMappings.forEach((value, key) => {
                         console.error(`${key}`);
                     })

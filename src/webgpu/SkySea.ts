@@ -1087,7 +1087,6 @@ class SkySeaApp implements RendererApp {
 
         if (this.settings.outputTextureSettings.has(this.settings.outputTexture)) {
             const newSettings = this.settings.outputTextureSettings.get(this.settings.outputTexture)!;
-            console.log(newSettings);
             this.settings.currentOutputTextureSettings.flip = newSettings.flip;
             this.settings.currentOutputTextureSettings.color_gain.r = newSettings.color_gain.r;
             this.settings.currentOutputTextureSettings.color_gain.g = newSettings.color_gain.g;
@@ -1324,8 +1323,9 @@ class SkySeaApp implements RendererApp {
         skyviewLUTPassEncoder.setBindGroup(1, this.skyviewLUTPassResources.group1);
 
         skyviewLUTPassEncoder.dispatchWorkgroups(
-            Math.ceil(skyviewLUTDimensions.width / 16), 
-            Math.ceil(skyviewLUTDimensions.height / 32),
+            Math.ceil(skyviewLUTDimensions.width / 16),
+            // divide by 31, since we can skip most of the lower half of the LUT 
+            Math.ceil(skyviewLUTDimensions.height / 31),
         );
         skyviewLUTPassEncoder.end();
 

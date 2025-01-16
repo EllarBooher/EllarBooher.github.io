@@ -933,6 +933,8 @@ class SkySeaApp implements RendererApp {
     fullscreenQuadPassResources: FullscreenQuadPassResources;
 
     gbuffer: GBuffer;
+    scaledSize: {width: number, height: number};
+    rawSize: {width: number, height: number};
 
     settings: {
         outputTexture: RenderOutput,
@@ -945,7 +947,8 @@ class SkySeaApp implements RendererApp {
             paused: boolean,
             inclinationRadians: number,
             sunsetAzimuthRadians: number,
-        }
+        },
+        renderScale: number,
     };
 
     celestialLightUBO: CelestialLightUBO;
@@ -982,6 +985,9 @@ class SkySeaApp implements RendererApp {
                 'GBuffer Normal': RenderOutput.GBufferNormal,
             }
         ).name('Render Output').listen();
+        gui.add(this.settings, 'renderScale', [0.25, 0.3333, 0.5, 0.75, 1.0, 1.5]).name('Render Resolution Scale').decimals(1).onFinishChange((_v: number) => {
+            this.handleResize(this.rawSize.width, this.rawSize.height);
+        });
         const outputTextureFolder = gui.addFolder('Output Transform').close();
         if(!this.fullscreenQuadPassResources.uboDataByOutputTexture.has(this.settings.outputTexture))
         {
@@ -1025,6 +1031,7 @@ class SkySeaApp implements RendererApp {
         gui.add(this.settings.orbit, 'timeHours').min(0.0).max(24.0).name('Time in Hours').listen();
         gui.add(this.settings.orbit, 'timeSpeedupFactor').min(1.0).max(50000).step(1.0).name('Time Multiplier');
         gui.add(this.settings.orbit, 'paused').name('Pause Time');
+
 
         gui.add({ fn: () => { this.settings.orbit.timeHours = this.settings.orbit.reversed ? (18.0 + 0.5) : (6.0 - 0.5)}}, 'fn').name('Skip to Sunrise');
         gui.add({ fn: () => { this.settings.orbit.timeHours = this.settings.orbit.reversed ? (6.0 + 0.5) : (18.0 - 0.5)}}, 'fn').name('Skip to Sunset');
@@ -1086,8 +1093,11 @@ class SkySeaApp implements RendererApp {
                 reversed: false,
                 inclinationRadians: Math.PI / 2,
                 sunsetAzimuthRadians: 0.0,
-            }
+            },
+            renderScale: 0.5,
         };
+        this.scaledSize = {width: 1.0, height: 1.0};
+        this.rawSize = {width: 1.0, height: 1.0};
 
         if (this.settings.outputTextureSettings.has(this.settings.outputTexture)) {
             const newSettings = this.settings.outputTextureSettings.get(this.settings.outputTexture)!;
@@ -1391,7 +1401,10 @@ class SkySeaApp implements RendererApp {
 
     handleResize(newWidth: number, newHeight: number)
     {
-        this.gbuffer = CreateGBuffer(this.device, {width: newWidth, height: newHeight}, this.gbuffer);
+        this.scaledSize = {width: newWidth * this.settings.renderScale, height: newHeight * this.settings.renderScale};
+        this.rawSize = {width: newWidth, height: newHeight};
+        this.gbuffer = CreateGBuffer(this.device, this.scaledSize, this.gbuffer);
+
         this.fullscreenQuadPassResources.group0ByOutputTexture.set(
             RenderOutput.GBufferColor, 
             this.device.createBindGroup({
@@ -1429,7 +1442,7 @@ class SkySeaApp implements RendererApp {
 
         this.atmosphereCameraPassResources.outputColor = this.device.createTexture({
             format: ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT,
-            size: {width: newWidth, height: newHeight},
+            size: this.scaledSize,
             usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING
         });
         this.atmosphereCameraPassResources.outputColorView = this.atmosphereCameraPassResources.outputColor.createView();

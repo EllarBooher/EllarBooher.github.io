@@ -109,6 +109,7 @@ const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
 
 export const RendererComponent = memo(function RendererComponent() {
     const [app, setApp] = useState<RendererApp>();
+    const [error, setError] = useState('');
     const [initialized, setInitialized] = useState(false);
     const [searchParams, _setSearchParams] = useSearchParams();
 
@@ -171,6 +172,7 @@ export const RendererComponent = memo(function RendererComponent() {
             })
             device.onuncapturederror = (ev) => {
                 console.error(`WebGPU device uncaptured error: ${ev.error.message}`);
+                setError(ev.error.message);
                 quitApp();
             }
 
@@ -178,8 +180,9 @@ export const RendererComponent = memo(function RendererComponent() {
             setApp(sample.create(device, adapter.features, presentFormat, performance.now()));
 
             console.log("Finished initializing app.");
-        }, (err) => {
+        }, (err: Error) => {
             console.error(err);
+            setError(`${err.message}\n${err.cause?.toString?.()}`);
         }).finally(() => {
             setInitialized(true);
         });
@@ -197,7 +200,9 @@ export const RendererComponent = memo(function RendererComponent() {
         {`Sorry, there was an issue.
             This app uses WebGPU, which has somewhat limited support.
             Try using another browser, updating your browser, or downloading a Beta or Nightly version.
+
         `} 
+        {error}
     </p>;
     const loadingBlock = <p style={bodyStyle}>
         {`Loading...`}

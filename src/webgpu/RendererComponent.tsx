@@ -24,7 +24,7 @@ const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
             // TODO: can we miss this event? can canvas dimensions and context.getCurrentTexture() be out of sync?
             app.handleResize?.(canvas.width, canvas.height);
         }
-    }, []);
+    }, [app]);
 
     useEffect(() => {
         resizeCanvas();

@@ -70,7 +70,7 @@ fn sampleWave(
 }
 
 // Distance when waves 2 and 3 (the smaller, finer detail ones) drop out
-const FIRST_DISTANCE = 150.0;
+const FIRST_DISTANCE = 100.0;
 // Distance when wave 1 drops out
 const SECOND_DISTANCE = 300.0;
 
@@ -177,7 +177,7 @@ fn raymarchHeightmap(
                 t,
             );
         }
-        t += 0.05;
+        t += 0.1;
     }
 
     while(t < SECOND_DISTANCE)

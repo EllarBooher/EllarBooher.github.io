@@ -2,10 +2,11 @@
 
 //// INCLUDE atmosphere_types.inc.wgsl
 
-@group(0) @binding(0) var lut_sampler: sampler;
-@group(0) @binding(1) var transmittance_lut: texture_2d<f32>;
-@group(0) @binding(2) var multiscatter_lut: texture_2d<f32>;
-@group(0) @binding(3) var skyview_lut: texture_2d<f32>;
+@group(0) @binding(0) var output_color: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(1) var lut_sampler: sampler;
+@group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
+@group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
+@group(0) @binding(4) var skyview_lut: texture_2d<f32>;
 
 struct CameraUBO
 {
@@ -16,6 +17,9 @@ struct CameraUBO
 
 @group(1) @binding(0) var<uniform> b_camera: CameraUBO;
 @group(1) @binding(1) var<uniform> b_light: CelestialLightUBO;
+
+@group(2) @binding(0) var gbuffer_color_with_depth_in_alpha: texture_2d<f32>;
+@group(2) @binding(1) var gbuffer_normal: texture_2d<f32>;
 
 // vertex state NOT included
 // Render a quad and use this as the fragment stage
@@ -221,13 +225,21 @@ fn vertex_main(@builtin(vertex_index) index : u32) -> VertexOut
     return output; 
 }
 
-@fragment
-fn fragment_main(fragData: VertexOut) -> @location(0) vec4<f32>
+@compute @workgroup_size(16,16,1)
+fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u32>)
 {
+    let texel_coord = vec2<u32>(global_id.xy);
+    let size = textureDimensions(gbuffer_color_with_depth_in_alpha);
+    if(texel_coord.x >= size.x || texel_coord.y >= size.y)
+    {
+        return;
+    }
+
     var atmosphere = ATMOSPHERE_GLOBAL;
     var light = b_light.light;
 
-    let uv = fragData.uv;
+    let offset = vec2<f32>(0.5, 0.5);
+    let uv = (vec2<f32>(texel_coord) + offset) / vec2<f32>(size);
 
     const METERS_PER_MM = 1000000.0;
     let origin = vec3<f32>(0.0, atmosphere.planetRadiusMm, 0.0) + b_camera.position.xyz / METERS_PER_MM;
@@ -239,5 +251,5 @@ fn fragment_main(fragData: VertexOut) -> @location(0) vec4<f32>
 
     let luminance = light.strength * sampleEnvironmentLuminance(&atmosphere, &light, origin, direction_world);
 
-    return vec4<f32>(tonemapACES(luminance),1.0);
+    textureStore(output_color, texel_coord, vec4<f32>(tonemapACES(luminance),1.0));
 }

@@ -8,4 +8,7 @@
     --focus-color: #144963;
     --number-color: rgb(96, 190, 234);
     --string-color: hsl(204, 50%, 95%);
+
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif
+    --font-family-mono: Menlo, Monaco, Consolas, "Droid Sans Mono", monospace
 }   

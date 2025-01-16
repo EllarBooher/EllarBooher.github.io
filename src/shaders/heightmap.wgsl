@@ -12,7 +12,10 @@ struct CameraUBO
     position: vec4<f32>,
 }
 
-@group(0) @binding(0) var<uniform> b_camera: CameraUBO;
+@group(0) @binding(0) var gbuffer_color_with_depth_in_alpha: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(1) var gbuffer_normal: texture_storage_2d<rgba16float, write>;
+
+@group(1) @binding(0) var<uniform> b_camera: CameraUBO;
 
 // const METERS_PER_MM = 1000000.0;
 
@@ -71,7 +74,18 @@ fn estimateHeightmapNormal(coords: vec2<f32>, time: f32) -> vec3<f32>
     return normal;
 }
 
-fn raymarchHeightmap(atmosphere: ptr<function, Atmosphere>, origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32>
+struct HeightmapRaymarchResult
+{
+    color: vec4<f32>,
+    normal: vec4<f32>,
+    distance: f32,
+}
+
+fn raymarchHeightmap(
+    atmosphere: ptr<function, Atmosphere>, 
+    origin: vec3<f32>, 
+    direction: vec3<f32>
+) -> HeightmapRaymarchResult
 {
     let step_size = 1.0;
     const MAX_DISTANCE = 1000.0;
@@ -91,49 +105,38 @@ fn raymarchHeightmap(atmosphere: ptr<function, Atmosphere>, origin: vec3<f32>, d
         if(sampled_height > position.y)
         {
             let normal = estimateHeightmapNormal(position.xz, 0.0);
-            let view = normalize(origin - position);
-            let light = normalize(vec3<f32>(0.0,1.0,-10.0));
-            let halfway = normalize(view + light);
-            return vec4<f32>(vec3<f32>(dot(normal, halfway)),1.0);
+
+            const water_color = vec3<f32>(1.0 / 255.0, 123.0 / 255.0, 146.0 / 255.0);
+            
+            return HeightmapRaymarchResult(
+                vec4<f32>(water_color, 1.0),
+                vec4<f32>(normal, 0.0),
+                t,
+            );
         }
         t += step_size;
     }
 
-    return vec4<f32>(0.0,0.0,0.0,0.0);
+    return HeightmapRaymarchResult(
+        vec4<f32>(0.0),
+        vec4<f32>(0.0),
+        0.0,
+    );
 }
 
-const QUAD_VERTICES: array<vec4<f32>, 4> = array<vec4<f32>,4>(
-    vec4<f32>(-1.0, -1.0, 0.0, 1.0),
-    vec4<f32>(1.0, -1.0, 0.0, 1.0),
-    vec4<f32>(1.0, 1.0, 0.0, 1.0),
-    vec4<f32>(-1.0, 1.0, 0.0, 1.0),
-);
-const QUAD_UVS: array<vec2<f32>,4> = array<vec2<f32>,4>(
-    vec2<f32>(0.0, 0.0),
-    vec2<f32>(1.0, 0.0),
-    vec2<f32>(1.0, 1.0),
-    vec2<f32>(0.0, 1.0),
-);
-
-struct VertexOut {
-    @builtin(position) position : vec4<f32>,
-    @location(0) uv : vec2<f32>
-}
-
-@vertex
-fn vertex_main(@builtin(vertex_index) index : u32) -> VertexOut
+@compute @workgroup_size(16,16,1)
+fn renderHeightmap(@builtin(global_invocation_id) global_id : vec3<u32>,) 
 {
-    var output : VertexOut;
-    output.position = QUAD_VERTICES[index];
-    output.uv = QUAD_UVS[index];
-    return output; 
-}
-
-@fragment
-fn fragment_main(fragData: VertexOut) -> @location(0) vec4<f32>
-{
+    let texel_coord = vec2<u32>(global_id.xy);
+    let size = textureDimensions(gbuffer_color_with_depth_in_alpha);
+    if(texel_coord.x >= size.x || texel_coord.y >= size.y)
+    {
+        return;
+    }
     var atmosphere = ATMOSPHERE_GLOBAL;
-    let uv = fragData.uv;
+
+    let offset = vec2<f32>(0.5, 0.5);
+    let uv = (vec2<f32>(texel_coord) + offset) / vec2<f32>(size);
 
     // const METERS_PER_MM = 1000000.0;
     //let origin = vec3<f32>(0.0, atmosphere.planetRadiusMm, 0.0) + b_camera.position.xyz / METERS_PER_MM;
@@ -144,5 +147,8 @@ fn fragment_main(fragData: VertexOut) -> @location(0) vec4<f32>
     let direction_view_space = b_camera.inv_proj * vec4(uv_clip_space, near_plane_depth, 1.0);
     let direction_world = normalize((b_camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
 
-    return raymarchHeightmap(&atmosphere, origin, direction_world);
+    let result = raymarchHeightmap(&atmosphere, origin, direction_world);
+
+    textureStore(gbuffer_color_with_depth_in_alpha, texel_coord, vec4<f32>(result.color.xyz, result.distance));
+    textureStore(gbuffer_normal, texel_coord, vec4<f32>(result.normal.xyz, 0.0));
 }

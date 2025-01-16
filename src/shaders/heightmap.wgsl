@@ -12,12 +12,16 @@ struct CameraUBO
     position: vec4<f32>,
 }
 
+struct TimeUBO
+{
+    time_seconds: f32,
+}
+
 @group(0) @binding(0) var gbuffer_color_with_depth_in_alpha: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(1) var gbuffer_normal: texture_storage_2d<rgba16float, write>;
 
 @group(1) @binding(0) var<uniform> b_camera: CameraUBO;
-
-// const METERS_PER_MM = 1000000.0;
+@group(1) @binding(1) var<uniform> b_time: TimeUBO;
 
 struct PlaneWave
 {
@@ -61,10 +65,10 @@ fn estimateHeightmapNormal(coords: vec2<f32>, time: f32) -> vec3<f32>
     // estimate of heightmap gradient
     const EPSILON = 0.001;
 
-    let dFdx = sampleHeightmap(vec2<f32>(coords.x + EPSILON, coords.y), 0.0) 
-        - sampleHeightmap(vec2<f32>(coords.x - EPSILON, coords.y), 0.0);
-    let dFdz = sampleHeightmap(vec2<f32>(coords.x, coords.y + EPSILON), 0.0)
-        - sampleHeightmap(vec2<f32>(coords.x,coords.y - EPSILON), 0.0);
+    let dFdx = sampleHeightmap(vec2<f32>(coords.x + EPSILON, coords.y), time) 
+        - sampleHeightmap(vec2<f32>(coords.x - EPSILON, coords.y), time);
+    let dFdz = sampleHeightmap(vec2<f32>(coords.x, coords.y + EPSILON), time)
+        - sampleHeightmap(vec2<f32>(coords.x,coords.y - EPSILON), time);
 
     let normal = normalize(vec3<f32>(
         -dFdx,
@@ -87,6 +91,8 @@ fn raymarchHeightmap(
     direction: vec3<f32>
 ) -> HeightmapRaymarchResult
 {
+    let time = b_time.time_seconds;
+
     let step_size = 1.0;
     const MAX_DISTANCE = 1000.0;
     var t = 0.0;
@@ -99,12 +105,12 @@ fn raymarchHeightmap(
 
         let sampled_height = sampleHeightmap(
             position.xz,
-            0.0
+            time
         );
 
         if(sampled_height > position.y)
         {
-            let normal = estimateHeightmapNormal(position.xz, 0.0);
+            let normal = estimateHeightmapNormal(position.xz, time);
 
             const water_color = vec3<f32>(1.0 / 255.0, 123.0 / 255.0, 146.0 / 255.0);
             

@@ -29,23 +29,52 @@ const GBUFFER_NORMAL_SAMPLE_TYPE: GPUTextureSampleType = 'float';
 const multiscatterLUTDimensions = {width: 1024, height: 1024};
 const skyviewLUTDimensions = {width: 1024, height: 256};
 
-interface CelestialLight
+abstract class UBO
 {
-    color: Vec3;
-    strength: number;
-    forward: Vec3;
-    angularRadius: number;
+    protected readonly stagingBuffer: Float32Array;
+    public readonly buffer: GPUBuffer;
+
+    constructor(device: GPUDevice, lengthFloat32: number)
+    {
+        this.stagingBuffer = new Float32Array(lengthFloat32);
+        this.buffer = device.createBuffer({
+            size: this.stagingBuffer.byteLength,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM
+        })
+    }
+
+    protected abstract stageFloats(): void;
+
+    public writeToGPU(device: GPUDevice)
+    {
+        this.stageFloats();
+
+        device.queue.writeBuffer(this.buffer, 0, this.stagingBuffer, 0, this.stagingBuffer.length);
+    }
 }
 
-interface FullscreenQuadUBOData
+class TimeUBO extends UBO
 {
-    color_gain: Vec4,
-    vertex_scale: Vec4,
+    public readonly data: {
+        time_seconds: number,
+    } = {
+        time_seconds: 0.0,
+    };
+
+    constructor(device: GPUDevice)
+    {
+        super(device, 1);
+    }
+
+    public stageFloats(): void
+    {
+        this.stagingBuffer[0] = this.data.time_seconds;
+    }
 }
 
-class CameraUBO
+class CameraUBO extends UBO
 {
-    data: {
+    public readonly data: {
         inv_proj: Mat4,
         inv_view: Mat4,
         position: Vec4,
@@ -55,55 +84,53 @@ class CameraUBO
         position: vec4.create(0.0,0.0,0.0,1.0),
     };
 
-    public readonly lengthFloat32: number = 16 + 16 + 4;
-    stagingBuffer: Float32Array;
-    buffer: GPUBuffer;
-
     constructor(device: GPUDevice)
     {
-        this.stagingBuffer = new Float32Array(this.lengthFloat32);
-        this.buffer = device.createBuffer({
-            size: this.stagingBuffer.byteLength,
-            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM
-        })
+        super(device, 16 + 16 + 4);
     }
-    writeToBuffer(device: GPUDevice) {
+
+    public stageFloats(): void 
+    {
         this.stagingBuffer.set(this.data.inv_proj, 0);
         this.stagingBuffer.set(this.data.inv_view, 16);
         this.stagingBuffer.set(this.data.position, 32);
-
-        device.queue.writeBuffer(this.buffer, 0, this.stagingBuffer, 0, this.stagingBuffer.length);
     }
 }
 
-class FullscreenQuadUBO
+interface FullscreenQuadUBOData
+{
+    color_gain: Vec4,
+    vertex_scale: Vec4,
+}
+
+class FullscreenQuadUBO extends UBO
 {
     data: FullscreenQuadUBOData = {
         color_gain: vec4.create(1.0,1.0,1.0,1.0),
         vertex_scale: vec4.create(1.0,1.0,1.0,1.0),
     };
 
-    public readonly lengthFloat32: number = 4 + 4;
-    stagingBuffer: Float32Array;
-    buffer: GPUBuffer;
-
     constructor(device: GPUDevice)
     {
-        this.stagingBuffer = new Float32Array(this.lengthFloat32);
-        this.buffer = device.createBuffer({
-            size: this.stagingBuffer.byteLength,
-            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM
-        })
+        super(device, 4 + 4);
     }
-    writeToBuffer(device: GPUDevice) {
+
+    public stageFloats(): void 
+    {
         this.stagingBuffer.set(this.data.color_gain, 0);
         this.stagingBuffer.set(this.data.vertex_scale, 4);
-
-        device.queue.writeBuffer(this.buffer, 0, this.stagingBuffer, 0, this.stagingBuffer.length);
     }
 }
 
-class CelestialLightUBO
+interface CelestialLight
+{
+    color: Vec3;
+    strength: number;
+    forward: Vec3;
+    angularRadius: number;
+}
+
+class CelestialLightUBO extends UBO
 {
     data: {light: CelestialLight } = {
         light: {
@@ -114,26 +141,17 @@ class CelestialLightUBO
         }
     };
 
-    
-    public readonly lengthFloat32: number = 3 + 1 + 3 + 1;
-    stagingBuffer: Float32Array;
-    buffer: GPUBuffer;
-
     constructor(device: GPUDevice)
     {
-        this.stagingBuffer = new Float32Array(this.lengthFloat32);
-        this.buffer = device.createBuffer({
-            size: this.stagingBuffer.byteLength,
-            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM
-        })
+        super(device, 3 + 1 + 3 + 1);
     }
-    writeToBuffer(device: GPUDevice) {
+    
+    public stageFloats(): void {
         this.stagingBuffer.set(this.data.light.color, 0);
         this.stagingBuffer[3] = this.data.light.strength;
         this.stagingBuffer.set(this.data.light.forward, 4);
         this.stagingBuffer[7] = this.data.light.angularRadius;
 
-        device.queue.writeBuffer(this.buffer, 0, this.stagingBuffer, 0, this.stagingBuffer.length);
     }
 }
 
@@ -547,23 +565,37 @@ function CreateHeightmapPassResources(
     device: GPUDevice,
     gbufferWriteGroupLayout: GPUBindGroupLayout,
     cameraUBO: CameraUBO,
+    timeUBO: TimeUBO,
 )
 {
     const label = "Heightmap Pass";
 
     const group1Layout = device.createBindGroupLayout({                    
-        entries: [{
-            binding: 0,
-            visibility: GPUShaderStage.COMPUTE,
-            buffer: {}
-        }], label
+        entries: [
+            {
+                binding: 0,
+                visibility: GPUShaderStage.COMPUTE,
+                buffer: {}
+            },
+            {
+                binding: 1,
+                visibility: GPUShaderStage.COMPUTE,
+                buffer: {}
+            }
+        ], label
     });
     const group1 = device.createBindGroup({
         layout: group1Layout,
-        entries: [{
-            binding: 0,
-            resource: {buffer: cameraUBO.buffer }
-        }]
+        entries: [
+            {
+                binding: 0,
+                resource: {buffer: cameraUBO.buffer }
+            },
+            {
+                binding: 1,
+                resource: {buffer: timeUBO.buffer }
+            }
+        ]
     });
 
     const shaderModule = device.createShaderModule({code: HeightmapPak, label});
@@ -755,7 +787,10 @@ class SkySeaApp implements RendererApp {
     celestialLightUBO: CelestialLightUBO;
 
     atmosphereCameraLUTGroup: GPUBindGroup;
+    
     cameraUBO: CameraUBO;
+    timeUBO: TimeUBO;
+    
     atmosphereCameraGroup1: GPUBindGroup;
     atmosphereCameraPipeline: GPURenderPipeline;
 
@@ -906,6 +941,7 @@ class SkySeaApp implements RendererApp {
         this.dummyFrameCounter = 10.0;
 
         this.cameraUBO = new CameraUBO(device);
+        this.timeUBO = new TimeUBO(device);
 
         this.celestialLightUBO = new CelestialLightUBO(device);
 
@@ -926,7 +962,7 @@ class SkySeaApp implements RendererApp {
         );
 
         this.heightmapPassResources = CreateHeightmapPassResources(
-            this.device, this.gbuffer.writeGroupLayout, this.cameraUBO
+            this.device, this.gbuffer.writeGroupLayout, this.cameraUBO, this.timeUBO
         );
 
         this.fullscreenQuadPassResources = CreateFullscreenQuadPassResources(
@@ -1145,6 +1181,8 @@ class SkySeaApp implements RendererApp {
             vec3.scale(noonDirection, Math.cos(SUN_ANOMALY))
         );
         vec3.scale(sunDirection, -1.0, this.celestialLightUBO.data.light.forward);
+
+        this.celestialLightUBO.writeToGPU(this.device);   
     }
 
     updateFPSValues(deltaTimeMilliseconds: number)
@@ -1175,12 +1213,18 @@ class SkySeaApp implements RendererApp {
         const camera_pos = [0, 10, 0];
         const view = mat4.lookAt(camera_pos, [0, 20, 100], [0, 1, 0]);
 
-        this.cameraUBO.data = {
+        Object.assign(this.cameraUBO.data, {
             inv_proj: mat4.inverse(perspective),
             inv_view: mat4.inverse(view),
             position: vec4.create(...camera_pos),
-        };
-        this.cameraUBO.writeToBuffer(this.device);
+        });
+        this.cameraUBO.writeToGPU(this.device);
+    }
+
+    updateTime(deltaTimeMilliseconds: number)
+    {
+        this.timeUBO.data.time_seconds += deltaTimeMilliseconds / 1000.0;
+        this.timeUBO.writeToGPU(this.device);
     }
 
     draw(
@@ -1198,6 +1242,7 @@ class SkySeaApp implements RendererApp {
         const presentView = presentTexture.createView();
         
         this.updateCamera(aspectRatio);
+        this.updateTime(deltaTimeMilliseconds);
         this.updateOrbit(deltaTimeMilliseconds);
         this.updateFPSValues(deltaTimeMilliseconds);
 
@@ -1218,8 +1263,6 @@ class SkySeaApp implements RendererApp {
         const skyviewLUTPassEncoder = commandEncoder.beginComputePass();
         skyviewLUTPassEncoder.setPipeline(this.skyviewLUTPassResources.pipeline);
         skyviewLUTPassEncoder.setBindGroup(0, this.skyviewLUTPassResources.group0);
-
-        this.celestialLightUBO.writeToBuffer(this.device);   
         skyviewLUTPassEncoder.setBindGroup(1, this.skyviewLUTPassResources.group1);
 
         skyviewLUTPassEncoder.dispatchWorkgroups(
@@ -1273,7 +1316,7 @@ class SkySeaApp implements RendererApp {
                     vertex_scale: vec4.create(1.0,1.0,1.0,1.0),
                 };
             }
-            this.fullscreenQuadPassResources.ubo.writeToBuffer(this.device);
+            this.fullscreenQuadPassResources.ubo.writeToGPU(this.device);
             fullscreenPassEncoder.setBindGroup(1, this.fullscreenQuadPassResources.group1);
             fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
         }

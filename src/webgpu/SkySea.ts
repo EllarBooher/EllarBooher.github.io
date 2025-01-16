@@ -13,10 +13,18 @@ const transmittanceLUTDimensions = {width: 2048, height: 1024};
 
 const TRANSMITTANCE_LUT_FORMAT: GPUTextureFormat = 'rgba32float';
 const TRANSMITTANCE_LUT_SAMPLE_TYPE: GPUTextureSampleType = 'float';
+
 const MULTISCATTER_LUT_FORMAT: GPUTextureFormat = 'rgba32float';
 const MULTISCATTER_LUT_SAMPLE_TYPE: GPUTextureSampleType = 'float';
+
 const SKYVIEW_LUT_FORMAT: GPUTextureFormat = 'rgba32float';
 const SKYVIEW_LUT_SAMPLE_TYPE: GPUTextureSampleType = 'float';
+
+const GBUFFER_COLOR_FORMAT: GPUTextureFormat = 'rgba32float';
+const GBUFFER_COLOR_SAMPLE_TYPE: GPUTextureSampleType = 'float';
+
+const GBUFFER_NORMAL_FORMAT: GPUTextureFormat = 'rgba16float';
+const GBUFFER_NORMAL_SAMPLE_TYPE: GPUTextureSampleType = 'float';
 
 const multiscatterLUTDimensions = {width: 1024, height: 1024};
 const skyviewLUTDimensions = {width: 1024, height: 256};
@@ -127,6 +135,123 @@ class CelestialLightUBO
 
         device.queue.writeBuffer(this.buffer, 0, this.stagingBuffer, 0, this.stagingBuffer.length);
     }
+}
+
+interface GBuffer
+{
+    colorWithDepthInAlpha: GPUTexture;
+    colorWithDepthInAlphaView: GPUTextureView;
+
+    normal: GPUTexture;
+    normalView: GPUTextureView;
+
+    // Keep both layout and group around for reuse across other pipelines
+
+    // binding 0: color
+    // binding 1: normal
+
+    // texture_2d
+    readGroupLayout: GPUBindGroupLayout;
+    readGroup: GPUBindGroup;
+
+    // texture_storage_2d
+    writeGroupLayout: GPUBindGroupLayout;
+    writeGroup: GPUBindGroup;
+}
+
+function CreateGBuffer(
+    device: GPUDevice, 
+    dimensions: {width: number, height: number},
+    old?: GBuffer,
+): GBuffer
+{
+    const label = 'GBuffer';
+    const colorWithDepthInAlpha = device.createTexture({
+        size: dimensions,
+        dimension: '2d',
+        format: GBUFFER_COLOR_FORMAT,
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING, 
+        label: label,
+    });
+    const colorWithDepthInAlphaView = colorWithDepthInAlpha.createView({label: label});
+
+    const normal = device.createTexture({
+        size: dimensions,
+        dimension: '2d',
+        format: GBUFFER_NORMAL_FORMAT,
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING, 
+        label: label,
+    });
+    const normalView = normal.createView({label: label});
+
+    const readGroupLayout = old?.readGroupLayout ?? device.createBindGroupLayout({
+        entries: [
+            {
+                binding: 0,
+                visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                texture: {sampleType: GBUFFER_COLOR_SAMPLE_TYPE},
+            },
+            {
+                binding: 1,
+                visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                texture: {sampleType: GBUFFER_NORMAL_SAMPLE_TYPE},
+            }
+        ]
+    });
+    const readGroup = device.createBindGroup({
+        layout: readGroupLayout,
+        entries: [
+            {
+                binding: 0,
+                resource: colorWithDepthInAlphaView,
+            },
+            {
+                binding: 1,
+                resource: normalView,
+            }
+        ],
+        label: label,
+    });
+
+    const writeGroupLayout = old?.writeGroupLayout ?? device.createBindGroupLayout({
+        entries: [
+            {
+                binding: 0,
+                visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                storageTexture: {access: 'write-only',format: GBUFFER_COLOR_FORMAT},
+            },
+            {
+                binding: 1,
+                visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                storageTexture: {access: 'write-only',format: GBUFFER_NORMAL_FORMAT},
+            }
+        ]
+    });
+    const writeGroup = device.createBindGroup({
+        layout: writeGroupLayout,
+        entries: [
+            {
+                binding: 0,
+                resource: colorWithDepthInAlphaView,
+            },
+            {
+                binding: 1,
+                resource: normalView,
+            }
+        ],
+        label: label,
+    });
+
+    return {
+        colorWithDepthInAlpha,
+        colorWithDepthInAlphaView,
+        normal,
+        normalView,
+        readGroupLayout,
+        readGroup,
+        writeGroupLayout,
+        writeGroup,
+    };
 }
 
 interface TransmittanceLUTPassResources
@@ -625,7 +750,10 @@ class SkySeaApp implements RendererApp {
     transmittanceLUTPassResources: TransmittanceLUTPassResources;
     multiscatterLUTPassResources: MultiscatterLUTPassResources;
     skyviewLUTPassResources: SkyViewLUTPassResources;
-    quit = false;
+    fullscreenQuadPassResources: FullscreenQuadPassResources;
+    heightmapPassResources: HeightmapPassResources;
+
+    gbuffer: GBuffer;
 
     settings: {
         outputTexture: RenderOutput,
@@ -640,8 +768,6 @@ class SkySeaApp implements RendererApp {
             sunsetAzimuthRadians: number,
         }
     };
-    fullscreenQuadPassResources: FullscreenQuadPassResources;
-    heightmapPassResources: HeightmapPassResources;
 
     celestialLightUBO: CelestialLightUBO;
 
@@ -654,6 +780,7 @@ class SkySeaApp implements RendererApp {
 
     device: GPUDevice;
     presentFormat: GPUTextureFormat;
+    quit = false;
 
     startTime: number;
     dummyFrameCounter: number;
@@ -792,6 +919,8 @@ class SkySeaApp implements RendererApp {
         this.cameraUBO = new CameraUBO(device);
 
         this.celestialLightUBO = new CelestialLightUBO(device);
+
+        this.gbuffer = CreateGBuffer(device, {width: 1, height: 1});
 
         this.transmittanceLUTPassResources = CreateTransmittanceLUTPassResources(
             this.device, transmittanceLUTDimensions
@@ -1157,6 +1286,11 @@ class SkySeaApp implements RendererApp {
         fullscreenPassEncoder.end();
     
         this.device.queue.submit([commandEncoder.finish()]);
+    }
+
+    handleResize(newWidth: number, newHeight: number)
+    {
+        this.gbuffer = CreateGBuffer(this.device, {width: newWidth, height: newHeight}, this.gbuffer);
     }
 };
 

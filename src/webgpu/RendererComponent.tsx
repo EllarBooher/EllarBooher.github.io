@@ -20,6 +20,9 @@ const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
             const devicePixelRatio = window.devicePixelRatio;
             canvas.width = canvas.offsetWidth * devicePixelRatio;
             canvas.height = canvas.offsetHeight * devicePixelRatio;
+
+            // TODO: can we miss this event? can canvas dimensions and context.getCurrentTexture() be out of sync?
+            app.handleResize?.(canvas.width, canvas.height);
         }
     }, []);
 

@@ -5,6 +5,7 @@ export interface RendererApp
     device: GPUDevice;
     presentFormat: GPUTextureFormat;
     quit: boolean;
+    handleResize?: (newWidth: number, newHeight: number) => void;
     draw: (
         presentTexture: GPUTexture, 
         aspectRatio: number, 

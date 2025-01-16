@@ -108,7 +108,7 @@ const RenderingCanvas = function RenderingCanvas({app}: {app: RendererApp}){
 }
 
 export const RendererComponent = memo(function RendererComponent() {
-    const appRef = useRef<RendererApp>();
+    const [app, setApp] = useState<RendererApp>();
     const [initialized, setInitialized] = useState(false);
     const [searchParams, _setSearchParams] = useSearchParams();
 
@@ -129,16 +129,32 @@ export const RendererComponent = memo(function RendererComponent() {
         return sample;
     }, [searchParams]);
 
+    const quitApp = useCallback(() => {
+        if(!app)
+        {
+            return;
+        }
+        app.quit = true;
+    }, [app]);
+
     useEffect(() => {
+        setApp(undefined);
+    }, [searchParams, setApp]);
+
+    useEffect(() => {
+        if(app)
+        {
+            return;
+        }
         setInitialized(false);
         const sample = getSample();
         getDevice(sample.requiredFeatures).then(({adapter, device}) => {
-            if(appRef.current)
+            if(app)
             {
                 // We need to override, since a rerender due to refresh vs due to strict mode is indistinguishable
                 // I am not 100% certain of this
                 console.warn("Device found, but app was already created. This is due to either a duplicate component rerender, or the sample changing without a full page refresh. Overriding the original.");
-                appRef.current.quit = true;
+                quitApp();
             }
             else
             {
@@ -155,15 +171,11 @@ export const RendererComponent = memo(function RendererComponent() {
             })
             device.onuncapturederror = (ev) => {
                 console.error(`WebGPU device uncaptured error: ${ev.error.message}`);
-                if(appRef.current)
-                {
-                    appRef.current.quit = true;
-                }
-                appRef.current = undefined;
+                quitApp();
             }
 
             const presentFormat = navigator.gpu.getPreferredCanvasFormat();
-            appRef.current = sample.create(device, adapter.features, presentFormat, performance.now());
+            setApp(sample.create(device, adapter.features, presentFormat, performance.now()));
 
             console.log("Finished initializing app.");
         }, (err) => {
@@ -171,7 +183,7 @@ export const RendererComponent = memo(function RendererComponent() {
         }).finally(() => {
             setInitialized(true);
         });
-    }, [searchParams, getSample]);
+    }, [app, quitApp, getSample]);
 
     const bodyStyle = {  
         backgroundColor: 'rgb(50, 99, 121)',
@@ -195,8 +207,8 @@ export const RendererComponent = memo(function RendererComponent() {
         {
             initialized 
                 ? <>
-                    {(appRef.current) 
-                    ? <RenderingCanvas app={appRef.current}/>
+                    {(app) 
+                    ? <RenderingCanvas app={app}/>
                     : errorBlock}
                 </> 
                 : <>{loadingBlock}</>

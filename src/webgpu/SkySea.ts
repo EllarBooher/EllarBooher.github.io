@@ -1253,6 +1253,7 @@ class SkySeaApp implements RendererApp {
         {
             record.runningSum -= 1000.0 / record.milliseconds[record.index];
         }
+        deltaTimeMilliseconds = Math.max(deltaTimeMilliseconds, 0.01);
         record.milliseconds[record.index] = deltaTimeMilliseconds;
         record.runningSum += 1000.0 / deltaTimeMilliseconds;
         record.count = Math.min(record.milliseconds.length, record.count + 1);
@@ -1290,7 +1291,7 @@ class SkySeaApp implements RendererApp {
         _timeMilliseconds: number,
         deltaTimeMilliseconds: number): void
     {
-        // Workaround for firefox stalling
+        // Workaround for firefox stalling causing time issues
         if(this.dummyFrameCounter > 0)
         {
             this.dummyFrameCounter -= 1;

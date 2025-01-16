@@ -982,7 +982,11 @@ class SkySeaApp implements RendererApp {
                 'GBuffer Normal': RenderOutput.GBufferNormal,
             }
         ).name('Render Output').listen();
-        const outputTextureFolder = gui.addFolder('Display Gain').hide();
+        const outputTextureFolder = gui.addFolder('Output Transform').close();
+        if(!this.fullscreenQuadPassResources.uboDataByOutputTexture.has(this.settings.outputTexture))
+        {
+            outputTextureFolder.hide();
+        }
         outputTextureFolder.add(this.settings.currentOutputTextureSettings, 'flip').name('Flip Image').listen();
         outputTextureFolder.add({gain: 0.0}, 'gain').name('RGB').min(0.0).max(100.0).onChange((v: number) => {
             this.settings.currentOutputTextureSettings.color_gain.r = v;
@@ -1304,7 +1308,7 @@ class SkySeaApp implements RendererApp {
         this.updateOrbit(deltaTimeMilliseconds);
         this.updateFPSValues(deltaTimeMilliseconds);
 
-        const clearColor = {r: 1.0, g: 0.0, b: 0.0, a: 0.0};
+        const clearColor = {r: 0.0, g: 0.0, b: 0.0, a: 1.0};
 
         const commandEncoder = this.device.createCommandEncoder({label: "Main"});
 

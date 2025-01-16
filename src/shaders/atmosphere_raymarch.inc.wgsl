@@ -1,6 +1,6 @@
 // Contains methods and overloads for raymarching the atmosphere
 
-//// FLAGS MULTISCATTERING ISOTROPIC_PHASE SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE
+//// FLAGS MULTISCATTERING ISOTROPIC_PHASE SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE HIGH_SAMPLE_COUNT
 
 /*
 Flags explanation:
@@ -19,6 +19,9 @@ SCATTERING_NONLINEAR_SAMPLE
 LIGHT_ILLUMINANCE_IS_ONE
 - When computing luminance using a light, use 1 instead of the strength.
 - This converts the returned luminance into a transfer value, which can be scaled by solar illuminance whenever
+
+HIGH_SAMPLE_COUNT
+- Whether to use a much higher sample count. Useful for one time renders, like the multiscattering LUT.
 */
 
 // Make sure to include atmosphere_common first
@@ -96,7 +99,11 @@ fn computeLuminanceScatteringIntegral(
 
     const ISOTROPIC_PHASE: f32 = 1.0 / (4.0 * PI);
 
-    const SAMPLE_COUNT = 24.0;
+//// IF HIGH_SAMPLE_COUNT
+    const SAMPLE_COUNT = 256.0;
+//// ELSE
+    const SAMPLE_COUNT = 16.0;
+//// ENDIF
 
     let dT: f32 = 1.0 / SAMPLE_COUNT;
     let dSampleDistance: f32 = sampleDistance * dT;

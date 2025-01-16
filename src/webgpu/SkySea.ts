@@ -924,6 +924,8 @@ interface OutputTexturePostProcessSettings
     };
 };
 
+const RENDER_SCALES = [0.25, 0.3333, 0.5, 0.75, 1.0, 1.5];
+
 class SkySeaApp implements RendererApp {
     transmittanceLUTPassResources: TransmittanceLUTPassResources;
     multiscatterLUTPassResources: MultiscatterLUTPassResources;
@@ -963,6 +965,8 @@ class SkySeaApp implements RendererApp {
 
     startTime: number;
     dummyFrameCounter: number;
+    probationFrameCounter: number;
+    targetFPS = 0.0;
 
     deltaTimeRecord: {
         milliseconds: number[],
@@ -985,9 +989,9 @@ class SkySeaApp implements RendererApp {
                 'GBuffer Normal': RenderOutput.GBufferNormal,
             }
         ).name('Render Output').listen();
-        gui.add(this.settings, 'renderScale', [0.25, 0.3333, 0.5, 0.75, 1.0, 1.5]).name('Render Resolution Scale').decimals(1).onFinishChange((_v: number) => {
+        gui.add(this.settings, 'renderScale', RENDER_SCALES).name('Render Resolution Scale').decimals(1).onFinishChange((_v: number) => {
             this.handleResize(this.rawSize.width, this.rawSize.height);
-        });
+        }).listen();
         const outputTextureFolder = gui.addFolder('Output Transform').close();
         if(!this.fullscreenQuadPassResources.uboDataByOutputTexture.has(this.settings.outputTexture))
         {
@@ -1030,7 +1034,7 @@ class SkySeaApp implements RendererApp {
         
         gui.add(this.settings.orbit, 'timeHours').min(0.0).max(24.0).name('Time in Hours').listen();
         gui.add(this.settings.orbit, 'timeSpeedupFactor').min(1.0).max(50000).step(1.0).name('Time Multiplier');
-        gui.add(this.settings.orbit, 'paused').name('Pause Time');
+        gui.add(this.settings.orbit, 'paused').name('Pause Sun');
 
 
         gui.add({ fn: () => { this.settings.orbit.timeHours = this.settings.orbit.reversed ? (18.0 + 0.5) : (6.0 - 0.5)}}, 'fn').name('Skip to Sunrise');
@@ -1094,7 +1098,7 @@ class SkySeaApp implements RendererApp {
                 inclinationRadians: Math.PI / 2,
                 sunsetAzimuthRadians: 0.0,
             },
-            renderScale: 0.5,
+            renderScale: 1.5,
         };
         this.scaledSize = {width: 1.0, height: 1.0};
         this.rawSize = {width: 1.0, height: 1.0};
@@ -1115,6 +1119,7 @@ class SkySeaApp implements RendererApp {
             averageFPS: 0.0,
         };
         this.dummyFrameCounter = 10.0;
+        this.probationFrameCounter = 100.0;
 
         this.cameraUBO = new CameraUBO(device);
         this.timeUBO = new TimeUBO(device);
@@ -1306,17 +1311,48 @@ class SkySeaApp implements RendererApp {
         deltaTimeMilliseconds: number): void
     {
         // Workaround for firefox stalling causing time issues
+
         if(this.dummyFrameCounter > 0)
         {
             this.dummyFrameCounter -= 1;
             return;
         }
         const presentView = presentTexture.createView();
+
+        this.updateFPSValues(deltaTimeMilliseconds);
+
+        if(this.probationFrameCounter > 49.0)
+        {
+            this.probationFrameCounter -= 1;
+
+            if(this.probationFrameCounter < 50.0)
+            {
+                console.log(`Average FPS without load is ${this.deltaTimeRecord.averageFPS}`);
+                this.targetFPS = this.deltaTimeRecord.averageFPS;
+            }
+            return;
+        }
+        if(this.probationFrameCounter > 0.0)
+        {
+            this.probationFrameCounter -= 1;
+            if(this.probationFrameCounter < 1.0)
+            {
+                console.log(`Average FPS with load is ${this.deltaTimeRecord.averageFPS}`);
+                const exactScale = this.deltaTimeRecord.averageFPS / (this.targetFPS);
+                this.settings.renderScale = RENDER_SCALES[0];
+                RENDER_SCALES.forEach(scale => {
+                    if(Math.abs(scale - exactScale) < Math.abs(this.settings.renderScale - exactScale))
+                        {
+                            this.settings.renderScale = scale;
+                        }
+                    });
+                this.handleResize(this.rawSize.width, this.rawSize.height);
+            }
+        }
         
         this.updateCamera(aspectRatio);
         this.updateTime(deltaTimeMilliseconds);
         this.updateOrbit(deltaTimeMilliseconds);
-        this.updateFPSValues(deltaTimeMilliseconds);
 
         const clearColor = {r: 0.0, g: 0.0, b: 0.0, a: 1.0};
 
@@ -1392,7 +1428,11 @@ class SkySeaApp implements RendererApp {
         }
         this.fullscreenQuadPassResources.ubo.writeToGPU(this.device);
         fullscreenPassEncoder.setBindGroup(1, this.fullscreenQuadPassResources.group1);
-        fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
+
+        if(this.probationFrameCounter < 1.0)
+        {
+            fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
+        }
         
         fullscreenPassEncoder.end();
     

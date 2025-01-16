@@ -158,8 +158,8 @@ fn raymarchHeightmap(
     var t = -max(origin.y-WAVE_MAX_HEIGHT, 0.0) / direction.y;
     while(t < FIRST_DISTANCE)
     {
-        // Make larger stepsize work for closer features 
-        let scaled_t = (t / FIRST_DISTANCE) * (t / FIRST_DISTANCE) * FIRST_DISTANCE;
+        // Make larger stepsize work for closer features
+        let scaled_t = t;
         let position = scaled_t * direction + origin;
 
         let sampled_height = sampleHeightmap(
@@ -200,7 +200,7 @@ fn raymarchHeightmap(
                 t,
             );
         }
-        t += 1.0;
+        t += 0.2;
     }
 
     let sin_horizonZenith: f32 = (*atmosphere).planetRadiusMm / (length(origin) / METERS_PER_MM + (*atmosphere).planetRadiusMm);

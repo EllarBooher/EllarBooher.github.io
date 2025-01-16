@@ -5,7 +5,7 @@
 @group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
 
 //// INCLUDE atmosphere_common.inc.wgsl
-//// INCLUDE atmosphere_raymarch.inc.wgsl ISOTROPIC_PHASE LIGHT_ILLUMINANCE_IS_ONE
+//// INCLUDE atmosphere_raymarch.inc.wgsl ISOTROPIC_PHASE LIGHT_ILLUMINANCE_IS_ONE HIGH_SAMPLE_COUNT
 
 // Based on "A Scalable and Production Ready Sky and Atmosphere Rendering Technique" by Sebastien Hillaire (2020)
 

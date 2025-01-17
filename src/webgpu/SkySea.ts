@@ -1153,7 +1153,7 @@ class SkySeaApp implements RendererApp {
             },
             orbit: {
                 timeHours: 5.5, 
-                timeSpeedupFactor: 1000.0,
+                timeSpeedupFactor: 400.0,
                 paused: false,
                 reversed: false,
                 inclinationRadians: Math.PI / 2,
@@ -1375,7 +1375,7 @@ class SkySeaApp implements RendererApp {
     {
         this.timeUBO.data.time_seconds = Math.min(this.timeUBO.data.time_seconds, 60.0);
         this.timeUBO.data.time_seconds += deltaTimeMilliseconds / 1000.0;
-        if(this.timeUBO.data.time_seconds > 10.0)
+        if(this.timeUBO.data.time_seconds > 400.0)
         {
             this.timeUBO.data.time_seconds = 0.0;
         }

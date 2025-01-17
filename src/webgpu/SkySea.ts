@@ -1373,7 +1373,6 @@ class SkySeaApp implements RendererApp {
 
     updateTime(deltaTimeMilliseconds: number)
     {
-        this.timeUBO.data.time_seconds = Math.min(this.timeUBO.data.time_seconds, 60.0);
         this.timeUBO.data.time_seconds += deltaTimeMilliseconds / 1000.0;
         if(this.timeUBO.data.time_seconds > 400.0)
         {

@@ -149,7 +149,7 @@ export const RendererComponent = memo(function RendererComponent() {
         }
         setInitialized(false);
         const sample = getSample();
-        getDevice(sample.requiredFeatures).then(({adapter, device}) => {
+        getDevice(sample.requiredFeatures, sample.optionalFeatures).then(({adapter: _adapter, device}) => {
             if(app)
             {
                 // We need to override, since a rerender due to refresh vs due to strict mode is indistinguishable
@@ -177,7 +177,7 @@ export const RendererComponent = memo(function RendererComponent() {
             }
 
             const presentFormat = navigator.gpu.getPreferredCanvasFormat();
-            setApp(sample.create(device, adapter.features, presentFormat, performance.now()));
+            setApp(sample.create(device, presentFormat, performance.now()));
 
             console.log("Finished initializing app.");
         }, (err: Error) => {

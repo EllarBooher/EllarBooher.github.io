@@ -41,10 +41,10 @@ export class HelloCubeApp implements RendererApp {
 
     supportedFeatures: GPUSupportedFeatures;
 
-    constructor(device: GPUDevice, supportedFeatures: GPUSupportedFeatures, presentFormat: GPUTextureFormat) {
+    constructor(device: GPUDevice, presentFormat: GPUTextureFormat) {
         this.device = device;
         this.presentFormat = presentFormat;
-        this.supportedFeatures = supportedFeatures;
+        this.supportedFeatures = device.features;
 
         const shaderModule = this.device.createShaderModule({
             code: HelloCubePak,
@@ -217,6 +217,6 @@ export class HelloCubeApp implements RendererApp {
     }
 }
 
-export const HelloCubeAppConstructor: RendererAppConstructor = (device, supportedFeatures, presentFormat, _time) => {
-    return new HelloCubeApp(device, supportedFeatures, presentFormat);
+export const HelloCubeAppConstructor: RendererAppConstructor = (device, presentFormat, _time) => {
+    return new HelloCubeApp(device, presentFormat);
 }

@@ -1015,8 +1015,8 @@ class SkySeaApp implements RendererApp {
     presentFormat: GPUTextureFormat;
     quit = false;
 
-    frametime: {
-        averages: Map<FrametimeCategory, ArithmeticSumArray>;
+    // undefined when 'timestamp-query' feature is disabled
+    frametimeQuery: {
         querySet: GPUQuerySet;
         // We cannot read directly from the buffer that WebGPU writes the timestamps to
         // So we use a copy operation, then an async mapping.
@@ -1024,7 +1024,8 @@ class SkySeaApp implements RendererApp {
         writeBuffer: GPUBuffer;
         readBuffer: GPUBuffer;
         mappingLock: boolean;
-    }
+    } | undefined;
+    frametimeAverages: Map<FrametimeCategory, ArithmeticSumArray>;
 
     startTime: number;
     dummyFrameCounter: number;
@@ -1100,7 +1101,7 @@ class SkySeaApp implements RendererApp {
         });
 
         const performanceFolder = gui.addFolder('Performance').close();
-        this.frametime.averages.forEach((_value, category) => {
+        this.frametimeAverages.forEach((_value, category) => {
             this.uiReadonly.frametimeControllers.set(category, performanceFolder.add({value: 0}, 'value').name(`${FrametimeCategory[category]} (ms)`).decimals(6).disable());
         })
     }
@@ -1175,22 +1176,30 @@ class SkySeaApp implements RendererApp {
             this.settings.currentOutputTextureSettings.color_gain.b = newSettings.color_gain.b;
         }
 
-        // Space for start & end for each step
-        // webgpu timestamps are 64 bit nanoseconds
-        const BYTES_PER_TIMESTAMP_SAMPLE = 8;
-        const numberOfTimestamps = 2 * Object.keys(FrametimeCategory).map(v => Number(v)).filter(isNaN).length;
-        this.frametime = {
-            averages: new Map(),
-            mappingLock: false,
-            querySet: device.createQuerySet({type: 'timestamp', count: numberOfTimestamps}),
-            writeBuffer: device.createBuffer({size: BYTES_PER_TIMESTAMP_SAMPLE * numberOfTimestamps, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.QUERY_RESOLVE}),
-            readBuffer: device.createBuffer({size: BYTES_PER_TIMESTAMP_SAMPLE * numberOfTimestamps, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ}),
-        };
-        Object.keys(FrametimeCategory).map(v => Number(v)).filter(v => !isNaN(v)).forEach(index => {
-            const category = index as FrametimeCategory;
-            this.frametime.averages.set(category, new ArithmeticSumArray(400));
-            Object.assign(this.uiReadonly, String(category), 0.0);
-        });
+        this.frametimeAverages = new Map();
+        if(device.features.has('timestamp-query'))
+        {
+            // Space for start & end for each step
+            // webgpu timestamps are 64 bit nanoseconds
+            const BYTES_PER_TIMESTAMP_SAMPLE = 8;
+            const numberOfTimestamps = 2 * Object.keys(FrametimeCategory).map(v => Number(v)).filter(isNaN).length;
+            this.frametimeQuery = {
+                mappingLock: false,
+                querySet: device.createQuerySet({type: 'timestamp', count: numberOfTimestamps}),
+                writeBuffer: device.createBuffer({size: BYTES_PER_TIMESTAMP_SAMPLE * numberOfTimestamps, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.QUERY_RESOLVE}),
+                readBuffer: device.createBuffer({size: BYTES_PER_TIMESTAMP_SAMPLE * numberOfTimestamps, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ}),
+            };
+            Object.keys(FrametimeCategory).map(v => Number(v)).filter(v => !isNaN(v)).forEach(index => {
+                const category = index as FrametimeCategory;
+                this.frametimeAverages.set(category, new ArithmeticSumArray(400));
+                Object.assign(this.uiReadonly, String(category), 0.0);
+            });
+        }
+        else
+        {
+            console.warn("WebGPU feature 'timestamp-query' is not supported. Continuing, but without performance information about specific stages.");
+            this.frametimeAverages.set(FrametimeCategory.DrawToDraw, new ArithmeticSumArray(400));
+        }
 
         this.dummyFrameCounter = 10.0;
         this.probationFrameCounter = 100.0;
@@ -1338,9 +1347,9 @@ class SkySeaApp implements RendererApp {
     {
         if(deltaTimeMilliseconds > 0.01)
         {
-            this.frametime.averages.get(FrametimeCategory.DrawToDraw)?.push(deltaTimeMilliseconds);
-            this.uiReadonly.averageFPS = 1000.0 / (this.frametime.averages.get(FrametimeCategory.DrawToDraw)?.average ?? 1000.0);
-            this.uiReadonly.frametimeControllers.get(FrametimeCategory.DrawToDraw)?.setValue(this.frametime.averages.get(FrametimeCategory.DrawToDraw)?.average ?? -1.0);
+            this.frametimeAverages.get(FrametimeCategory.DrawToDraw)?.push(deltaTimeMilliseconds);
+            this.uiReadonly.averageFPS = 1000.0 / (this.frametimeAverages.get(FrametimeCategory.DrawToDraw)?.average ?? 1000.0);
+            this.uiReadonly.frametimeControllers.get(FrametimeCategory.DrawToDraw)?.setValue(this.frametimeAverages.get(FrametimeCategory.DrawToDraw)?.average ?? -1.0);
         }
     }
 
@@ -1431,7 +1440,7 @@ class SkySeaApp implements RendererApp {
         let timestampQueryIndex = 0;
         const timestampIndexMapping = new Map<FrametimeCategory, number>();
         timestampIndexMapping.set(FrametimeCategory.Heightmap, timestampQueryIndex);
-        const heightmapPassEncoder = commandEncoder.beginComputePass({timestampWrites: {querySet: this.frametime.querySet, beginningOfPassWriteIndex: timestampQueryIndex++, endOfPassWriteIndex: timestampQueryIndex++}, label: "Heightmap"});
+        const heightmapPassEncoder = commandEncoder.beginComputePass({timestampWrites: this.frametimeQuery !== undefined ? {querySet: this.frametimeQuery.querySet, beginningOfPassWriteIndex: timestampQueryIndex++, endOfPassWriteIndex: timestampQueryIndex++} : undefined, label: "Heightmap"});
         heightmapPassEncoder.setPipeline(this.heightmapPassResources.pipeline);
         heightmapPassEncoder.setBindGroup(0, this.gbuffer.writeGroup);
         heightmapPassEncoder.setBindGroup(1, this.heightmapPassResources.group1);
@@ -1442,7 +1451,7 @@ class SkySeaApp implements RendererApp {
         heightmapPassEncoder.end();
 
         timestampIndexMapping.set(FrametimeCategory.SkyviewLUT, timestampQueryIndex);
-        const skyviewLUTPassEncoder = commandEncoder.beginComputePass({timestampWrites: {querySet: this.frametime.querySet, beginningOfPassWriteIndex: timestampQueryIndex++, endOfPassWriteIndex: timestampQueryIndex++}, label: "Skyview LUT"});
+        const skyviewLUTPassEncoder = commandEncoder.beginComputePass({timestampWrites: this.frametimeQuery !== undefined ? {querySet: this.frametimeQuery.querySet, beginningOfPassWriteIndex: timestampQueryIndex++, endOfPassWriteIndex: timestampQueryIndex++} : undefined, label: "Skyview LUT"});
         skyviewLUTPassEncoder.setPipeline(this.skyviewLUTPassResources.pipeline);
         skyviewLUTPassEncoder.setBindGroup(0, this.skyviewLUTPassResources.group0);
         skyviewLUTPassEncoder.setBindGroup(1, this.skyviewLUTPassResources.group1);
@@ -1454,7 +1463,7 @@ class SkySeaApp implements RendererApp {
         skyviewLUTPassEncoder.end();
 
         timestampIndexMapping.set(FrametimeCategory.AtmosphereCamera, timestampQueryIndex);
-        const atmosphereCameraPassEncoder = commandEncoder.beginComputePass({timestampWrites: {querySet: this.frametime.querySet, beginningOfPassWriteIndex: timestampQueryIndex++, endOfPassWriteIndex: timestampQueryIndex++}, label: "Atmosphere Camera"});
+        const atmosphereCameraPassEncoder = commandEncoder.beginComputePass({timestampWrites: this.frametimeQuery !== undefined ? {querySet: this.frametimeQuery.querySet, beginningOfPassWriteIndex: timestampQueryIndex++, endOfPassWriteIndex: timestampQueryIndex++} : undefined, label: "Atmosphere Camera"});
         atmosphereCameraPassEncoder.setPipeline(this.atmosphereCameraPassResources.pipeline);
         atmosphereCameraPassEncoder.setBindGroup(0, this.atmosphereCameraPassResources.group0);
         atmosphereCameraPassEncoder.setBindGroup(1, this.atmosphereCameraPassResources.group1);
@@ -1475,7 +1484,7 @@ class SkySeaApp implements RendererApp {
                     view: presentView
                 },
             ],
-            timestampWrites: {querySet: this.frametime.querySet, beginningOfPassWriteIndex: timestampQueryIndex++, endOfPassWriteIndex: timestampQueryIndex++},
+            timestampWrites: this.frametimeQuery !== undefined ? {querySet: this.frametimeQuery.querySet, beginningOfPassWriteIndex: timestampQueryIndex++, endOfPassWriteIndex: timestampQueryIndex++} : undefined,
             label: "Fullscreen Pass"
         });
 
@@ -1512,27 +1521,27 @@ class SkySeaApp implements RendererApp {
         
         fullscreenPassEncoder.end();
 
-        if(!this.frametime.mappingLock)
+        if(this.frametimeQuery != undefined && !this.frametimeQuery.mappingLock)
         {
-            commandEncoder.resolveQuerySet(this.frametime.querySet, 0, 2 * timestampIndexMapping.size, this.frametime.writeBuffer, 0);
-            commandEncoder.copyBufferToBuffer(this.frametime.writeBuffer, 0, this.frametime.readBuffer, 0, this.frametime.readBuffer.size);
+            commandEncoder.resolveQuerySet(this.frametimeQuery.querySet, 0, 2 * timestampIndexMapping.size, this.frametimeQuery.writeBuffer, 0);
+            commandEncoder.copyBufferToBuffer(this.frametimeQuery.writeBuffer, 0, this.frametimeQuery.readBuffer, 0, this.frametimeQuery.readBuffer.size);
         }
         
         this.device.queue.submit([commandEncoder.finish()]);
         
-        if (!this.frametime.mappingLock)
+        if (this.frametimeQuery !== undefined && !this.frametimeQuery.mappingLock)
         {
-            this.frametime.mappingLock = true;
-            this.frametime.readBuffer.mapAsync(GPUMapMode.READ, 0, this.frametime.readBuffer.size).then(() => {
-                const timestampsView = new BigInt64Array(this.frametime.readBuffer.getMappedRange(0, this.frametime.readBuffer.size));
+            this.frametimeQuery.mappingLock = true;
+            this.frametimeQuery.readBuffer.mapAsync(GPUMapMode.READ, 0, this.frametimeQuery.readBuffer.size).then(() => {
+                const timestampsView = new BigInt64Array(this.frametimeQuery.readBuffer.getMappedRange(0, this.frametimeQuery.readBuffer.size));
                 timestampIndexMapping.forEach((value, key) => {
                     const MS_PER_NS = 1000000;
                     const timeMilliseconds = Number(timestampsView.at(value + 1)! - timestampsView.at(value)!) / MS_PER_NS;
-                    this.frametime.averages.get(key)?.push(timeMilliseconds);
-                    this.uiReadonly.frametimeControllers.get(key)?.setValue(this.frametime.averages.get(key)?.average ?? -1.0);
+                    this.frametimeAverages.get(key)?.push(timeMilliseconds);
+                    this.uiReadonly.frametimeControllers.get(key)?.setValue(this.frametimeAverages.get(key)?.average ?? -1.0);
                 });
-                this.frametime.readBuffer.unmap();
-                this.frametime.mappingLock = false;
+                this.frametimeQuery.readBuffer.unmap();
+                this.frametimeQuery.mappingLock = false;
             }).catch(reason => {
                 console.error(`Failed while retrieving frametime values from GPU:`);
                 console.error(reason);
@@ -1638,6 +1647,6 @@ class SkySeaApp implements RendererApp {
     }
 };
 
-export const SkySeaAppConstructor: RendererAppConstructor = (device, _supportedFeatures, presentFormat, time) => {
+export const SkySeaAppConstructor: RendererAppConstructor = (device, presentFormat, time) => {
     return new SkySeaApp(device, presentFormat, time);
 };

@@ -5,6 +5,7 @@ import AtmosphereCameraPak from '../shaders/atmosphere_camera.wgsl';
 import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import FullscreenQuadPak from '../shaders/fullscreen_quad.wgsl';
 import HeightmapPak from '../shaders/heightmap.wgsl';
+import GerstnerPak from '../shaders/gerstner_heightmap.wgsl';
 
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
 import { mat4, Mat4, vec3, Vec3, vec4, Vec4 } from 'wgpu-matrix';
@@ -22,6 +23,7 @@ const SKYVIEW_LUT_SAMPLE_TYPE: GPUTextureSampleType = 'float';
 
 const GBUFFER_COLOR_FORMAT: GPUTextureFormat = 'rgba16float';
 const GBUFFER_COLOR_SAMPLE_TYPE: GPUTextureSampleType = 'float';
+const GBUFFER_DEPTH_FORMAT: GPUTextureFormat = 'depth32float';
 
 const GBUFFER_NORMAL_FORMAT: GPUTextureFormat = 'rgba16float';
 const GBUFFER_NORMAL_SAMPLE_TYPE: GPUTextureSampleType = 'float';
@@ -79,23 +81,26 @@ class CameraUBO extends UBO
     public readonly data: {
         inv_proj: Mat4,
         inv_view: Mat4,
+        proj_view: Mat4,
         position: Vec4,
     } = {
         inv_proj: mat4.identity(),
         inv_view: mat4.identity(),
+        proj_view: mat4.identity(),
         position: vec4.create(0.0,0.0,0.0,1.0),
     };
 
     constructor(device: GPUDevice)
     {
-        super(device, 16 + 16 + 4);
+        super(device, 16 + 16 + 16 + 4);
     }
 
     public stageFloats(): void 
     {
         this.stagingBuffer.set(this.data.inv_proj, 0);
         this.stagingBuffer.set(this.data.inv_view, 16);
-        this.stagingBuffer.set(this.data.position, 32);
+        this.stagingBuffer.set(this.data.proj_view, 32);
+        this.stagingBuffer.set(this.data.position, 48);
     }
 }
 
@@ -165,6 +170,10 @@ interface GBuffer
     normal: GPUTexture;
     normalView: GPUTextureView;
 
+    // Depth used for graphics pipelines that render into the gbuffer
+    depth: GPUTexture;
+    depthView: GPUTextureView;
+
     // Keep both layout and group around for reuse across other pipelines
 
     // binding 0: color
@@ -190,7 +199,7 @@ function CreateGBuffer(
         size: dimensions,
         dimension: '2d',
         format: GBUFFER_COLOR_FORMAT,
-        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING, 
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING, 
         label: label,
     });
     const colorWithDepthInAlphaView = colorWithDepthInAlpha.createView({label: label});
@@ -199,7 +208,7 @@ function CreateGBuffer(
         size: dimensions,
         dimension: '2d',
         format: GBUFFER_NORMAL_FORMAT,
-        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING, 
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING, 
         label: label,
     });
     const normalView = normal.createView({label: label});
@@ -262,11 +271,22 @@ function CreateGBuffer(
         label: label,
     });
 
+    const depth = device.createTexture({
+        size: dimensions,
+        dimension: '2d',
+        format: GBUFFER_DEPTH_FORMAT,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING, 
+        label: label,
+    });
+    const depthView = depth.createView({label: label});
+
     return {
         colorWithDepthInAlpha,
         colorWithDepthInAlphaView,
         normal,
         normalView,
+        depth,
+        depthView,
         readGroupLayout,
         readGroup,
         writeGroupLayout,
@@ -557,6 +577,256 @@ function CreateSkyViewLUTPassResources(
     }
 }
 
+// Holds a compute pass for computing the displacement of a bunch of vertices,
+// then a graphics pass for rasterizing these vertices
+interface GerstnerPassResources
+{
+    // Contains wave/heightmap data
+    group0Compute: GPUBindGroup;
+    group0Graphics: GPUBindGroup;
+    // Camera/time/other world buffers
+    group1: GPUBindGroup;
+
+    vertices: GPUBuffer;
+    worldNormals: GPUBuffer;
+    indices: GPUBuffer;
+
+    // heightmap: GPUTexture;
+    // heightmapView: GPUTextureView;
+
+    displacementPipeline: GPUComputePipeline;
+    heightmapPipeline: GPURenderPipeline;
+}
+
+function CreateGerstnerPassResources(
+    device: GPUDevice,
+    cameraUBO: CameraUBO,
+    timeUBO: TimeUBO,
+)
+{
+    const label = "Gerstner Heightmap";
+
+    // Grid of vertices + extra quad for ocean horizon
+
+    // vec4<f32>
+    const VERTEX_SIZE_BYTES = 4 * 4;
+    const VERTEX_DIMENSION = 2048; //2048
+    const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION; // + 4;
+    // const HEIGHTMAP_FORMAT: GPUTextureFormat = 'rgba16float';
+
+    // u32
+    const INDEX_SIZE_BYTES = 4;
+    const TRIANGLE_COUNT = 2 * (VERTEX_DIMENSION - 1) * (VERTEX_DIMENSION - 1);
+    const INDEX_COUNT = 3 * TRIANGLE_COUNT; // + 6;
+
+    const vertices = device.createBuffer({
+        size: VERTEX_SIZE_BYTES * VERTEX_COUNT,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
+        label,
+    });
+    const worldNormals = device.createBuffer({
+        size: VERTEX_SIZE_BYTES * VERTEX_COUNT,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
+        label,
+    });
+
+    // const horizonQuadVertices = new Float32Array([
+    //     ...vec4.create(-100, -10.0, -100, 1.0),
+    //     ...vec4.create(100, -10.0, -100, 1.0),
+    //     ...vec4.create(-100, -10.0, 100, 1.0),
+    //     ...vec4.create(100, -10.0, 100, 1.0),
+    // ]);
+    // const horizonQuadNormals = new Float32Array([
+    //     ...vec4.create(0.0, 1.0, 0.0, 0.0),
+    //     ...vec4.create(0.0, 1.0, 0.0, 0.0),
+    //     ...vec4.create(0.0, 1.0, 0.0, 0.0),
+    //     ...vec4.create(0.0, 1.0, 0.0, 0.0),
+    // ]);
+    // device.queue.writeBuffer(vertices, VERTEX_SIZE_BYTES * VERTEX_COUNT - horizonQuadVertices.byteLength, horizonQuadVertices);
+    // device.queue.writeBuffer(worldNormals, VERTEX_SIZE_BYTES * VERTEX_COUNT - horizonQuadNormals.byteLength, horizonQuadNormals);
+
+    const indices = device.createBuffer({
+        size: INDEX_COUNT * INDEX_SIZE_BYTES,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
+    });
+
+    // Could use instancing instead of duplicating the indices, since these are all a bunch of quads
+    const indicesSource = new Uint32Array(INDEX_COUNT);
+    let indicesSourceOffset = 0;
+    for(let y = 0; y < VERTEX_DIMENSION - 1; y++)
+    {
+        for(let x = 0; x < VERTEX_DIMENSION - 1; x++)
+        {
+            // Looking at the grid from above we have 4 indices per cell of adjacent vertices
+            // y 2 3
+            // | 0 1
+            // ----x
+
+            const index0 = x + y * VERTEX_DIMENSION;
+            const index1 = index0 + 1;
+            const index2 = index0 + VERTEX_DIMENSION;
+            const index3 = index2 + 1; 
+
+            const twoTriangleIndices = new Uint32Array([
+               index0, index2, index1,
+               index1, index2, index3, 
+            ]);
+            indicesSource.set(twoTriangleIndices, indicesSourceOffset);
+            indicesSourceOffset += twoTriangleIndices.length;
+        }
+    }
+    // const horizonIndices = new Uint32Array([
+    //     VERTEX_COUNT - 4, VERTEX_COUNT - 2, VERTEX_COUNT - 3, 
+    //     VERTEX_COUNT - 3, VERTEX_COUNT - 2, VERTEX_COUNT - 1,
+    // ]);
+    // indicesSource.set(horizonIndices, indicesSourceOffset);
+
+    device.queue.writeBuffer(indices, 0, indicesSource, 0, indicesSource.length);
+
+    const group0LayoutCompute = device.createBindGroupLayout({
+        entries: [
+            {
+                binding: 0, 
+                visibility: GPUShaderStage.COMPUTE,
+                buffer: {type: 'storage'}
+            },
+            {
+                binding: 1, 
+                visibility: GPUShaderStage.COMPUTE,
+                buffer: {type: 'storage'}
+            }
+        ],
+        label,
+    });
+
+    const group0Compute = device.createBindGroup({
+        layout: group0LayoutCompute,
+        entries: [
+            {binding: 0, resource: {buffer: vertices}},
+            {binding: 1, resource: {buffer: worldNormals}},
+        ],
+        label,
+    });
+
+    const group0LayoutGraphics = device.createBindGroupLayout({
+        entries: [
+            {
+                binding: 0, 
+                visibility: GPUShaderStage.VERTEX,
+                buffer: {type: 'read-only-storage'}
+            },
+            {
+                binding: 1, 
+                visibility: GPUShaderStage.VERTEX,
+                buffer: {type: 'read-only-storage'}
+            }
+        ],
+        label,
+    });
+
+    const group0Graphics = device.createBindGroup({
+        layout: group0LayoutGraphics,
+        entries: [
+            {binding: 0, resource: {buffer: vertices}},
+            {binding: 1, resource: {buffer: worldNormals}},
+        ],
+        label,
+    });
+
+    const group1Layout = device.createBindGroupLayout({                    
+        entries: [
+            {
+                binding: 0,
+                visibility: GPUShaderStage.VERTEX,
+                buffer: {}
+            },
+            {
+                binding: 1,
+                visibility: GPUShaderStage.COMPUTE,
+                buffer: {}
+            }
+        ], 
+        label,
+    });
+    const group1 = device.createBindGroup({
+        layout: group1Layout,
+        entries: [
+            {
+                binding: 0,
+                resource: {buffer: cameraUBO.buffer }
+            },
+            {
+                binding: 1,
+                resource: {buffer: timeUBO.buffer }
+            }
+        ],
+        label,
+    });
+
+    const shaderModule = device.createShaderModule({code: GerstnerPak, label});
+
+    const displacementPipeline = device.createComputePipeline({
+        layout: device.createPipelineLayout({
+            bindGroupLayouts: [group0LayoutCompute, group1Layout],
+        }),
+        compute: {
+            module: shaderModule,
+            entryPoint: 'displaceVertices',
+        },
+        label
+    });
+
+    /*
+    const heightmap = device.createTexture({
+        format: HEIGHTMAP_FORMAT,
+        size: {width: 4096, height: 4096},
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    const heightmapView = heightmap.createView();
+    */
+
+    const heightmapPipeline = device.createRenderPipeline({
+        layout: device.createPipelineLayout({
+            bindGroupLayouts: [group0LayoutGraphics, group1Layout],
+        }),
+        vertex: {
+            module: shaderModule,
+            entryPoint: 'heightmapVertex',
+        },
+        fragment: {
+            module: shaderModule,
+            entryPoint: 'heightmapFragment',
+            targets: [
+                {format: GBUFFER_COLOR_FORMAT},
+                {format: GBUFFER_NORMAL_FORMAT},
+            ]
+        },
+        primitive: {
+            topology: 'triangle-list',
+            cullMode: 'back',
+            frontFace: 'ccw',
+        },
+        depthStencil: {
+            format: GBUFFER_DEPTH_FORMAT,
+            depthWriteEnabled: true,
+            depthCompare: 'less',
+        }
+    });
+
+    return {
+        group0Compute,
+        group0Graphics,
+        group1,
+        vertices,
+        worldNormals,
+        indices,
+        // heightmap,
+        // heightmapView,
+        displacementPipeline,
+        heightmapPipeline,
+    };
+}
+
 interface HeightmapPassResources
 {
     group1: GPUBindGroup;
@@ -619,7 +889,7 @@ function CreateHeightmapPassResources(
     };
 }
 
-interface AtmosphereCameraPassResoruces
+interface AtmosphereCameraPassResources
 {
     group0Layout: GPUBindGroupLayout;
     group1Layout: GPUBindGroupLayout;
@@ -913,7 +1183,6 @@ enum RenderOutput {
     GBufferNormal,
 };
 
-
 interface OutputTexturePostProcessSettings
 {
     flip: boolean;
@@ -922,6 +1191,12 @@ interface OutputTexturePostProcessSettings
         g: number,
         b: number,
     };
+};
+
+enum HeightmapWaveModel
+{
+    Cosine,
+    Gerstner,
 };
 
 const RENDER_SCALES = [0.25, 0.3333, 0.5, 0.75, 1.0, 1.5];
@@ -978,7 +1253,8 @@ class SkySeaApp implements RendererApp {
     multiscatterLUTPassResources: MultiscatterLUTPassResources;
     skyviewLUTPassResources: SkyViewLUTPassResources;
     heightmapPassResources: HeightmapPassResources;
-    atmosphereCameraPassResources: AtmosphereCameraPassResoruces;
+    gerstnerPassResources: GerstnerPassResources;
+    atmosphereCameraPassResources: AtmosphereCameraPassResources;
     fullscreenQuadPassResources: FullscreenQuadPassResources;
 
     gbuffer: GBuffer;
@@ -987,6 +1263,7 @@ class SkySeaApp implements RendererApp {
 
     settings: {
         outputTexture: RenderOutput,
+        heightmapWaveModel: HeightmapWaveModel,
         outputTextureSettings: Map<RenderOutput, OutputTexturePostProcessSettings>,
         currentOutputTextureSettings: OutputTexturePostProcessSettings,
         orbit: {
@@ -1048,17 +1325,24 @@ class SkySeaApp implements RendererApp {
             this.handleResize(this.rawSize.width, this.rawSize.height);
         }).listen();
         gui.add(this.uiReadonly, 'averageFPS').decimals(1).disable().name('Average FPS').listen();
-        
-        gui.add(this.settings.orbit, 'timeHours').min(0.0).max(24.0).name('Time in Hours').listen();
-        gui.add(this.settings.orbit, 'timeSpeedupFactor').min(1.0).max(50000).step(1.0).name('Time Multiplier');
-        gui.add(this.settings.orbit, 'paused').name('Pause Sun');
 
-        gui.add({ fn: () => { this.settings.orbit.timeHours = this.settings.orbit.reversed ? (18.0 + 0.5) : (6.0 - 0.5)}}, 'fn').name('Skip to Sunrise');
-        gui.add({ fn: () => { this.settings.orbit.timeHours = this.settings.orbit.reversed ? (6.0 + 0.5) : (18.0 - 0.5)}}, 'fn').name('Skip to Sunset');
+        gui.add(this.settings, 'heightmapWaveModel', {
+            'Cosine': HeightmapWaveModel.Cosine,
+            'Gerstner': HeightmapWaveModel.Gerstner,
+        }).name('Wave Heightmap Model');
+
+        const sunFolder = gui.addFolder('Sun Parameters').open();
         
-        gui.add(this.settings.orbit, 'reversed').name('Reverse Sun');
-        gui.add(this.settings.orbit, 'sunsetAzimuthRadians').name("Sun Azimuth").min(0.0).max(2.0 * Math.PI);
-        gui.add(this.settings.orbit, 'inclinationRadians').name("Sun Inclination").min(0.0).max(Math.PI);
+        sunFolder.add(this.settings.orbit, 'timeHours').min(0.0).max(24.0).name('Time in Hours').listen();
+        sunFolder.add(this.settings.orbit, 'timeSpeedupFactor').min(1.0).max(50000).step(1.0).name('Time Multiplier');
+        sunFolder.add(this.settings.orbit, 'paused').name('Pause Sun');
+
+        sunFolder.add({ fn: () => { this.settings.orbit.timeHours = this.settings.orbit.reversed ? (18.0 + 0.5) : (6.0 - 0.5)}}, 'fn').name('Skip to Sunrise');
+        sunFolder.add({ fn: () => { this.settings.orbit.timeHours = this.settings.orbit.reversed ? (6.0 + 0.5) : (18.0 - 0.5)}}, 'fn').name('Skip to Sunset');
+        
+        sunFolder.add(this.settings.orbit, 'reversed').name('Reverse Sun');
+        sunFolder.add(this.settings.orbit, 'sunsetAzimuthRadians').name("Sun Azimuth").min(0.0).max(2.0 * Math.PI);
+        sunFolder.add(this.settings.orbit, 'inclinationRadians').name("Sun Inclination").min(0.0).max(Math.PI);
 
         const outputTextureFolder = gui.addFolder('Output Transform').close();
         if(!this.fullscreenQuadPassResources.uboDataByOutputTexture.has(this.settings.outputTexture))
@@ -1113,6 +1397,7 @@ class SkySeaApp implements RendererApp {
         this.startTime = time;
         this.settings = {
             outputTexture: RenderOutput.Scene,
+            heightmapWaveModel: HeightmapWaveModel.Gerstner,
             outputTextureSettings: new Map<RenderOutput, OutputTexturePostProcessSettings>([
                 [RenderOutput.Scene,
                     {
@@ -1228,6 +1513,9 @@ class SkySeaApp implements RendererApp {
         this.heightmapPassResources = CreateHeightmapPassResources(
             this.device, this.gbuffer.writeGroupLayout, this.cameraUBO, this.timeUBO
         );
+        this.gerstnerPassResources = CreateGerstnerPassResources(
+            this.device, this.cameraUBO, this.timeUBO,
+        );
 
         const fullscreenQuadIndices = new Uint32Array([
             0, 1, 2,
@@ -1278,7 +1566,7 @@ class SkySeaApp implements RendererApp {
                     {
                         view: this.gbuffer.normalView,
                         defaultUBO: {vertex_scale: vec4.create(1.0,1.0,1.0,1.0), color_gain: vec4.create(1.0,1.0,1.0,1.0)}
-                    }]
+                    }],
             ]), 
             this.presentFormat
         );
@@ -1360,12 +1648,13 @@ class SkySeaApp implements RendererApp {
         const far = 1000;
         const perspective = mat4.perspective(fov, aspectRatio, near, far);
         
-        const camera_pos = [0, 10, 0];
-        const view = mat4.lookAt(camera_pos, [0, 20, 100], [0, 1, 0]);
+        const camera_pos = [0, 10, -20];
+        const view = mat4.lookAt(camera_pos, [0, 0, 200], [0, 1, 0]);
 
         Object.assign(this.cameraUBO.data, {
             inv_proj: mat4.inverse(perspective),
             inv_view: mat4.inverse(view),
+            proj_view: mat4.mul(perspective, view),
             position: vec4.create(...camera_pos),
         });
         this.cameraUBO.writeToGPU(this.device);
@@ -1439,15 +1728,89 @@ class SkySeaApp implements RendererApp {
         let timestampQueryIndex = 0;
         const timestampIndexMapping = new Map<FrametimeCategory, number>();
         timestampIndexMapping.set(FrametimeCategory.Heightmap, timestampQueryIndex);
-        const heightmapPassEncoder = commandEncoder.beginComputePass({timestampWrites: this.frametimeQuery !== undefined ? {querySet: this.frametimeQuery.querySet, beginningOfPassWriteIndex: timestampQueryIndex++, endOfPassWriteIndex: timestampQueryIndex++} : undefined, label: "Heightmap"});
-        heightmapPassEncoder.setPipeline(this.heightmapPassResources.pipeline);
-        heightmapPassEncoder.setBindGroup(0, this.gbuffer.writeGroup);
-        heightmapPassEncoder.setBindGroup(1, this.heightmapPassResources.group1);
-        heightmapPassEncoder.dispatchWorkgroups(
-            Math.ceil(this.gbuffer.colorWithDepthInAlpha.width / 16), 
-            Math.ceil(this.gbuffer.colorWithDepthInAlpha.height / 16),
-        ); 
-        heightmapPassEncoder.end();
+
+        switch(this.settings.heightmapWaveModel) {
+            case HeightmapWaveModel.Gerstner: {
+                const gerstnerComputePassEncoder = commandEncoder.beginComputePass({
+                    label: 'Gerstner Ocean Mesh Displacement',
+                    timestampWrites: 
+                        this.frametimeQuery !== undefined 
+                        ? {
+                            querySet: this.frametimeQuery.querySet, 
+                            beginningOfPassWriteIndex: timestampQueryIndex++,
+                        } 
+                        : undefined, 
+                });
+                gerstnerComputePassEncoder.setPipeline(this.gerstnerPassResources.displacementPipeline);
+                gerstnerComputePassEncoder.setBindGroup(0, this.gerstnerPassResources.group0Compute);
+                gerstnerComputePassEncoder.setBindGroup(1, this.gerstnerPassResources.group1);
+                gerstnerComputePassEncoder.dispatchWorkgroups(
+                    Math.ceil(2048 / 16),
+                    Math.ceil(2048 / 16),
+                );
+                gerstnerComputePassEncoder.end();
+
+                const gerstnerRenderPassEncoder = commandEncoder.beginRenderPass({
+                    label: 'Gerstner Heightmap Rasterization',
+                    colorAttachments: [
+                        {
+                            clearValue: {r: 0.0, g: 0.0, b: 0.0, a: 0.0},
+                            loadOp: 'clear',
+                            storeOp: 'store',
+                            view: this.gbuffer.colorWithDepthInAlphaView,
+                        },
+                        {
+                            clearValue: {r: 0.0, g: 0.0, b: 0.0, a: 0.0},
+                            loadOp: 'clear',
+                            storeOp: 'store',
+                            view: this.gbuffer.normalView
+                        },
+                    ],
+                    depthStencilAttachment: {
+                        view: this.gbuffer.depthView,
+                        depthClearValue: 1.0,
+                        depthLoadOp: 'clear',
+                        depthStoreOp: 'store',
+                    },
+                    timestampWrites: 
+                        this.frametimeQuery !== undefined 
+                        ? {
+                            querySet: this.frametimeQuery.querySet, 
+                            endOfPassWriteIndex: timestampQueryIndex++,
+                        } 
+                        : undefined, 
+                });
+                gerstnerRenderPassEncoder.setPipeline(this.gerstnerPassResources.heightmapPipeline);
+                gerstnerRenderPassEncoder.setBindGroup(0, this.gerstnerPassResources.group0Graphics);
+                gerstnerRenderPassEncoder.setBindGroup(1, this.gerstnerPassResources.group1);
+                gerstnerRenderPassEncoder.setIndexBuffer(this.gerstnerPassResources.indices, 'uint32');
+                gerstnerRenderPassEncoder.drawIndexed(this.gerstnerPassResources.indices.size / 4);
+                gerstnerRenderPassEncoder.end();
+                break;
+            }
+            case HeightmapWaveModel.Cosine: {
+                const heightmapPassEncoder = commandEncoder.beginComputePass({
+                    label: "Heightmap",
+                    timestampWrites: 
+                        this.frametimeQuery !== undefined 
+                        ? {
+                            querySet: this.frametimeQuery.querySet, 
+                            beginningOfPassWriteIndex: timestampQueryIndex++, 
+                            endOfPassWriteIndex: timestampQueryIndex++,
+                        } 
+                        : undefined, 
+                });
+                heightmapPassEncoder.setPipeline(this.heightmapPassResources.pipeline);
+                heightmapPassEncoder.setBindGroup(0, this.gbuffer.writeGroup);
+                heightmapPassEncoder.setBindGroup(1, this.heightmapPassResources.group1);
+                heightmapPassEncoder.dispatchWorkgroups(
+                    Math.ceil(this.gbuffer.colorWithDepthInAlpha.width / 16), 
+                    Math.ceil(this.gbuffer.colorWithDepthInAlpha.height / 16),
+                ); 
+                heightmapPassEncoder.end();
+                break;
+            }
+        }
 
         timestampIndexMapping.set(FrametimeCategory.SkyviewLUT, timestampQueryIndex);
         const skyviewLUTPassEncoder = commandEncoder.beginComputePass({timestampWrites: this.frametimeQuery !== undefined ? {querySet: this.frametimeQuery.querySet, beginningOfPassWriteIndex: timestampQueryIndex++, endOfPassWriteIndex: timestampQueryIndex++} : undefined, label: "Skyview LUT"});
@@ -1530,17 +1893,19 @@ class SkySeaApp implements RendererApp {
         
         if (this.frametimeQuery !== undefined && !this.frametimeQuery.mappingLock)
         {
+            const query = this.frametimeQuery!;
+
             this.frametimeQuery.mappingLock = true;
             this.frametimeQuery.readBuffer.mapAsync(GPUMapMode.READ, 0, this.frametimeQuery.readBuffer.size).then(() => {
-                const timestampsView = new BigInt64Array(this.frametimeQuery.readBuffer.getMappedRange(0, this.frametimeQuery.readBuffer.size));
+                const timestampsView = new BigInt64Array(query.readBuffer.getMappedRange(0, query.readBuffer.size));
                 timestampIndexMapping.forEach((value, key) => {
                     const MS_PER_NS = 1000000;
                     const timeMilliseconds = Number(timestampsView.at(value + 1)! - timestampsView.at(value)!) / MS_PER_NS;
                     this.frametimeAverages.get(key)?.push(timeMilliseconds);
                     this.uiReadonly.frametimeControllers.get(key)?.setValue(this.frametimeAverages.get(key)?.average ?? -1.0);
                 });
-                this.frametimeQuery.readBuffer.unmap();
-                this.frametimeQuery.mappingLock = false;
+                query.readBuffer.unmap();
+                query.mappingLock = false;
             }).catch(reason => {
                 console.error(`Failed while retrieving frametime values from GPU:`);
                 console.error(reason);

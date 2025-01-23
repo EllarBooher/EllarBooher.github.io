@@ -4,6 +4,7 @@ struct CameraUBO
 {
     inv_proj: mat4x4<f32>,
     inv_view: mat4x4<f32>,
+    proj_view: mat4x4<f32>,
     position: vec4<f32>,
 }
 
@@ -154,8 +155,18 @@ fn raymarchHeightmap(
     let time = b_time.time_seconds;
     // TODO: Figure out spherical coordinate raymarching
 
-    // Skip to where waves can possibly start
+    // Skip to where waves can possibly start.
+    // Also skip the case where the camera starts below the waves (for now)
     var t = -max(origin.y-WAVE_MAX_HEIGHT, 0.0) / direction.y;
+    if (t < 0.0)
+    {
+        return HeightmapRaymarchResult(
+            vec4<f32>(0.0),
+            vec4<f32>(0.0),
+            0.0,
+        );
+    }
+
     while(t < FIRST_DISTANCE)
     {
         // Make larger stepsize work for closer features
@@ -232,6 +243,8 @@ fn renderHeightmap(@builtin(global_invocation_id) global_id : vec3<u32>,)
     let size = textureDimensions(gbuffer_color_with_depth_in_alpha);
     if(texel_coord.x >= size.x || texel_coord.y >= size.y)
     {
+        textureStore(gbuffer_color_with_depth_in_alpha, texel_coord, vec4<f32>(0.0));
+        textureStore(gbuffer_normal, texel_coord, vec4<f32>(0.0));
         return;
     }
     var atmosphere = ATMOSPHERE_GLOBAL;
@@ -245,13 +258,6 @@ fn renderHeightmap(@builtin(global_invocation_id) global_id : vec3<u32>,)
     let near_plane_depth = 1.0;
     let direction_view_space = b_camera.inv_proj * vec4(ndc_space_coord, near_plane_depth, 1.0);
     let direction_world = normalize((b_camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
-
-    // Assume we start far enough above the waves that upward rays cannot intersect the ocean
-    // Eventually it would be nice to solve for that case, but not while we deferred render the waves
-    if(direction_world.y > 0.0)
-    {
-        return;
-    }
 
     let result = raymarchHeightmap(&atmosphere, origin, direction_world);
 

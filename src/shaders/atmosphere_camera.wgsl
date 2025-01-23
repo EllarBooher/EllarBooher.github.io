@@ -10,6 +10,7 @@ struct CameraUBO
 {
     inv_proj: mat4x4<f32>,
     inv_view: mat4x4<f32>,
+    proj_view: mat4x4<f32>,
     position: vec4<f32>,
 }
 
@@ -161,7 +162,7 @@ fn computeFractionOfSunVisible(
     return 0.5 * (sinHorizonSun / sinSunRadius) + 0.5;
 }
 
-fn sampleEnvironmentLuminance(
+fn sampleSkyLuminance(
     atmosphere: ptr<function, Atmosphere>, 
     light: ptr<function, CelestialLight>, 
     position: vec3<f32>, 
@@ -236,7 +237,7 @@ fn sampleGeometryLuminance(
 
     light_luminance_transfer += 
         transmittance_to_surface
-        * sampleEnvironmentLuminance(atmosphere, light, surface_position, reflection_direction) 
+        * sampleSkyLuminance(atmosphere, light, surface_position, reflection_direction) 
         * mix(
             diffuse, 
             vec3<f32>(1.0), 
@@ -294,46 +295,31 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     let color_with_depth_in_alpha = textureLoad(gbuffer_color_with_depth_in_alpha, texel_coord, 0);
     let normal = textureLoad(gbuffer_normal, texel_coord, 0); 
 
-    let material: PBRTexel = convertPBRProperties(color_with_depth_in_alpha.xyz, normal.xyz);
     let depth = color_with_depth_in_alpha.a / METERS_PER_MM;
 
     var luminance_transfer = vec3<f32>(0.0);
 
-    // TODO: Use radius/mu to test if mu is below horizon instead?
-    let intersects_ground = raySphereTest(origin, direction_world, atmosphere.planetRadiusMm);
-
+    let sin_horizon: f32 = atmosphere.planetRadiusMm / length(origin);
+    let cos_horizon: f32 = -safeSqrt(1.0 - sin_horizon * sin_horizon);
+    let intersects_ground = dot(normalize(origin), normalize(direction_world)) < cos_horizon;
+    
     if (depth <= 0.0)
     {
-        // Unobscured view of the virtual environment, i.e. sky or ground
-
-        /*
-        This should not occur if the virtual ground is obscured by otherwise rendered terrain/geometry
-        Uncomment if needed at some point
+        // View of virtual environment: either the sky, or the floor
         if (intersects_ground)
         {
-            let include_ground = true;
-
-            // Ray intersects the ground, so the sky view LUT is not valid
-
-            luminance_transfer = computeLuminanceScatteringIntegral(
-                &atmosphere, 
-                &light, 
-                lut_sampler,
-                transmittance_lut, 
-                multiscatter_lut, 
-                origin, 
-                direction_world, 
-                include_ground
-            ).luminance;
+            let material: PBRTexel = convertPBRProperties(vec3<f32>(1.0), vec3<f32>(0.0,1.0,0.0));
+            luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, intersects_ground);
         }
         else
-        */
         {
-            luminance_transfer = sampleEnvironmentLuminance(&atmosphere, &light, origin, direction_world);
+            luminance_transfer = sampleSkyLuminance(&atmosphere, &light, origin, direction_world);
         }
     }
     else
     {
+        // View of geometry in gbuffer 
+        let material: PBRTexel = convertPBRProperties(color_with_depth_in_alpha.xyz, normal.xyz);
         luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, intersects_ground);
     }
 

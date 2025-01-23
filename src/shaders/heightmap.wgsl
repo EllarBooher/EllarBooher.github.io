@@ -26,7 +26,6 @@ struct PlaneWave
     amplitude: f32,
     wavelength: f32,
     direction: vec2<f32>,
-    speed: f32,
 }
 
 // Fairly arbitrary parameters I thought looked good
@@ -35,22 +34,19 @@ struct PlaneWave
 const WAVE_1 = PlaneWave(
     1.5,
     33.8,
-    vec2<f32>( 0.447213595499957, 0.89442719099991587856),
-    5.9,
+    vec2<f32>(1.0, 2.0),
 );
 
 const WAVE_2 = PlaneWave(
     0.02,
     3.5,
     vec2<f32>(1.0, 0.0),
-    0.5,
 );
 
 const WAVE_3 = PlaneWave(
     0.02,
     4.5,
     vec2<f32>(0.0, 1.0),
-    1.5,
 );
 
 const WATER_COLOR = vec3<f32>(1.0 / 255.0, 123.0 / 255.0, 146.0 / 255.0);
@@ -65,7 +61,9 @@ fn sampleWave(
 {
     let wave_number = 2.0 * 3.141592653589793 / wave.wavelength;
     let wave_vector = wave.direction * wave_number;
-    let angular_frequency = wave.speed * wave_number;
+
+    let gravity = 9.8;
+    let angular_frequency = sqrt(gravity * wave_number);
 
     return wave.amplitude * (WAVE_NEUTRAL_PLANE + cos(dot(coords, wave_vector) - angular_frequency * time));
 }

@@ -1,6 +1,6 @@
-// Displace a grid of vertices representing the ocean surface, then rasterize into a heightmap with a graphics pass
+// Displace a grid of vertices representing the ocean surface, then rasterize into the gbuffer with a graphics pass
 
-/* --- begin ocean heightmap mesh displacement --- */
+/* --- begin ocean mesh displacement --- */
 
 // Defines the world half-extent (radius of the square) of the patch where the ocean waves are defined  
 const WORLD_HALF_EXTENT_METERS = 300.0;
@@ -151,7 +151,7 @@ const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 // const TRIANGLE_COUNT = 2u * (VERTEX_DIMENSION - 1u) * (VERTEX_DIMENSION - 1u);
 // const INDEX_COUNT = 3u * TRIANGLE_COUNT;
 
-// Vertices are in (x,y,z) world coordinates, so when rasterizing the heightmap you must swizzle y <-> z
+// Vertices are in (x,y,z) world coordinates, so during rasterization you must swizzle y <-> z
 @group(0) @binding(0) var<storage, read_write> output_vertices: array<vec4<f32>, VERTEX_COUNT>;
 @group(0) @binding(1) var<storage, read_write> output_world_normals: array<vec4<f32>, VERTEX_COUNT>;
 // Indices are populated CPU side
@@ -204,7 +204,7 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
     output_world_normals[vertex_index] = vec4<f32>(world_normal, 0.0);
 }
 
-/* --- begin heightmap rasterization --- */
+/* --- begin surface rasterization --- */
 
 struct CameraUBO
 {
@@ -233,7 +233,7 @@ struct VertexOut {
 }
 
 @vertex
-fn heightmapVertex(@builtin(vertex_index) index : u32) -> VertexOut 
+fn rasterizationVertex(@builtin(vertex_index) index : u32) -> VertexOut 
 {
     var output : VertexOut;
 
@@ -254,7 +254,7 @@ struct FragmentOut
 }
 
 @fragment
-fn heightmapFragment(frag_interpolated: VertexOut) -> FragmentOut
+fn rasterizationFragment(frag_interpolated: VertexOut) -> FragmentOut
 {
     var output : FragmentOut;
 

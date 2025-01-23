@@ -3,7 +3,7 @@ import MultiscatterLUTPak from '../shaders/sky-sea/multiscatter_LUT.wgsl';
 import SkyViewLUTPak from '../shaders/sky-sea/skyview_LUT.wgsl';
 import AtmosphereCameraPak from '../shaders/sky-sea/atmosphere_camera.wgsl';
 import FullscreenQuadPak from '../shaders/sky-sea/fullscreen_quad.wgsl';
-import GerstnerPak from '../shaders/sky-sea/gerstner_heightmap.wgsl';
+import WaveSurfaceDisplacementPak from '../shaders/sky-sea/wave_surface_displacement.wgsl';
 
 import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
@@ -578,47 +578,43 @@ function CreateSkyViewLUTPassResources(
 
 // Holds a compute pass for computing the displacement of a bunch of vertices,
 // then a graphics pass for rasterizing these vertices
-interface GerstnerPassResources
+interface WaveSurfaceDisplacementPassResources
 {
-    // Contains wave/heightmap data
+    // Contains wave data
     group0Compute: GPUBindGroup;
     group0Graphics: GPUBindGroup;
-    // Camera/time/other world buffers
+    // Camera/time/other global buffers
     group1: GPUBindGroup;
 
     vertices: GPUBuffer;
     worldNormals: GPUBuffer;
     indices: GPUBuffer;
 
-    // heightmap: GPUTexture;
-    // heightmapView: GPUTextureView;
-
     displacementCosinePipeline: GPUComputePipeline;
     displacementGerstnerPipeline: GPUComputePipeline;
 
-    heightmapPipeline: GPURenderPipeline;
+    surfaceRasterizationPipeline: GPURenderPipeline;
 }
 
-function CreateGerstnerPassResources(
+function CreateWaveSurfaceDisplacementPassResources(
     device: GPUDevice,
     cameraUBO: CameraUBO,
     timeUBO: TimeUBO,
 )
 {
-    const label = "Gerstner Heightmap";
+    const label = "Wave Surface Displacement";
 
     // Grid of vertices + extra quad for ocean horizon
 
     // vec4<f32>
     const VERTEX_SIZE_BYTES = 4 * 4;
-    const VERTEX_DIMENSION = 2048; //2048
-    const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION; // + 4;
-    // const HEIGHTMAP_FORMAT: GPUTextureFormat = 'rgba16float';
+    const VERTEX_DIMENSION = 2048;
+    const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 
     // u32
     const INDEX_SIZE_BYTES = 4;
     const TRIANGLE_COUNT = 2 * (VERTEX_DIMENSION - 1) * (VERTEX_DIMENSION - 1);
-    const INDEX_COUNT = 3 * TRIANGLE_COUNT; // + 6;
+    const INDEX_COUNT = 3 * TRIANGLE_COUNT;
 
     const vertices = device.createBuffer({
         size: VERTEX_SIZE_BYTES * VERTEX_COUNT,
@@ -630,21 +626,6 @@ function CreateGerstnerPassResources(
         usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
         label,
     });
-
-    // const horizonQuadVertices = new Float32Array([
-    //     ...vec4.create(-100, -10.0, -100, 1.0),
-    //     ...vec4.create(100, -10.0, -100, 1.0),
-    //     ...vec4.create(-100, -10.0, 100, 1.0),
-    //     ...vec4.create(100, -10.0, 100, 1.0),
-    // ]);
-    // const horizonQuadNormals = new Float32Array([
-    //     ...vec4.create(0.0, 1.0, 0.0, 0.0),
-    //     ...vec4.create(0.0, 1.0, 0.0, 0.0),
-    //     ...vec4.create(0.0, 1.0, 0.0, 0.0),
-    //     ...vec4.create(0.0, 1.0, 0.0, 0.0),
-    // ]);
-    // device.queue.writeBuffer(vertices, VERTEX_SIZE_BYTES * VERTEX_COUNT - horizonQuadVertices.byteLength, horizonQuadVertices);
-    // device.queue.writeBuffer(worldNormals, VERTEX_SIZE_BYTES * VERTEX_COUNT - horizonQuadNormals.byteLength, horizonQuadNormals);
 
     const indices = device.createBuffer({
         size: INDEX_COUNT * INDEX_SIZE_BYTES,
@@ -676,12 +657,6 @@ function CreateGerstnerPassResources(
             indicesSourceOffset += twoTriangleIndices.length;
         }
     }
-    // const horizonIndices = new Uint32Array([
-    //     VERTEX_COUNT - 4, VERTEX_COUNT - 2, VERTEX_COUNT - 3, 
-    //     VERTEX_COUNT - 3, VERTEX_COUNT - 2, VERTEX_COUNT - 1,
-    // ]);
-    // indicesSource.set(horizonIndices, indicesSourceOffset);
-
     device.queue.writeBuffer(indices, 0, indicesSource, 0, indicesSource.length);
 
     const group0LayoutCompute = device.createBindGroupLayout({
@@ -764,7 +739,7 @@ function CreateGerstnerPassResources(
         label,
     });
 
-    const shaderModule = device.createShaderModule({code: GerstnerPak, label});
+    const shaderModule = device.createShaderModule({code: WaveSurfaceDisplacementPak, label});
 
     const displacementCosinePipeline = device.createComputePipeline({
         layout: device.createPipelineLayout({
@@ -793,26 +768,17 @@ function CreateGerstnerPassResources(
         label
     });
 
-    /*
-    const heightmap = device.createTexture({
-        format: HEIGHTMAP_FORMAT,
-        size: {width: 4096, height: 4096},
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-    });
-    const heightmapView = heightmap.createView();
-    */
-
-    const heightmapPipeline = device.createRenderPipeline({
+    const surfaceRasterizationPipeline = device.createRenderPipeline({
         layout: device.createPipelineLayout({
             bindGroupLayouts: [group0LayoutGraphics, group1Layout],
         }),
         vertex: {
             module: shaderModule,
-            entryPoint: 'heightmapVertex',
+            entryPoint: 'rasterizationVertex',
         },
         fragment: {
             module: shaderModule,
-            entryPoint: 'heightmapFragment',
+            entryPoint: 'rasterizationFragment',
             targets: [
                 {format: GBUFFER_COLOR_FORMAT},
                 {format: GBUFFER_NORMAL_FORMAT},
@@ -837,11 +803,9 @@ function CreateGerstnerPassResources(
         vertices,
         worldNormals,
         indices,
-        // heightmap,
-        // heightmapView,
         displacementCosinePipeline,
         displacementGerstnerPipeline,
-        heightmapPipeline,
+        surfaceRasterizationPipeline,
     };
 }
 
@@ -1149,7 +1113,7 @@ interface OutputTexturePostProcessSettings
     };
 };
 
-enum HeightmapWaveModel
+enum WaveModel
 {
     Cosine,
     Gerstner,
@@ -1161,7 +1125,7 @@ enum FrametimeCategory
 {
     DrawToDraw,
     SkyviewLUT,
-    Heightmap,
+    OceanSurface,
     AtmosphereCamera,
     FullscreenQuad,
 }
@@ -1208,7 +1172,7 @@ class SkySeaApp implements RendererApp {
     transmittanceLUTPassResources: TransmittanceLUTPassResources;
     multiscatterLUTPassResources: MultiscatterLUTPassResources;
     skyviewLUTPassResources: SkyViewLUTPassResources;
-    gerstnerPassResources: GerstnerPassResources;
+    waveSurfaceDisplacementPassResources: WaveSurfaceDisplacementPassResources;
     atmosphereCameraPassResources: AtmosphereCameraPassResources;
     fullscreenQuadPassResources: FullscreenQuadPassResources;
 
@@ -1218,7 +1182,7 @@ class SkySeaApp implements RendererApp {
 
     settings: {
         outputTexture: RenderOutput,
-        heightmapWaveModel: HeightmapWaveModel,
+        oceanWaveModel: WaveModel,
         outputTextureSettings: Map<RenderOutput, OutputTexturePostProcessSettings>,
         currentOutputTextureSettings: OutputTexturePostProcessSettings,
         orbit: {
@@ -1281,10 +1245,10 @@ class SkySeaApp implements RendererApp {
         }).listen();
         gui.add(this.uiReadonly, 'averageFPS').decimals(1).disable().name('Average FPS').listen();
 
-        gui.add(this.settings, 'heightmapWaveModel', {
-            'Cosine': HeightmapWaveModel.Cosine,
-            'Gerstner': HeightmapWaveModel.Gerstner,
-        }).name('Wave Heightmap Model');
+        gui.add(this.settings, 'oceanWaveModel', {
+            'Cosine': WaveModel.Cosine,
+            'Gerstner': WaveModel.Gerstner,
+        }).name('Ocean Wave Model');
 
         const sunFolder = gui.addFolder('Sun Parameters').open();
         
@@ -1352,7 +1316,7 @@ class SkySeaApp implements RendererApp {
         this.startTime = time;
         this.settings = {
             outputTexture: RenderOutput.Scene,
-            heightmapWaveModel: HeightmapWaveModel.Gerstner,
+            oceanWaveModel: WaveModel.Gerstner,
             outputTextureSettings: new Map<RenderOutput, OutputTexturePostProcessSettings>([
                 [RenderOutput.Scene,
                     {
@@ -1466,7 +1430,7 @@ class SkySeaApp implements RendererApp {
             this.celestialLightUBO,
         );
 
-        this.gerstnerPassResources = CreateGerstnerPassResources(
+        this.waveSurfaceDisplacementPassResources = CreateWaveSurfaceDisplacementPassResources(
             this.device, this.cameraUBO, this.timeUBO,
         );
 
@@ -1680,14 +1644,14 @@ class SkySeaApp implements RendererApp {
 
         let timestampQueryIndex = 0;
         const timestampIndexMapping = new Map<FrametimeCategory, number>();
-        timestampIndexMapping.set(FrametimeCategory.Heightmap, timestampQueryIndex);
+        timestampIndexMapping.set(FrametimeCategory.OceanSurface, timestampQueryIndex);
 
-        switch(this.settings.heightmapWaveModel) 
+        switch(this.settings.oceanWaveModel) 
         {
-            case HeightmapWaveModel.Cosine:
-            case HeightmapWaveModel.Gerstner: {
-                const gerstnerComputePassEncoder = commandEncoder.beginComputePass({
-                    label: 'Gerstner Ocean Mesh Displacement',
+            case WaveModel.Cosine:
+            case WaveModel.Gerstner: {
+                const displacementPassEncoder = commandEncoder.beginComputePass({
+                    label: 'Wave Surface Mesh Displacement',
                     timestampWrites: 
                         this.frametimeQuery !== undefined 
                         ? {
@@ -1696,24 +1660,24 @@ class SkySeaApp implements RendererApp {
                         } 
                         : undefined, 
                 });
-                if(this.settings.heightmapWaveModel == HeightmapWaveModel.Cosine)
+                if(this.settings.oceanWaveModel == WaveModel.Cosine)
                 {
-                    gerstnerComputePassEncoder.setPipeline(this.gerstnerPassResources.displacementCosinePipeline);
+                    displacementPassEncoder.setPipeline(this.waveSurfaceDisplacementPassResources.displacementCosinePipeline);
                 }
                 else
                 {
-                    gerstnerComputePassEncoder.setPipeline(this.gerstnerPassResources.displacementGerstnerPipeline);
+                    displacementPassEncoder.setPipeline(this.waveSurfaceDisplacementPassResources.displacementGerstnerPipeline);
                 }
-                gerstnerComputePassEncoder.setBindGroup(0, this.gerstnerPassResources.group0Compute);
-                gerstnerComputePassEncoder.setBindGroup(1, this.gerstnerPassResources.group1);
-                gerstnerComputePassEncoder.dispatchWorkgroups(
+                displacementPassEncoder.setBindGroup(0, this.waveSurfaceDisplacementPassResources.group0Compute);
+                displacementPassEncoder.setBindGroup(1, this.waveSurfaceDisplacementPassResources.group1);
+                displacementPassEncoder.dispatchWorkgroups(
                     Math.ceil(2048 / 16),
                     Math.ceil(2048 / 16),
                 );
-                gerstnerComputePassEncoder.end();
+                displacementPassEncoder.end();
 
-                const gerstnerRenderPassEncoder = commandEncoder.beginRenderPass({
-                    label: 'Gerstner Heightmap Rasterization',
+                const surfaceRasterizationPassEncoder = commandEncoder.beginRenderPass({
+                    label: 'Wave Surface Rasterization',
                     colorAttachments: [
                         {
                             clearValue: {r: 0.0, g: 0.0, b: 0.0, a: 0.0},
@@ -1742,38 +1706,14 @@ class SkySeaApp implements RendererApp {
                         } 
                         : undefined, 
                 });
-                gerstnerRenderPassEncoder.setPipeline(this.gerstnerPassResources.heightmapPipeline);
-                gerstnerRenderPassEncoder.setBindGroup(0, this.gerstnerPassResources.group0Graphics);
-                gerstnerRenderPassEncoder.setBindGroup(1, this.gerstnerPassResources.group1);
-                gerstnerRenderPassEncoder.setIndexBuffer(this.gerstnerPassResources.indices, 'uint32');
-                gerstnerRenderPassEncoder.drawIndexed(this.gerstnerPassResources.indices.size / 4);
-                gerstnerRenderPassEncoder.end();
+                surfaceRasterizationPassEncoder.setPipeline(this.waveSurfaceDisplacementPassResources.surfaceRasterizationPipeline);
+                surfaceRasterizationPassEncoder.setBindGroup(0, this.waveSurfaceDisplacementPassResources.group0Graphics);
+                surfaceRasterizationPassEncoder.setBindGroup(1, this.waveSurfaceDisplacementPassResources.group1);
+                surfaceRasterizationPassEncoder.setIndexBuffer(this.waveSurfaceDisplacementPassResources.indices, 'uint32');
+                surfaceRasterizationPassEncoder.drawIndexed(this.waveSurfaceDisplacementPassResources.indices.size / 4);
+                surfaceRasterizationPassEncoder.end();
                 break;
                 }
-                /*
-            case HeightmapWaveModel.Cosine: {
-                const heightmapPassEncoder = commandEncoder.beginComputePass({
-                    label: "Heightmap",
-                    timestampWrites: 
-                        this.frametimeQuery !== undefined 
-                        ? {
-                            querySet: this.frametimeQuery.querySet, 
-                            beginningOfPassWriteIndex: timestampQueryIndex++, 
-                            endOfPassWriteIndex: timestampQueryIndex++,
-                        } 
-                        : undefined, 
-                });
-                heightmapPassEncoder.setPipeline(this.heightmapPassResources.pipeline);
-                heightmapPassEncoder.setBindGroup(0, this.gbuffer.writeGroup);
-                heightmapPassEncoder.setBindGroup(1, this.heightmapPassResources.group1);
-                heightmapPassEncoder.dispatchWorkgroups(
-                    Math.ceil(this.gbuffer.colorWithDepthInAlpha.width / 16), 
-                    Math.ceil(this.gbuffer.colorWithDepthInAlpha.height / 16),
-                ); 
-                heightmapPassEncoder.end();
-                break;
-            }
-                */
         }
 
         timestampIndexMapping.set(FrametimeCategory.SkyviewLUT, timestampQueryIndex);

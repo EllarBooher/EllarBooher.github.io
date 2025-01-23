@@ -1121,17 +1121,17 @@ class SkySeaApp implements RendererApp {
                     }],
                 [RenderOutput.TransmittanceLUT, 
                     {
-                        flip: false, 
+                        flip: true, 
                         color_gain: {r: 1.0, g: 1.0, b: 1.0}
                     }], 
                 [RenderOutput.MultiscatterLUT, 
                     { 
-                        flip: false,
+                        flip: true,
                         color_gain: {r: 15.0, g: 15.0, b: 15.0}
                     }], 
                 [RenderOutput.SkyviewLUT, 
                     { 
-                        flip: true,
+                        flip: false,
                         color_gain: {r: 8.0, g: 8.0, b: 8.0}
                     }],
                 [RenderOutput.GBufferColor,

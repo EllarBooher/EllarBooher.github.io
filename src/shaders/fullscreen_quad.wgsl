@@ -18,10 +18,10 @@ const QUAD_VERTICES: array<vec4<f32>, 4> = array<vec4<f32>,4>(
     vec4<f32>(-1.0, 1.0, 0.0, 1.0),
 );
 const QUAD_UVS: array<vec2<f32>,4> = array<vec2<f32>,4>(
-    vec2<f32>(0.0, 0.0),
-    vec2<f32>(1.0, 0.0),
-    vec2<f32>(1.0, 1.0),
     vec2<f32>(0.0, 1.0),
+    vec2<f32>(1.0, 1.0),
+    vec2<f32>(1.0, 0.0),
+    vec2<f32>(0.0, 0.0),
 );
 
 struct VertexOut {

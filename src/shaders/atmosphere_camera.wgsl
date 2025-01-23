@@ -286,9 +286,9 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     const METERS_PER_MM = 1000000.0;
     let origin = vec3<f32>(0.0, atmosphere.planetRadiusMm, 0.0) + b_camera.position.xyz / METERS_PER_MM;
 
-    let uv_clip_space = (uv - vec2<f32>(0.5)) * 2.0;
+    let ndc_space_coord = (uv - vec2<f32>(0.5)) * 2.0 * vec2<f32>(1.0, -1.0);
     let near_plane_depth = 1.0;
-    let direction_view_space = b_camera.inv_proj * vec4(uv_clip_space, near_plane_depth, 1.0);
+    let direction_view_space = b_camera.inv_proj * vec4(ndc_space_coord, near_plane_depth, 1.0);
     let direction_world = normalize((b_camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
 
     let color_with_depth_in_alpha = textureLoad(gbuffer_color_with_depth_in_alpha, texel_coord, 0);

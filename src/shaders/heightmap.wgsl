@@ -241,9 +241,9 @@ fn renderHeightmap(@builtin(global_invocation_id) global_id : vec3<u32>,)
 
     let origin = b_camera.position.xyz;
 
-    let uv_clip_space = (uv - vec2<f32>(0.5)) * 2.0;
+    let ndc_space_coord = (uv - vec2<f32>(0.5)) * 2.0 * vec2<f32>(1.0, -1.0);
     let near_plane_depth = 1.0;
-    let direction_view_space = b_camera.inv_proj * vec4(uv_clip_space, near_plane_depth, 1.0);
+    let direction_view_space = b_camera.inv_proj * vec4(ndc_space_coord, near_plane_depth, 1.0);
     let direction_world = normalize((b_camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
 
     // Assume we start far enough above the waves that upward rays cannot intersect the ocean

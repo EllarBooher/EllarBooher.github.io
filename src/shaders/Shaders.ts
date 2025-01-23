@@ -1,14 +1,15 @@
 import fs from 'fs';
+import path from 'path';
 
 const shaderRoot = "src/shaders/";
 
 // TODO: Load includes upon every shader compile, but cache them and check if the version on disk is newer. This is needed for hot reloading
 const includeFilenames = [
-    "atmosphere_types.inc.wgsl", 
-    "atmosphere_common.inc.wgsl", 
-    "atmosphere_raymarch.inc.wgsl",
-    "tonemap.inc.wgsl",
-    "pbr.inc.wgsl"
+    "sky-sea/atmosphere_types.inc.wgsl", 
+    "sky-sea/atmosphere_common.inc.wgsl", 
+    "sky-sea/atmosphere_raymarch.inc.wgsl",
+    "sky-sea/tonemap.inc.wgsl",
+    "sky-sea/pbr.inc.wgsl"
 ]; 
 
 interface ShaderInclude {
@@ -43,8 +44,9 @@ function gatherFlags(filename: string, source: string): string[]
 const includeMappings = new Map<string,ShaderInclude>();
 includeFilenames.forEach(
     (filename) => {
-        const code = fs.readFileSync(shaderRoot+filename).toString();
-        includeMappings.set(filename, {
+        const path = fs.realpathSync(shaderRoot+filename);
+        const code = fs.readFileSync(path).toString();
+        includeMappings.set(path, {
             code: code,
             flags: gatherFlags(filename, code),
         });
@@ -221,6 +223,10 @@ export function packShaders(id: string, source: string) : string
 
     console.log(`Preprocessing shader ${id}`);
 
+    const includeWorkingPrefix = path.parse(id).dir;
+
+    let logIncludes = false;
+
     const sourceOut = source.split('\n')
         .map((line) => {
             if(line.startsWith(INCLUDE_PREFIX))
@@ -232,22 +238,29 @@ export function packShaders(id: string, source: string) : string
                 }
                 
                 const includeFilename = fragments.shift()!;
+                const resolvedPath = path.resolve(includeWorkingPrefix, includeFilename);
 
-                if(!includeMappings.has(includeFilename))
+                const includeSource = includeMappings.get(resolvedPath);
+                if(includeSource === undefined)
                 {
-                    console.error(`Unrecognized WGSL include: ${includeFilename}`);
-                    console.error(`Known are:`);
-                    includeMappings.forEach((value, key) => {
-                        console.error(`${key}`);
-                    })
+                    console.error(`Unrecognized WGSL include: ${resolvedPath} \n     Resolved as: ${resolvedPath}`);
+                    logIncludes = true;
                     return "";
                 }
 
-                return replaceConditionalBlocks(includeFilename, includeMappings.get(includeFilename)!, fragments);
+                return replaceConditionalBlocks(includeFilename, includeSource, fragments);
             }
 
             return line;
     }).join('\n');
+    
+    if (logIncludes)
+    {
+        console.error(`Absolute paths of known include(s) are:`);
+        includeMappings.forEach((value, key) => {
+            console.error(`    ${key}`);
+        })
+    }
     
     return sourceOut;
 }

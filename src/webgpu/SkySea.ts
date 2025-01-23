@@ -1,12 +1,12 @@
-import TransmittanceLUTPak from '../shaders/transmittance_LUT.wgsl';
-import MultiscatterLUTPak from '../shaders/multiscatter_LUT.wgsl';
-import SkyViewLUTPak from '../shaders/skyview_LUT.wgsl';
-import AtmosphereCameraPak from '../shaders/atmosphere_camera.wgsl';
-import { Controller as LilController, GUI as LilGUI } from "lil-gui";
-import FullscreenQuadPak from '../shaders/fullscreen_quad.wgsl';
-import HeightmapPak from '../shaders/heightmap.wgsl';
-import GerstnerPak from '../shaders/gerstner_heightmap.wgsl';
+import TransmittanceLUTPak from '../shaders/sky-sea/transmittance_LUT.wgsl';
+import MultiscatterLUTPak from '../shaders/sky-sea/multiscatter_LUT.wgsl';
+import SkyViewLUTPak from '../shaders/sky-sea/skyview_LUT.wgsl';
+import AtmosphereCameraPak from '../shaders/sky-sea/atmosphere_camera.wgsl';
+import FullscreenQuadPak from '../shaders/sky-sea/fullscreen_quad.wgsl';
+import HeightmapPak from '../shaders/sky-sea/heightmap.wgsl';
+import GerstnerPak from '../shaders/sky-sea/gerstner_heightmap.wgsl';
 
+import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
 import { mat4, Mat4, vec3, Vec3, vec4, Vec4 } from 'wgpu-matrix';
 

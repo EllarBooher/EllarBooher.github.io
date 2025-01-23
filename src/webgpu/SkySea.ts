@@ -3,7 +3,6 @@ import MultiscatterLUTPak from '../shaders/sky-sea/multiscatter_LUT.wgsl';
 import SkyViewLUTPak from '../shaders/sky-sea/skyview_LUT.wgsl';
 import AtmosphereCameraPak from '../shaders/sky-sea/atmosphere_camera.wgsl';
 import FullscreenQuadPak from '../shaders/sky-sea/fullscreen_quad.wgsl';
-import HeightmapPak from '../shaders/sky-sea/heightmap.wgsl';
 import GerstnerPak from '../shaders/sky-sea/gerstner_heightmap.wgsl';
 
 import { Controller as LilController, GUI as LilGUI } from "lil-gui";
@@ -594,7 +593,9 @@ interface GerstnerPassResources
     // heightmap: GPUTexture;
     // heightmapView: GPUTextureView;
 
-    displacementPipeline: GPUComputePipeline;
+    displacementCosinePipeline: GPUComputePipeline;
+    displacementGerstnerPipeline: GPUComputePipeline;
+
     heightmapPipeline: GPURenderPipeline;
 }
 
@@ -765,13 +766,29 @@ function CreateGerstnerPassResources(
 
     const shaderModule = device.createShaderModule({code: GerstnerPak, label});
 
-    const displacementPipeline = device.createComputePipeline({
+    const displacementCosinePipeline = device.createComputePipeline({
         layout: device.createPipelineLayout({
             bindGroupLayouts: [group0LayoutCompute, group1Layout],
         }),
         compute: {
             module: shaderModule,
             entryPoint: 'displaceVertices',
+            constants: {
+                0: 0,
+            }
+        },
+        label
+    });
+    const displacementGerstnerPipeline = device.createComputePipeline({
+        layout: device.createPipelineLayout({
+            bindGroupLayouts: [group0LayoutCompute, group1Layout],
+        }),
+        compute: {
+            module: shaderModule,
+            entryPoint: 'displaceVertices',
+            constants: {
+                0: 1,
+            }
         },
         label
     });
@@ -822,70 +839,9 @@ function CreateGerstnerPassResources(
         indices,
         // heightmap,
         // heightmapView,
-        displacementPipeline,
+        displacementCosinePipeline,
+        displacementGerstnerPipeline,
         heightmapPipeline,
-    };
-}
-
-interface HeightmapPassResources
-{
-    group1: GPUBindGroup;
-    pipeline: GPUComputePipeline;
-}
-
-function CreateHeightmapPassResources(
-    device: GPUDevice,
-    gbufferWriteGroupLayout: GPUBindGroupLayout,
-    cameraUBO: CameraUBO,
-    timeUBO: TimeUBO,
-)
-{
-    const label = "Heightmap Pass";
-
-    const group1Layout = device.createBindGroupLayout({                    
-        entries: [
-            {
-                binding: 0,
-                visibility: GPUShaderStage.COMPUTE,
-                buffer: {}
-            },
-            {
-                binding: 1,
-                visibility: GPUShaderStage.COMPUTE,
-                buffer: {}
-            }
-        ], label
-    });
-    const group1 = device.createBindGroup({
-        layout: group1Layout,
-        entries: [
-            {
-                binding: 0,
-                resource: {buffer: cameraUBO.buffer }
-            },
-            {
-                binding: 1,
-                resource: {buffer: timeUBO.buffer }
-            }
-        ]
-    });
-
-    const shaderModule = device.createShaderModule({code: HeightmapPak, label});
-
-    const pipeline = device.createComputePipeline({
-        layout: device.createPipelineLayout({
-            bindGroupLayouts: [gbufferWriteGroupLayout, group1Layout],
-        }),
-        compute: {
-            module: shaderModule,
-            entryPoint: 'renderHeightmap',
-        },
-        label
-    });
-
-    return {
-        group1,
-        pipeline,
     };
 }
 
@@ -1252,7 +1208,6 @@ class SkySeaApp implements RendererApp {
     transmittanceLUTPassResources: TransmittanceLUTPassResources;
     multiscatterLUTPassResources: MultiscatterLUTPassResources;
     skyviewLUTPassResources: SkyViewLUTPassResources;
-    heightmapPassResources: HeightmapPassResources;
     gerstnerPassResources: GerstnerPassResources;
     atmosphereCameraPassResources: AtmosphereCameraPassResources;
     fullscreenQuadPassResources: FullscreenQuadPassResources;
@@ -1503,6 +1458,7 @@ class SkySeaApp implements RendererApp {
             this.device, multiscatterLUTDimensions, 
             this.transmittanceLUTPassResources.view
         );
+
         this.skyviewLUTPassResources = CreateSkyViewLUTPassResources(
             this.device, skyviewLUTDimensions, 
             this.transmittanceLUTPassResources.view, 
@@ -1510,9 +1466,6 @@ class SkySeaApp implements RendererApp {
             this.celestialLightUBO,
         );
 
-        this.heightmapPassResources = CreateHeightmapPassResources(
-            this.device, this.gbuffer.writeGroupLayout, this.cameraUBO, this.timeUBO
-        );
         this.gerstnerPassResources = CreateGerstnerPassResources(
             this.device, this.cameraUBO, this.timeUBO,
         );
@@ -1729,7 +1682,9 @@ class SkySeaApp implements RendererApp {
         const timestampIndexMapping = new Map<FrametimeCategory, number>();
         timestampIndexMapping.set(FrametimeCategory.Heightmap, timestampQueryIndex);
 
-        switch(this.settings.heightmapWaveModel) {
+        switch(this.settings.heightmapWaveModel) 
+        {
+            case HeightmapWaveModel.Cosine:
             case HeightmapWaveModel.Gerstner: {
                 const gerstnerComputePassEncoder = commandEncoder.beginComputePass({
                     label: 'Gerstner Ocean Mesh Displacement',
@@ -1741,7 +1696,14 @@ class SkySeaApp implements RendererApp {
                         } 
                         : undefined, 
                 });
-                gerstnerComputePassEncoder.setPipeline(this.gerstnerPassResources.displacementPipeline);
+                if(this.settings.heightmapWaveModel == HeightmapWaveModel.Cosine)
+                {
+                    gerstnerComputePassEncoder.setPipeline(this.gerstnerPassResources.displacementCosinePipeline);
+                }
+                else
+                {
+                    gerstnerComputePassEncoder.setPipeline(this.gerstnerPassResources.displacementGerstnerPipeline);
+                }
                 gerstnerComputePassEncoder.setBindGroup(0, this.gerstnerPassResources.group0Compute);
                 gerstnerComputePassEncoder.setBindGroup(1, this.gerstnerPassResources.group1);
                 gerstnerComputePassEncoder.dispatchWorkgroups(
@@ -1787,7 +1749,8 @@ class SkySeaApp implements RendererApp {
                 gerstnerRenderPassEncoder.drawIndexed(this.gerstnerPassResources.indices.size / 4);
                 gerstnerRenderPassEncoder.end();
                 break;
-            }
+                }
+                /*
             case HeightmapWaveModel.Cosine: {
                 const heightmapPassEncoder = commandEncoder.beginComputePass({
                     label: "Heightmap",
@@ -1810,6 +1773,7 @@ class SkySeaApp implements RendererApp {
                 heightmapPassEncoder.end();
                 break;
             }
+                */
         }
 
         timestampIndexMapping.set(FrametimeCategory.SkyviewLUT, timestampQueryIndex);
@@ -1893,7 +1857,7 @@ class SkySeaApp implements RendererApp {
         
         if (this.frametimeQuery !== undefined && !this.frametimeQuery.mappingLock)
         {
-            const query = this.frametimeQuery!;
+            const query = this.frametimeQuery;
 
             this.frametimeQuery.mappingLock = true;
             this.frametimeQuery.readBuffer.mapAsync(GPUMapMode.READ, 0, this.frametimeQuery.readBuffer.size).then(() => {

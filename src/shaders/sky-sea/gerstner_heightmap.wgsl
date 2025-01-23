@@ -1,4 +1,4 @@
-// Displace a grid of vertices with Gerstner waves, then rasterize into a heightmap with a graphics pass
+// Displace a grid of vertices representing the ocean surface, then rasterize into a heightmap with a graphics pass
 
 /* --- begin ocean heightmap mesh displacement --- */
 
@@ -25,12 +25,12 @@ const WAVES = array<PlaneWave, WAVE_COUNT>(
     PlaneWave(
         0.50,
         25.0,
-        vec2<f32>(1.5, 2.0),
+        vec2<f32>(1.2, 2.0),
     ),
     PlaneWave(
         0.50,
         30.0,
-        vec2<f32>(0.5, 2.0),
+        vec2<f32>(0.8, 2.0),
     ),
     PlaneWave(
         0.50,
@@ -101,6 +101,51 @@ fn sampleGerstner(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplace
     return output;
 }
 
+fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplacementResult
+{
+    let wave_amplitude = (1.0 - smoothstep(0.0, WORLD_HALF_EXTENT_METERS, length(coords))) * wave.amplitude;
+    let wave_direction = normalize(wave.direction);
+    let wavelength = wave.wavelength;
+    
+    let wave_number = 2.0 * 3.141592653589793 / wavelength;
+
+    let gravity = 9.8;
+
+    // Dispersion relationship for deep ocean waves
+    // wave_speed = sqrt(gravity / wave_number)
+    // angular_frequency = wave_speed * wave_number
+    let angular_frequency = sqrt(gravity * wave_number);
+    
+    let wave_vector = wave_direction * wave_number;
+
+    let theta = dot(coords, wave_vector) - angular_frequency * time;
+    let sin_theta = sin(theta);
+    let cos_theta = cos(theta);
+
+    var output: WaveDisplacementResult;
+
+    output.displacement = vec3<f32>(
+        0.0, 
+        wave_amplitude * cos_theta, 
+        0.0
+    );
+
+    // partial derivatives computed exactly via the above formula
+    // Note these vectors are parallel, since wave only displaces in travel direction
+    output.tangent = vec3<f32>(
+        0.0,
+        - wave_amplitude * sin_theta * wave_vector.x,
+        0.0,
+    );
+    output.bitangent = vec3<f32>(
+        0.0,
+        - wave_amplitude * sin_theta * wave_vector.y,
+        0.0,
+    );
+
+    return output;
+}
+
 const VERTEX_DIMENSION = 2048u;
 const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 // const TRIANGLE_COUNT = 2u * (VERTEX_DIMENSION - 1u) * (VERTEX_DIMENSION - 1u);
@@ -111,6 +156,10 @@ const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 @group(0) @binding(1) var<storage, read_write> output_world_normals: array<vec4<f32>, VERTEX_COUNT>;
 // Indices are populated CPU side
 // @group(0) @binding(1) var<storage, read_write> output_indices: array<u32, INDEX_COUNT>;  
+
+@id(0) override wave_model: u32 = 1;
+const WAVE_MODEL_COSINE = 0;
+const WAVE_MODEL_GERSTNER = 1;
 
 @compute @workgroup_size(16, 16, 1)
 fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
@@ -133,7 +182,15 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 
     for (var i = 0u; i < WAVE_COUNT; i++)
     {
-        let result = sampleGerstner(WAVES[i], time, world_position_xz);
+        var result: WaveDisplacementResult;
+        switch wave_model {
+            case WAVE_MODEL_COSINE: {
+                result = sampleCosine(WAVES[i], time, world_position_xz);
+            }
+            default {
+                result = sampleGerstner(WAVES[i], time, world_position_xz);
+            }
+        }
 
         displaced_position += result.displacement;
         tangent += result.tangent;
@@ -172,6 +229,7 @@ struct VertexOut {
     @builtin(position) position : vec4<f32>,
     @location(1) world_normal : vec3<f32>,
     @location(2) color : vec3<f32>,
+    @location(3) camera_distance : f32,
 }
 
 @vertex
@@ -184,6 +242,7 @@ fn heightmapVertex(@builtin(vertex_index) index : u32) -> VertexOut
     output.position = b_camera.proj_view * world_position;
     output.world_normal = world_normals[index].xyz;
     output.color = vec3<f32>(WATER_COLOR);
+    output.camera_distance = distance(b_camera.position, world_position);
 
     return output; 
 }
@@ -199,7 +258,7 @@ fn heightmapFragment(frag_interpolated: VertexOut) -> FragmentOut
 {
     var output : FragmentOut;
 
-    output.color = vec4<f32>(frag_interpolated.color, 1.0);
+    output.color = vec4<f32>(frag_interpolated.color, frag_interpolated.camera_distance);
     output.world_normal = vec4<f32>(frag_interpolated.world_normal,0.0);
 
     return output;

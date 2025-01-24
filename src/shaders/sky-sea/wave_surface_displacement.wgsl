@@ -119,9 +119,9 @@ const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 
 const WAVE_COUNT = 6u;
 
-@id(0) override wave_model: u32 = 1;
-const WAVE_MODEL_COSINE = 0;
-const WAVE_MODEL_GERSTNER = 1;
+@id(0) override wave_model: u32 = 1u;
+const WAVE_MODEL_COSINE = 0u;
+const WAVE_MODEL_GERSTNER = 1u;
 
 // Vertices are in (x,y,z) world coordinates, so during rasterization you must swizzle y <-> z
 @group(0) @binding(0) var<storage, read_write> output_vertices: array<vec4<f32>, VERTEX_COUNT>;

@@ -1220,7 +1220,7 @@ enum WaveModel
     Gerstner,
 };
 
-const RENDER_SCALES = [0.25, 0.3333, 0.5, 0.75, 1.0, 1.5];
+const RENDER_SCALES = [0.25, 0.3333, 0.5, 0.75, 1.0, 1.5, 2.0, 4.0];
 
 enum FrametimeCategory
 {
@@ -1920,7 +1920,46 @@ class SkySeaApp implements RendererApp {
 
     handleResize(newWidth: number, newHeight: number)
     {
-        this.scaledSize = {width: newWidth * this.settings.renderScale, height: newHeight * this.settings.renderScale};
+        const newSize = {
+            width: newWidth * this.settings.renderScale, 
+            height: newHeight * this.settings.renderScale
+        };
+
+        const WEBGPU_MAX_DIMENSION = 8192;
+        const WEBGPU_MAX_BUFFER_BYTES = 268435456;
+        const BYTES_PER_RGBA32FLOAT = 16;
+
+        const validateSize = (width: number, height: number) => {
+            return width < WEBGPU_MAX_DIMENSION 
+            && height < WEBGPU_MAX_DIMENSION 
+            && (width * height * BYTES_PER_RGBA32FLOAT) < WEBGPU_MAX_BUFFER_BYTES;
+        };
+
+        if (!validateSize(newSize.width, newSize.height))
+        {
+            RENDER_SCALES.slice().reverse().some(value => {
+                if (validateSize(newWidth * value, newHeight * value))
+                {
+                    this.settings.renderScale = value;
+                    return true;
+                }
+            });
+            console.warn(
+                `During resize: Texture size (${newSize.width, newSize.height}) exceeds WebGPU guaranteed limit (8192, 8192).
+                Defaulting to highest possible render scale of ${this.settings.renderScale}`
+            );
+            this.scaledSize = {
+                width: newWidth * this.settings.renderScale, 
+                height: newHeight * this.settings.renderScale
+            };
+        }
+        else
+        {
+            this.scaledSize = newSize;
+        }
+
+        console.log(`Resizing to (${this.scaledSize.width},${this.scaledSize.height})`);
+
         this.rawSize = {width: newWidth, height: newHeight};
         this.gbuffer = CreateGBuffer(this.device, this.scaledSize, this.gbuffer);
 

@@ -10,44 +10,10 @@ const WAVE_NEUTRAL_PLANE = 1.0;
 
 struct PlaneWave
 {
+    direction: vec2<f32>,
     amplitude: f32,
     wavelength: f32,
-    direction: vec2<f32>,
 }
-
-const WAVE_COUNT = 6u;
-const WAVES = array<PlaneWave, WAVE_COUNT>(
-    PlaneWave(
-        0.50,
-        20.0,
-        vec2<f32>(1.0, 2.0),
-    ),
-    PlaneWave(
-        0.50,
-        25.0,
-        vec2<f32>(1.2, 2.0),
-    ),
-    PlaneWave(
-        0.50,
-        30.0,
-        vec2<f32>(0.8, 2.0),
-    ),
-    PlaneWave(
-        0.50,
-        25.0,
-        vec2<f32>(1.25, 2.0),
-    ),
-    PlaneWave(
-        0.25,
-        50.0,
-        vec2<f32>(-2.0, 1.0),
-    ),
-    PlaneWave(
-        0.25,
-        50.0,
-        vec2<f32>(0.0, 1.0),
-    ),
-);
 
 // When sampling multiple waves, these properties should be summed since we assume waves add linearly
 // The gradient distributes linearly, so sum all tangents and bitangent before crossing to produce normal
@@ -151,15 +117,19 @@ const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 // const TRIANGLE_COUNT = 2u * (VERTEX_DIMENSION - 1u) * (VERTEX_DIMENSION - 1u);
 // const INDEX_COUNT = 3u * TRIANGLE_COUNT;
 
-// Vertices are in (x,y,z) world coordinates, so during rasterization you must swizzle y <-> z
-@group(0) @binding(0) var<storage, read_write> output_vertices: array<vec4<f32>, VERTEX_COUNT>;
-@group(0) @binding(1) var<storage, read_write> output_world_normals: array<vec4<f32>, VERTEX_COUNT>;
-// Indices are populated CPU side
-// @group(0) @binding(1) var<storage, read_write> output_indices: array<u32, INDEX_COUNT>;  
+const WAVE_COUNT = 6u;
 
 @id(0) override wave_model: u32 = 1;
 const WAVE_MODEL_COSINE = 0;
 const WAVE_MODEL_GERSTNER = 1;
+
+// Vertices are in (x,y,z) world coordinates, so during rasterization you must swizzle y <-> z
+@group(0) @binding(0) var<storage, read_write> output_vertices: array<vec4<f32>, VERTEX_COUNT>;
+@group(0) @binding(1) var<storage, read_write> output_world_normals: array<vec4<f32>, VERTEX_COUNT>;
+@group(0) @binding(2) var<uniform> waves: array<PlaneWave, WAVE_COUNT>;
+
+@group(1) @binding(0) var<uniform> b_camera: CameraUBO;
+@group(1) @binding(1) var<uniform> b_time: TimeUBO;
 
 @compute @workgroup_size(16, 16, 1)
 fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
@@ -185,10 +155,10 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
         var result: WaveDisplacementResult;
         switch wave_model {
             case WAVE_MODEL_COSINE: {
-                result = sampleCosine(WAVES[i], time, world_position_xz);
+                result = sampleCosine(waves[i], time, world_position_xz);
             }
             default {
-                result = sampleGerstner(WAVES[i], time, world_position_xz);
+                result = sampleGerstner(waves[i], time, world_position_xz);
             }
         }
 
@@ -221,9 +191,6 @@ struct TimeUBO
 
 @group(0) @binding(0) var<storage> vertices: array<vec4<f32>, VERTEX_COUNT>;
 @group(0) @binding(1) var<storage> world_normals: array<vec4<f32>, VERTEX_COUNT>;
-
-@group(1) @binding(0) var<uniform> b_camera: CameraUBO;
-@group(1) @binding(1) var<uniform> b_time: TimeUBO;
 
 struct VertexOut {
     @builtin(position) position : vec4<f32>,

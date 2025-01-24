@@ -7,7 +7,7 @@ import WaveSurfaceDisplacementPak from '../shaders/sky-sea/wave_surface_displace
 
 import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
-import { mat4, Mat4, vec3, Vec3, vec4, Vec4 } from 'wgpu-matrix';
+import { mat4, Mat4, vec2, Vec2, vec3, Vec3, vec4, Vec4 } from 'wgpu-matrix';
 
 const transmittanceLUTDimensions = {width: 2048, height: 1024};
 
@@ -580,10 +580,23 @@ function CreateSkyViewLUTPassResources(
 // then a graphics pass for rasterizing these vertices
 interface WaveSurfaceDisplacementPassResources
 {
-    // Contains wave data
+    /*
+    @group(0) @binding(0) var<storage, read_write> output_vertices: array<vec4<f32>, VERTEX_COUNT>;
+    @group(0) @binding(1) var<storage, read_write> output_world_normals: array<vec4<f32>, VERTEX_COUNT>;
+    @group(0) @binding(2) var<uniform> waves: array<PlaneWave, WAVE_COUNT>;
+
+    @group(1) @binding(1) var<uniform> b_time: TimeUBO;
+    */
     group0Compute: GPUBindGroup;
+
+    /*
+    @group(0) @binding(0) var<storage> vertices: array<vec4<f32>, VERTEX_COUNT>;
+    @group(0) @binding(1) var<storage> world_normals: array<vec4<f32>, VERTEX_COUNT>;
+
+    @group(1) @binding(0) var<uniform> b_camera: CameraUBO;
+    */
     group0Graphics: GPUBindGroup;
-    // Camera/time/other global buffers
+
     group1: GPUBindGroup;
 
     vertices: GPUBuffer;
@@ -632,6 +645,13 @@ function CreateWaveSurfaceDisplacementPassResources(
         usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
     });
 
+    interface PlaneWave
+    {
+        direction: Vec2,
+        amplitude: number,
+        wavelength: number,
+    };
+
     // Could use instancing instead of duplicating the indices, since these are all a bunch of quads
     const indicesSource = new Uint32Array(INDEX_COUNT);
     let indicesSourceOffset = 0;
@@ -659,6 +679,79 @@ function CreateWaveSurfaceDisplacementPassResources(
     }
     device.queue.writeBuffer(indices, 0, indicesSource, 0, indicesSource.length);
 
+
+    const WAVE_COUNT = 6;
+    const WAVE_SIZE_FLOATS = 4;
+    const WAVE_SIZE_BYTES = 4 * WAVE_SIZE_FLOATS;
+    const waves = device.createBuffer({
+        size: WAVE_COUNT * WAVE_SIZE_BYTES,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
+    });
+
+    // We ensure that the waves can loop, and determine this loop period
+    // To ensure this, the phase speeds must be an integer ratio
+    // Our model uses the dispersion relationship for deep ocean waves:
+    // c := wave speed
+    // g := gravity = 9.8
+    // k := wave number = wavelength / 2pi
+    // T := period in seconds
+    //
+    // c = sqrt(g * k) = sqrt(g * wavelength / 2pi)
+    // T = wavelength / c = sqrt(wavelength * 2pi / g)
+    // 
+    // Thus we pick some base largest wavelength to determine the animation period
+    // Then, all smaller periods must be T/n for some integer n.
+    // So all smaller wavelengths are wavelength / n^2 for some integer n. 
+    //
+    // Note: we do not actually need to render the largest wave, this just ensures that the periods work out.
+
+    const gravity = 9.8;
+    const animationPeriod = 60.0;
+    // ~5615 meter wavelength
+    const baseWavelength = animationPeriod * animationPeriod * gravity / (2.0 * Math.PI);
+
+    const wavesSource = new Array<PlaneWave>(
+        {
+            direction: vec2.create(1.0, 2.0),
+            amplitude: 0.50,
+            wavelength: baseWavelength / (16.0 * 16.0),
+        },
+        {
+            direction: vec2.create(1.2, 2.0),
+            amplitude: 0.50,
+            wavelength: baseWavelength / (14.0 * 14.0),
+        },
+        {
+            direction: vec2.create(0.8, 2.0),
+            amplitude: 0.50,
+            wavelength: baseWavelength / (12.0 * 12.0),
+        },
+        {
+            direction: vec2.create(1.25, 2.0),
+            amplitude: 0.50,
+            wavelength: baseWavelength / (16.0 * 16.0),
+        },
+        {
+            direction: vec2.create(-2.0, 1.0),
+            amplitude: 0.1,
+            wavelength: baseWavelength / (19.0 * 19.0),
+        },
+        {
+            direction: vec2.create(0.0, 1.0),
+            amplitude: 0.1,
+            wavelength: baseWavelength / (19.0 * 19.0),
+        },
+    );
+    const wavesFloats = new Float32Array(WAVE_COUNT * WAVE_SIZE_FLOATS);
+    var wavesFloatsIndex = 0;
+    wavesSource.forEach(value => {
+        wavesFloats.set(value.direction, wavesFloatsIndex);
+        wavesFloats[wavesFloatsIndex + 2] = value.amplitude;
+        wavesFloats[wavesFloatsIndex + 3] = value.wavelength;
+        wavesFloatsIndex += 4;
+    });
+    device.queue.writeBuffer(waves, 0, wavesFloats);
+
     const group0LayoutCompute = device.createBindGroupLayout({
         entries: [
             {
@@ -670,7 +763,12 @@ function CreateWaveSurfaceDisplacementPassResources(
                 binding: 1, 
                 visibility: GPUShaderStage.COMPUTE,
                 buffer: {type: 'storage'}
-            }
+            },
+            {
+                binding: 2,
+                visibility: GPUShaderStage.COMPUTE,
+                buffer: {type: 'uniform'}
+            },
         ],
         label,
     });
@@ -680,6 +778,7 @@ function CreateWaveSurfaceDisplacementPassResources(
         entries: [
             {binding: 0, resource: {buffer: vertices}},
             {binding: 1, resource: {buffer: worldNormals}},
+            {binding: 2, resource: {buffer: waves}},
         ],
         label,
     });
@@ -1580,7 +1679,7 @@ class SkySeaApp implements RendererApp {
     updateTime(deltaTimeMilliseconds: number)
     {
         this.timeUBO.data.time_seconds += deltaTimeMilliseconds / 1000.0;
-        if(this.timeUBO.data.time_seconds > 400.0)
+        if(this.timeUBO.data.time_seconds > 60.0)
         {
             this.timeUBO.data.time_seconds = 0.0;
         }
@@ -1713,7 +1812,7 @@ class SkySeaApp implements RendererApp {
                 surfaceRasterizationPassEncoder.drawIndexed(this.waveSurfaceDisplacementPassResources.indices.size / 4);
                 surfaceRasterizationPassEncoder.end();
                 break;
-                }
+            }
         }
 
         timestampIndexMapping.set(FrametimeCategory.SkyviewLUT, timestampQueryIndex);

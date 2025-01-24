@@ -8,6 +8,7 @@ interface SampleEntry
     // GPUAdapter requires all desired features, optional or not, to be provided at creation time. So we track both and fail when any features in requiredFeatures are missing.
     requiredFeatures: ReadonlySet<GPUFeatureName>,
     optionalFeatures: ReadonlySet<GPUFeatureName>,
+    description: string,
     create: RendererAppConstructor,
 };
 export const defaultSample = {
@@ -31,12 +32,14 @@ export const defaultSample = {
         "clip-distances",
         "dual-source-blending",
     ]),
+    description: 'Tests WebGPU functionality with a simple spinning cube.',
     create: HelloCube,
 } satisfies SampleEntry;
 export const samplesByQueryParam = new Map<string, SampleEntry>([
     ["hello-cube", defaultSample],
     ["sky-sea", {
         name: "Sky and Sea",
+        description: "Real-time rendering of a dynamic sun over the open ocean, with various models for surface waves and raymarched atmospheric scattering.",
         requiredFeatures: new Set(['float32-filterable']),
         optionalFeatures: new Set(['timestamp-query']),
         create: SkySea,

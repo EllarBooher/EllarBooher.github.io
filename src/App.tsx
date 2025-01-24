@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import './App.css';
 import { useNavigate } from "react-router";
+import { samplesByQueryParam } from './webgpu/Samples';
 
 const emailLink = <a target="_blank" rel="noreferrer" href="mailto:estelle.booher@gmail.com">estelle.booher@gmail.com</a>;
 const githubLink = <a target="_blank" rel="noreferrer" href="https://github.com/EllarBooher">https://github.com/EllarBooher</a>;
@@ -56,6 +57,54 @@ const DisplayCard = memo(function DisplayCard({
 });
 
 function App() {
+  const webGPUCards = new Array();
+  samplesByQueryParam.forEach((value, key) => {
+    webGPUCards.push(<DisplayCard 
+      key={key}
+      hyperlink={`/webgpu-samples?sample=${key}`} 
+      externalLink={false}
+      thumbnailAssets={[]}
+      title={value.name} 
+      description={value.description}
+    />)
+  });
+
+  const offlineCards = new Array(
+    <DisplayCard
+      key='Syzygy' 
+      hyperlink={`https://github.com/EllarBooher/Syzygy`} 
+      thumbnailAssets={[ new URL('./assets/syzygy1.png', import.meta.url) ]}
+      title={`Syzygy`} 
+      description={`
+        A sandbox renderer I started to study C++ and Vulkan. 
+        It aims to be a testbed of various features and techniques.
+      `}
+    />,
+    <DisplayCard 
+      key='SSAO'
+      hyperlink={`https://github.com/EllarBooher/VulkanTemplate/tree/SSAO`} 
+      thumbnailAssets={[ new URL('./assets/ssao1.png', import.meta.url) ]}
+      title={`SSAO`} 
+      description={`
+        An implementation of Screen-Space Ambient Occlusion written in C++ with Vulkan.
+      `}
+    />
+  );
+
+  const videogameCards = new Array(
+    <DisplayCard 
+      key='Snail Blazer'
+      hyperlink={`https://ellarbooher.itch.io/snail-blazer`}
+      thumbnailAssets={[ new URL('./assets/snailblazer1.png', import.meta.url), new URL('./assets/snailblazer2.png', import.meta.url)]}
+      title={`Snail Blazer`}
+      description={`
+        A short bullet-hell made for the Bullet Hell Jam 2023 on itch.io. 
+        The player primarily moves via grappling on enemy projectiles and the environment, 
+        instead of the conventional WASD-style of movement.
+      `}
+    />
+  );
+
   return (
     <div className="App">
       <div className="website-main">
@@ -70,49 +119,18 @@ function App() {
           <br/>
           To contact me, please email at {emailLink}.
           <br/>
-          <h1>WebGPU</h1>
+          <h1>In-Browser WebGPU Samples</h1>
           <div className="DisplayGrid">
-            <DisplayCard 
-              hyperlink={`/webgpu-samples?sample=hello-cube`} 
-              externalLink={false}
-              thumbnailAssets={[]}
-              title={`Hello Cube`} 
-              description={`
-                Test of WebGPU.
-              `}
-            />
+            {webGPUCards}
           </div>
-          <h1>Computer Graphics Offline</h1>
+          <h1>Offline Computer Graphics</h1>
           <div className="DisplayGrid">
-            <DisplayCard 
-              hyperlink={`https://github.com/EllarBooher/Syzygy`} 
-              thumbnailAssets={[ new URL('./assets/syzygy1.png', import.meta.url) ]}
-              title={`Syzygy`} 
-              description={`
-                A sandbox renderer I started to study C++ and Vulkan. 
-                It aims to be a testbed of various features and techniques.
-              `}
-            />
-            <DisplayCard 
-              hyperlink={`https://github.com/EllarBooher/VulkanTemplate/tree/SSAO`} 
-              thumbnailAssets={[ new URL('./assets/ssao1.png', import.meta.url) ]}
-              title={`SSAO`} 
-              description={`
-                An implementation of Screen-Space Ambient Occlusion.
-              `}
-            />
+            {offlineCards}
           </div>
           <h1>Video Games</h1>
-          <DisplayCard 
-            hyperlink={`https://ellarbooher.itch.io/snail-blazer`}
-            thumbnailAssets={[ new URL('./assets/snailblazer1.png', import.meta.url), new URL('./assets/snailblazer2.png', import.meta.url)]}
-            title={`Snail Blazer`}
-            description={`
-              A short bullet-hell made for the Bullet Hell Jam 2023 on itch.io. 
-              The player primarily moves via grappling on enemy projectiles and the environment, 
-              instead of the conventional WASD-style of movement.
-            `}
-          />
+          <div className="DisplayGrid">
+            {videogameCards}
+          </div>
         </div>
       </div>
       <footer className="website-footer">

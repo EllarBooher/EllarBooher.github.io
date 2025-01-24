@@ -34,6 +34,7 @@ code {
   max-width: 90%;
   display: flex;
   flex-direction: column;
+  align-items: center;
   padding: 1em;
   background-color: hsl(199, 35%, 45%);
   border-radius: 1em;

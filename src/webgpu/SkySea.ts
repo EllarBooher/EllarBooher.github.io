@@ -1945,7 +1945,7 @@ class SkySeaApp implements RendererApp {
                 }
             });
             console.warn(
-                `During resize: Texture size (${newSize.width, newSize.height}) exceeds WebGPU guaranteed limit (8192, 8192).
+                `During resize: Texture size (${newSize.width},${newSize.height}) exceeds WebGPU guaranteed limit (8192, 8192).
                 Defaulting to highest possible render scale of ${this.settings.renderScale}`
             );
             this.scaledSize = {

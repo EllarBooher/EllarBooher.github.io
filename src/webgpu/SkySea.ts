@@ -710,25 +710,27 @@ function CreateWaveSurfaceDisplacementPassResources(
     // ~5615 meter wavelength
     const baseWavelength = animationPeriod * animationPeriod * gravity / (2.0 * Math.PI);
 
+    // Arbitrarily picked wavelengths/directions/amplitudes
+    // Loops may occur but I did not see any with these parameters
     const wavesSource = new Array<PlaneWave>(
         {
             direction: vec2.create(1.0, 2.0),
-            amplitude: 0.50,
+            amplitude: 0.75,
             wavelength: baseWavelength / (16.0 * 16.0),
         },
         {
             direction: vec2.create(1.2, 2.0),
-            amplitude: 0.50,
+            amplitude: 0.75,
             wavelength: baseWavelength / (14.0 * 14.0),
         },
         {
             direction: vec2.create(0.8, 2.0),
-            amplitude: 0.50,
+            amplitude: 0.75,
             wavelength: baseWavelength / (12.0 * 12.0),
         },
         {
             direction: vec2.create(1.25, 2.0),
-            amplitude: 0.50,
+            amplitude: 0.75,
             wavelength: baseWavelength / (16.0 * 16.0),
         },
         {

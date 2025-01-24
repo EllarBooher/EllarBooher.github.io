@@ -111,7 +111,7 @@ export const RendererComponent = memo(function RendererComponent() {
     const [app, setApp] = useState<RendererApp>();
     const [error, setError] = useState('');
     const [initialized, setInitialized] = useState(false);
-    const [searchParams, _setSearchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
 
     const getSample = useCallback(() => {
         const sampleID = searchParams.get("sample");
@@ -208,7 +208,43 @@ export const RendererComponent = memo(function RendererComponent() {
         {`Loading...`}
     </p>
 
-    return <>
+    const sampleSidebarLinks = new Array();
+    samplesByQueryParam.forEach((value, key) => {
+        sampleSidebarLinks.push(
+            <button 
+                className='sidebar-button'
+                onClick={(e) => {setSearchParams({'sample': key})}} 
+                key={key}> 
+                {value.name}
+            </button>
+        )
+    });
+
+    const sampleSidebar = <div style={{
+        color: 'hsl(204, 50%, 95%)', 
+        flexShrink: 0,
+        whiteSpace: 'pre-line', 
+        fontSize: '1.0em',
+    }}>
+        <div style={{paddingLeft: '0.5em', paddingRight: '0.5em'}}>
+            <div style={{padding: '0.5em'}}>Samples</div>
+            <hr/>
+        </div>
+        <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+        }}>
+            {sampleSidebarLinks}
+        </div>
+    </div>;
+
+    return <div style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'row',
+    }}>
+        { sampleSidebar }
         {
             initialized 
                 ? <>
@@ -218,5 +254,5 @@ export const RendererComponent = memo(function RendererComponent() {
                 </> 
                 : <>{loadingBlock}</>
         }
-    </>
+    </div>
 });

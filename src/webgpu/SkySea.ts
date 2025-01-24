@@ -745,7 +745,7 @@ function CreateWaveSurfaceDisplacementPassResources(
         },
     );
     const wavesFloats = new Float32Array(WAVE_COUNT * WAVE_SIZE_FLOATS);
-    var wavesFloatsIndex = 0;
+    let wavesFloatsIndex = 0;
     wavesSource.forEach(value => {
         wavesFloats.set(value.direction, wavesFloatsIndex);
         wavesFloats[wavesFloatsIndex + 2] = value.amplitude;

@@ -103,10 +103,10 @@ class CameraUBO extends UBO
     }
 }
 
-interface FullscreenQuadUBOData
+class FullscreenQuadUBOData
 {
-    color_gain: Vec4,
-    vertex_scale: Vec4,
+    color_gain: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
+    vertex_scale: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
 }
 
 class FullscreenQuadUBO extends UBO
@@ -573,6 +573,65 @@ function CreateSkyViewLUTPassResources(
         pipeline: skyviewLUTPipeline,
         texture: skyviewLUT,
         view: skyviewLUTView,
+    }
+}
+
+class FFTWaveSpectrumResources
+{
+    // We produce a discrete spectrum of waves, for which the various values will be stored in square textures
+    // This dimension determines the diameter of that square, so the total number of frequencies we produce
+    // Our spectrum is discrete so we can apply an IDFT algorithm to determine the displacement when rendering the sums of these waves  
+    // (x,z) position in this grid uniquely identifies a wave with wave vector k = (k_x,k_z)
+    spectrumDimension: number;
+    
+    // A two-channel texture of pairs of gaussian random variables, used to generate the amplitudes of our waves
+    gaussianNoise: GPUTexture;
+    gaussianNoiseView: GPUTextureView;
+
+    constructor(device: GPUDevice)
+    {
+        const GAUSSIAN_NOISE_FORMAT: GPUTextureFormat = 'rg32float';
+        const SPECTRUM_DIMENSION = 2048;
+
+        this.spectrumDimension = SPECTRUM_DIMENSION;
+        this.gaussianNoise = device.createTexture({
+            label: 'FFT Wave Gaussian Noise', 
+            format: GAUSSIAN_NOISE_FORMAT, 
+            size: {width: this.spectrumDimension, height: this.spectrumDimension},
+            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING
+        });
+        this.gaussianNoiseView = this.gaussianNoise.createView();
+
+        const FLOAT32_PER_GAUSSIAN_NOISE_TEXEL = 2;
+        const BYTES_PER_TEXEL = 8;
+        const BYTES_PER_ROW = BYTES_PER_TEXEL  * this.spectrumDimension;
+        let randomNumbers = new Float32Array(this.spectrumDimension * this.spectrumDimension * FLOAT32_PER_GAUSSIAN_NOISE_TEXEL);
+
+        for(let i = 0; i < randomNumbers.length; i++)
+        {
+            // Box-Muller transform two uniform random numbers to gaussian pair
+            // https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
+            const u_0 = Math.random();
+            const u_1 = Math.random();
+            
+            const amplitude = Math.sqrt(-2.0 * Math.log(u_0));
+            const theta = 2.0 * Math.PI * u_1;
+            
+            // We cannot use both gaussians in the pair since they are dependent
+            // It may be possible to use the second far away in the texture, but this is a single texture generated
+            // on the CPU so it is not a bottleneck
+            const z_0 = amplitude * Math.cos(theta);
+            // const z_1 = amplitude * Math.sin(theta);
+
+            randomNumbers[i] = z_0;
+        }
+
+        device.queue.writeTexture(
+            {texture: this.gaussianNoise}, 
+            randomNumbers, 
+            {bytesPerRow: BYTES_PER_ROW},
+            {width: this.gaussianNoise.width, height: this.gaussianNoise.height},
+        );
     }
 }
 
@@ -1089,7 +1148,7 @@ interface FullscreenQuadPassResources
 // For showing a single texture stretched across the screen
 function CreateFullscreenQuadPassResources(
     device: GPUDevice,
-    textures: Map<RenderOutput, {view: GPUTextureView, defaultUBO: FullscreenQuadUBOData}>,
+    textures: Map<RenderOutput, GPUTextureView>,
     outputFormat: GPUTextureFormat,
 )
 {
@@ -1116,7 +1175,7 @@ function CreateFullscreenQuadPassResources(
 
     const group0Sampler = device.createSampler({magFilter: 'linear', minFilter: 'linear'});
 
-    textures.forEach(({view, defaultUBO}, key) => {
+    textures.forEach((view, key) => {
         group0ByOutputTexture.set(key, device.createBindGroup({
             layout: group0Layout,
             entries: [
@@ -1131,7 +1190,7 @@ function CreateFullscreenQuadPassResources(
             ],
             label: label + key.toString()
         }))
-        uboDataByOutputTexture.set(key, defaultUBO);
+        uboDataByOutputTexture.set(key, new FullscreenQuadUBOData());
     });
 
     const ubo = new FullscreenQuadUBO(device);
@@ -1202,16 +1261,17 @@ enum RenderOutput {
     Scene,
     GBufferColor,
     GBufferNormal,
+    FFTWaveSpectrumGaussianNoise,
 };
 
-interface OutputTexturePostProcessSettings
+class OutputTexturePostProcessSettings
 {
-    flip: boolean;
+    flip: boolean = false;
     color_gain: {
         r: number,
         g: number,
         b: number,
-    };
+    } = {r: 1.0, g: 1.0, b: 1.0};
 };
 
 enum WaveModel
@@ -1273,6 +1333,7 @@ class SkySeaApp implements RendererApp {
     transmittanceLUTPassResources: TransmittanceLUTPassResources;
     multiscatterLUTPassResources: MultiscatterLUTPassResources;
     skyviewLUTPassResources: SkyViewLUTPassResources;
+    fftWaveSpectrumResources: FFTWaveSpectrumResources;
     waveSurfaceDisplacementPassResources: WaveSurfaceDisplacementPassResources;
     atmosphereCameraPassResources: AtmosphereCameraPassResources;
     fullscreenQuadPassResources: FullscreenQuadPassResources;
@@ -1339,6 +1400,7 @@ class SkySeaApp implements RendererApp {
                 'Skyview LUT': RenderOutput.SkyviewLUT,
                 'GBuffer Color': RenderOutput.GBufferColor,
                 'GBuffer Normal': RenderOutput.GBufferNormal,
+                'Wave Spectrum Gaussian Noise': RenderOutput.FFTWaveSpectrumGaussianNoise,
             }
         ).name('Render Output').listen();
         gui.add(this.settings, 'renderScale', RENDER_SCALES).name('Render Resolution Scale').decimals(1).onFinishChange((_v: number) => {
@@ -1378,30 +1440,26 @@ class SkySeaApp implements RendererApp {
         outputTextureFolder.add(this.settings.currentOutputTextureSettings.color_gain, 'r').name('R').min(0.0).max(100.0).listen();
         outputTextureFolder.add(this.settings.currentOutputTextureSettings.color_gain, 'g').name('G').min(0.0).max(100.0).listen();
         outputTextureFolder.add(this.settings.currentOutputTextureSettings.color_gain, 'b').name('B').min(0.0).max(100.0).listen();
-        outputTextureController.onChange((v: RenderOutput) => {
-            if(this.fullscreenQuadPassResources.uboDataByOutputTexture.has(v))
-            {
-                // UI is bound to suboject so we can't just reassign in one statement, need to recursively set fields
-                this.settings.currentOutputTextureSettings.flip = false;
-                this.settings.currentOutputTextureSettings.color_gain.r = 1.0;
-                this.settings.currentOutputTextureSettings.color_gain.g = 1.0;
-                this.settings.currentOutputTextureSettings.color_gain.b = 1.0;
-    
-                if(this.settings.outputTextureSettings.has(v))
-                {
-                    const newSettings = this.settings.outputTextureSettings.get(v)!;
-                    this.settings.currentOutputTextureSettings.flip = newSettings.flip;
-                    this.settings.currentOutputTextureSettings.color_gain.r = newSettings.color_gain.r;
-                    this.settings.currentOutputTextureSettings.color_gain.g = newSettings.color_gain.g;
-                    this.settings.currentOutputTextureSettings.color_gain.b = newSettings.color_gain.b;
-                }
+        outputTextureController.onChange((newValue: RenderOutput,) => {
+            const previousValue = outputTextureController._listenPrevValue;
 
-                outputTextureFolder.show();
-            }
-            else
+            if(!this.settings.outputTextureSettings.has(previousValue))
             {
-                outputTextureFolder.hide();
+                this.settings.outputTextureSettings.set(previousValue, new OutputTexturePostProcessSettings())
             }
+
+            const oldSettings = this.settings.outputTextureSettings.get(previousValue)!;
+            oldSettings.flip = this.settings.currentOutputTextureSettings.flip;
+            Object.assign(oldSettings.color_gain, this.settings.currentOutputTextureSettings.color_gain);
+
+            if(!this.settings.outputTextureSettings.has(newValue))
+            {
+                this.settings.outputTextureSettings.set(newValue, new OutputTexturePostProcessSettings())
+            }
+            
+            const newSettings = this.settings.outputTextureSettings.get(newValue)!;
+            this.settings.currentOutputTextureSettings.flip = newSettings.flip;
+            Object.assign(this.settings.currentOutputTextureSettings.color_gain, newSettings.color_gain);
         });
 
         const performanceFolder = gui.addFolder('Performance').close();
@@ -1445,6 +1503,11 @@ class SkySeaApp implements RendererApp {
                         color_gain: {r: 1.0, g: 1.0, b: 1.0}
                     }],
                 [RenderOutput.GBufferNormal, 
+                    {
+                        flip: false,
+                        color_gain: {r: 1.0, g: 1.0, b: 1.0}
+                    }],
+                [RenderOutput.FFTWaveSpectrumGaussianNoise,
                     {
                         flip: false,
                         color_gain: {r: 1.0, g: 1.0, b: 1.0}
@@ -1531,6 +1594,8 @@ class SkySeaApp implements RendererApp {
             this.celestialLightUBO,
         );
 
+        this.fftWaveSpectrumResources = new FFTWaveSpectrumResources(this.device);
+
         this.waveSurfaceDisplacementPassResources = CreateWaveSurfaceDisplacementPassResources(
             this.device, this.cameraUBO, this.timeUBO,
         );
@@ -1554,37 +1619,14 @@ class SkySeaApp implements RendererApp {
 
         this.fullscreenQuadPassResources = CreateFullscreenQuadPassResources(
             this.device, 
-            new Map<RenderOutput, {view: GPUTextureView, defaultUBO: FullscreenQuadUBOData}>([
-                [RenderOutput.Scene,
-                    {
-                        view: this.atmosphereCameraPassResources.outputColorView,
-                        defaultUBO: {vertex_scale: vec4.create(1.0,1.0,1.0,1.0), color_gain: vec4.create(1.0,1.0,1.01,.0) }
-                    }],
-                [RenderOutput.TransmittanceLUT, 
-                    { 
-                        view: this.transmittanceLUTPassResources.view, 
-                        defaultUBO: {vertex_scale: vec4.create(1.0,1.0,1.0,1.0), color_gain: vec4.create(1.0,1.0,1.0,1.0) } 
-                    }], 
-                [RenderOutput.MultiscatterLUT, 
-                    { 
-                        view: this.multiscatterLUTPassResources.view, 
-                        defaultUBO: {vertex_scale: vec4.create(1.0,1.0,1.0,1.0), color_gain: vec4.create(15.0,15.0,15.0,15.0) }
-                    }], 
-                [RenderOutput.SkyviewLUT, 
-                    { 
-                        view: this.skyviewLUTPassResources.view, 
-                        defaultUBO: {vertex_scale: vec4.create(1.0,-1.0,1.0,1.0), color_gain: vec4.create(8.0,8.0,8.0,8.0) }
-                    }],
-                [RenderOutput.GBufferColor,
-                    {
-                        view: this.gbuffer.colorWithDepthInAlphaView,
-                        defaultUBO: {vertex_scale: vec4.create(1.0,1.0,1.0,1.0), color_gain: vec4.create(1.0,1.0,1.0,1.0)}
-                    }],
-                [RenderOutput.GBufferNormal,
-                    {
-                        view: this.gbuffer.normalView,
-                        defaultUBO: {vertex_scale: vec4.create(1.0,1.0,1.0,1.0), color_gain: vec4.create(1.0,1.0,1.0,1.0)}
-                    }],
+            new Map<RenderOutput, GPUTextureView>([
+                [RenderOutput.Scene, this.atmosphereCameraPassResources.outputColorView],
+                [RenderOutput.TransmittanceLUT, this.transmittanceLUTPassResources.view],
+                [RenderOutput.MultiscatterLUT, this.multiscatterLUTPassResources.view], 
+                [RenderOutput.SkyviewLUT, this.skyviewLUTPassResources.view],
+                [RenderOutput.GBufferColor, this.gbuffer.colorWithDepthInAlphaView],
+                [RenderOutput.GBufferNormal, this.gbuffer.normalView],
+                [RenderOutput.FFTWaveSpectrumGaussianNoise, this.fftWaveSpectrumResources.gaussianNoiseView],
             ]), 
             this.presentFormat
         );

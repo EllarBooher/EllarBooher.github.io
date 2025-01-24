@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState, useRef, memo } from "react";
+import { useEffect, useCallback, useState, useRef, memo, ReactElement } from "react";
 import { useSearchParams } from "react-router";
 import { defaultSample, samplesByQueryParam } from "./Samples";
 import { RendererApp, getDevice } from "./RendererApp";
@@ -208,12 +208,12 @@ export const RendererComponent = memo(function RendererComponent() {
         {`Loading...`}
     </p>
 
-    const sampleSidebarLinks = new Array();
+    const sampleSidebarLinks: ReactElement[] = [];
     samplesByQueryParam.forEach((value, key) => {
         sampleSidebarLinks.push(
             <button 
                 className='sidebar-button'
-                onClick={(e) => {setSearchParams({'sample': key})}} 
+                onClick={() => {setSearchParams({'sample': key})}} 
                 key={key}> 
                 {value.name}
             </button>

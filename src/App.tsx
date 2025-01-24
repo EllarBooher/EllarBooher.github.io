@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, ReactElement } from 'react';
 import './App.css';
 import { useNavigate } from "react-router";
 import { samplesByQueryParam } from './webgpu/Samples';
@@ -57,7 +57,7 @@ const DisplayCard = memo(function DisplayCard({
 });
 
 function App() {
-    const webGPUCards = new Array();
+    const webGPUCards: ReactElement[] = [];
     samplesByQueryParam.forEach((value, key) => {
         webGPUCards.push(<DisplayCard 
             key={key}
@@ -69,7 +69,7 @@ function App() {
         />)
     });
 
-    const offlineCards = new Array(
+    const offlineCards = [
         <DisplayCard
             key='Syzygy' 
             hyperlink={`https://github.com/EllarBooher/Syzygy`} 
@@ -89,9 +89,9 @@ function App() {
                 An implementation of Screen-Space Ambient Occlusion written in C++ with Vulkan.
             `}
         />
-    );
+    ];
 
-    const videogameCards = new Array(
+    const videogameCards = [
         <DisplayCard 
             key='Snail Blazer'
             hyperlink={`https://ellarbooher.itch.io/snail-blazer`}
@@ -103,7 +103,7 @@ function App() {
                 instead of the conventional WASD-style of movement.
             `}
         />
-    );
+    ];
 
     return (
         <div className="App">

@@ -1,78 +1,78 @@
 .App {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  margin: 0;
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+	margin: 0;
 }
 
 body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+	margin: 0;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+		"Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+		sans-serif;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
 }
 
 html {
-  background-color: rgb(2,48,71);
+	background-color: rgb(2, 48, 71);
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+	font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
+		monospace;
 }
 
 .DisplayGrid {
-  display: flex;
-  gap: 1em;
-  flex-wrap: wrap;
+	display: flex;
+	gap: 1em;
+	flex-wrap: wrap;
 }
 
 .DisplayCard {
-  width: 30em;
-  max-width: 90%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 1em;
-  background-color: hsl(199, 35%, 45%);
-  border-radius: 1em;
-  transition: 0.3s;
-  color: rgb(255, 255, 255);
-  cursor: pointer;
+	width: 30em;
+	max-width: 90%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 1em;
+	background-color: hsl(199, 35%, 45%);
+	border-radius: 1em;
+	transition: 0.3s;
+	color: rgb(255, 255, 255);
+	cursor: pointer;
 }
 
 .DisplayCard:hover {
-  background-color: hsl(199,35%, 50%);
+	background-color: hsl(199, 35%, 50%);
 }
 
 .DisplayCard:visited {
-  color: rgb(255, 255, 255);
+	color: rgb(255, 255, 255);
 }
 
 .DisplayCard-name {
-  font-size: 1.5em;
-  font-weight: bold;
+	font-size: 1.5em;
+	font-weight: bold;
 }
 
 .DisplayCard-body {
-  padding: 0.5em;
+	padding: 0.5em;
 }
 
 .DisplayCard-thumbnails {
-  display: flex;
-  margin-top: 1em;
-  flex-direction: row;
+	display: flex;
+	margin-top: 1em;
+	flex-direction: row;
 }
 
 .DisplayCard-thumbnail {
-  border-radius: 0.75em;
-  padding: 0.15em;
-  overflow: hidden;
+	border-radius: 0.75em;
+	padding: 0.15em;
+	overflow: hidden;
 }
 
 .DisplayCard-image {
-  max-width: 100%;
-  display: block;
+	max-width: 100%;
+	display: block;
 }

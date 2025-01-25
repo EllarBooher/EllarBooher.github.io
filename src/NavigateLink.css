@@ -1,10 +1,10 @@
 .nav-button {
-    padding: 0;
-    border: none;
-    background: none;
-    color: inherit;
+	padding: 0;
+	border: none;
+	background: none;
+	color: inherit;
 }
 
 .nav-button:hover {
-    color: hsl(201, 9%, 63%);
+	color: hsl(201, 9%, 63%);
 }

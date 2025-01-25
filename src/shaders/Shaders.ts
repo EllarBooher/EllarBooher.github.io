@@ -1,57 +1,60 @@
-import fs from 'fs';
-import path from 'path';
+import fs from "fs";
+import path from "path";
 
 const shaderRoot = "src/shaders/";
 
 // TODO: Load includes upon every shader compile, but cache them and check if the version on disk is newer. This is needed for hot reloading
 const includeFilenames = [
-    "sky-sea/atmosphere_types.inc.wgsl", 
-    "sky-sea/atmosphere_common.inc.wgsl", 
-    "sky-sea/atmosphere_raymarch.inc.wgsl",
-    "sky-sea/tonemap.inc.wgsl",
-    "sky-sea/pbr.inc.wgsl"
-]; 
+	"sky-sea/atmosphere_types.inc.wgsl",
+	"sky-sea/atmosphere_common.inc.wgsl",
+	"sky-sea/atmosphere_raymarch.inc.wgsl",
+	"sky-sea/tonemap.inc.wgsl",
+	"sky-sea/pbr.inc.wgsl",
+];
 
 interface ShaderInclude {
-    code: string,
-    flags: string[],
+	code: string;
+	flags: string[];
 }
 
-function gatherFlags(filename: string, source: string): string[]
-{
-    let flags: string[] = [];
-    const FLAGS_PREFIX = "//// FLAGS ";
-    let foundPrefix = false;
-    source.split('\n').forEach((line, index) => {
-        if(line.startsWith(FLAGS_PREFIX))
-        {
-            if (foundPrefix)
-            {
-                console.error(`Duplicate FLAGS prefix found:
-                    Original line: 
+function gatherFlags(filename: string, source: string): string[] {
+	let flags: string[] = [];
+	const FLAGS_PREFIX = "//// FLAGS ";
+	let foundPrefix = false;
+	source.split("\n").forEach((line, index) => {
+		if (line.startsWith(FLAGS_PREFIX)) {
+			if (foundPrefix) {
+				console.error(`Duplicate FLAGS prefix found:
+                    Original line:
                     (${filename}:${index})
-                    ${line}`)
-            }
-            else {
-                foundPrefix = true;
-                flags = line.trim().substring(FLAGS_PREFIX.length).split(' ').map((value) => {return value.trim(); }).filter((value) => {return value.length > 0;});
-            }
-        }
-    });
-    return flags;
+                    ${line}`);
+			} else {
+				foundPrefix = true;
+				flags = line
+					.trim()
+					.substring(FLAGS_PREFIX.length)
+					.split(" ")
+					.map((value) => {
+						return value.trim();
+					})
+					.filter((value) => {
+						return value.length > 0;
+					});
+			}
+		}
+	});
+	return flags;
 }
 
-const includeMappings = new Map<string,ShaderInclude>();
-includeFilenames.forEach(
-    (filename) => {
-        const path = fs.realpathSync(shaderRoot+filename);
-        const code = fs.readFileSync(path).toString();
-        includeMappings.set(path, {
-            code: code,
-            flags: gatherFlags(filename, code),
-        });
-    }
-);
+const includeMappings = new Map<string, ShaderInclude>();
+includeFilenames.forEach((filename) => {
+	const path = fs.realpathSync(shaderRoot + filename);
+	const code = fs.readFileSync(path).toString();
+	includeMappings.set(path, {
+		code: code,
+		flags: gatherFlags(filename, code),
+	});
+});
 
 /*
 A conditional block looks like the following:
@@ -75,192 +78,198 @@ ELSE may be omitted.
 At this point, nesting is not supported.
 */
 
-function replaceConditionalBlocks(filename: string, source: ShaderInclude, enabledConditions: string[] = [])
-{
-    const IF_PREFIX = "//// IF ";
-    const ELSE_PREFIX = "//// ELSE";
-    const ENDIF_PREFIX = "//// ENDIF";
+function replaceConditionalBlocks(
+	filename: string,
+	source: ShaderInclude,
+	enabledConditions: string[] = []
+) {
+	const IF_PREFIX = "//// IF ";
+	const ELSE_PREFIX = "//// ELSE";
+	const ENDIF_PREFIX = "//// ENDIF";
 
-    const enabledFlags = new Set<string>(enabledConditions);
+	const enabledFlags = new Set<string>(enabledConditions);
 
-    console.log(`Including '${filename}' with flags '${enabledConditions.join(',')}'`);
-    console.log(`Possible flag(s) are '${source.flags.join(',')}'`)
-    const invalidFlags = enabledConditions.filter((flag) => {return !source.flags.includes(flag); });
-    if (invalidFlags.length > 0)
-    {
-        console.error(`Found invalid flag(s) '${invalidFlags.join(',')}', these will not be used`);
-    }
+	console.log(
+		`Including '${filename}' with flags '${enabledConditions.join(",")}'`
+	);
+	console.log(`Possible flag(s) are '${source.flags.join(",")}'`);
+	const invalidFlags = enabledConditions.filter((flag) => {
+		return !source.flags.includes(flag);
+	});
+	if (invalidFlags.length > 0) {
+		console.error(
+			`Found invalid flag(s) '${invalidFlags.join(
+				","
+			)}', these will not be used`
+		);
+	}
 
-    enum ConditionalState {
-        Outside,
-        IF,
-        ELSE,
-    };
-    enum LinePrefix {
-        None,
-        IF,
-        ELSE,
-        ENDIF
-    };
-    const getPrefix = (line: string) => {
-        let prefix = LinePrefix.None;
-        let prefixLength = 0;
-        if (line.startsWith(IF_PREFIX))
-        {
-            prefix = LinePrefix.IF;
-            prefixLength = IF_PREFIX.length;
-        }
-        else if (line.startsWith(ELSE_PREFIX))
-        {
-            prefix = LinePrefix.ELSE;
-            prefixLength = ELSE_PREFIX.length;
-        }
-        else if (line.startsWith(ENDIF_PREFIX))
-        {
-            prefix = LinePrefix.ENDIF;
-            prefixLength = ENDIF_PREFIX.length;
-        }
+	enum ConditionalState {
+		Outside,
+		IF,
+		ELSE,
+	}
+	enum LinePrefix {
+		None,
+		IF,
+		ELSE,
+		ENDIF,
+	}
+	const getPrefix = (line: string) => {
+		let prefix = LinePrefix.None;
+		let prefixLength = 0;
+		if (line.startsWith(IF_PREFIX)) {
+			prefix = LinePrefix.IF;
+			prefixLength = IF_PREFIX.length;
+		} else if (line.startsWith(ELSE_PREFIX)) {
+			prefix = LinePrefix.ELSE;
+			prefixLength = ELSE_PREFIX.length;
+		} else if (line.startsWith(ENDIF_PREFIX)) {
+			prefix = LinePrefix.ENDIF;
+			prefixLength = ENDIF_PREFIX.length;
+		}
 
-        return {prefix: prefix, remainder: line.substring(prefixLength).trim()};
-    };
+		return {
+			prefix: prefix,
+			remainder: line.substring(prefixLength).trim(),
+		};
+	};
 
-    let step = ConditionalState.Outside;
-    let currentFlag = "";
-    let keepLines = true;
+	let step = ConditionalState.Outside;
+	let currentFlag = "";
+	let keepLines = true;
 
-    const sourceOut = source.code.split('\n').filter((line, index) => {
-        const {prefix, remainder} = getPrefix(line);
+	const sourceOut = source.code
+		.split("\n")
+		.filter((line, index) => {
+			const { prefix, remainder } = getPrefix(line);
 
-        if(step == ConditionalState.Outside)
-        {
-            if (prefix == LinePrefix.IF)
-            {
-                if(source.flags.includes(remainder))
-                {
-                    step = ConditionalState.IF;
-                    currentFlag = remainder;
-                    keepLines = enabledFlags.has(currentFlag);
-                }
-                else
-                {
-                    console.error(
-                        `Invalid conditional syntax: invalid flag. 
-                        Original line: 
+			if (step == ConditionalState.Outside) {
+				if (prefix == LinePrefix.IF) {
+					if (source.flags.includes(remainder)) {
+						step = ConditionalState.IF;
+						currentFlag = remainder;
+						keepLines = enabledFlags.has(currentFlag);
+					} else {
+						console.error(
+							`Invalid conditional syntax: invalid flag.
+                        Original line:
                         (${filename}:${index})
                         ${line}`
-                    );
-                }
-            }
-            else if (prefix != LinePrefix.None)
-            {
-                console.error(
-                    `Invalid conditional syntax: invalid conditional statement outside of conditional block. 
-                    Original line: 
+						);
+					}
+				} else if (prefix != LinePrefix.None) {
+					console.error(
+						`Invalid conditional syntax: invalid conditional statement outside of conditional block.
+                    Original line:
                     (${filename}:${index})
                     ${line}`
-                );
-            }
-        }
-        else if(step == ConditionalState.IF)
-        {
-            if (prefix == LinePrefix.ELSE)
-            {
-                step = ConditionalState.ELSE;
-                keepLines = !enabledFlags.has(currentFlag);
-            }
-            else if (prefix == LinePrefix.ENDIF)
-            {
-                step = ConditionalState.Outside;
-                currentFlag = "";
-                keepLines = true;
-            }
-            else if (prefix != LinePrefix.None)
-            {
-                console.error(
-                    `(${filename}:${index}) Invalid conditional syntax in IF branch. 
-                    Original line: 
+					);
+				}
+			} else if (step == ConditionalState.IF) {
+				if (prefix == LinePrefix.ELSE) {
+					step = ConditionalState.ELSE;
+					keepLines = !enabledFlags.has(currentFlag);
+				} else if (prefix == LinePrefix.ENDIF) {
+					step = ConditionalState.Outside;
+					currentFlag = "";
+					keepLines = true;
+				} else if (prefix != LinePrefix.None) {
+					console.error(
+						`(${filename}:${index}) Invalid conditional syntax in IF branch.
+                    Original line:
                     (${filename}:${index})
                     ${line}`
-                );
-            }
-        }
-        else if (step == ConditionalState.ELSE)
-        {
-            if (prefix == LinePrefix.ENDIF)
-            {
-                step = ConditionalState.Outside;
-                currentFlag = "";
-                keepLines = true;
-            }
-            else if (prefix != LinePrefix.None)
-            {
-                console.error(
-                    `(${filename}:${index}) Invalid conditional syntax in ELSE branch. 
-                    Original line: 
+					);
+				}
+			} else if (step == ConditionalState.ELSE) {
+				if (prefix == LinePrefix.ENDIF) {
+					step = ConditionalState.Outside;
+					currentFlag = "";
+					keepLines = true;
+				} else if (prefix != LinePrefix.None) {
+					console.error(
+						`(${filename}:${index}) Invalid conditional syntax in ELSE branch.
+                    Original line:
                     (${filename}:${index})
                     ${line}`
-                );
-            }
-        }
+					);
+				}
+			}
 
-        return keepLines && (prefix == LinePrefix.None);
-    }).join('\n');
+			return keepLines && prefix == LinePrefix.None;
+		})
+		.join("\n");
 
-    if(step != ConditionalState.Outside)
-    {
-        console.error(
-            `While processing shader include conditionals, encountered end of lines without exiting a conditional.`
-        );
-    }
+	if (step != ConditionalState.Outside) {
+		console.error(
+			`While processing shader include conditionals, encountered end of lines without exiting a conditional.`
+		);
+	}
 
-    return sourceOut;
+	return sourceOut;
 }
 
 // This is utilized as a plugin in vite.config.ts, to preprocess each shader as a part of typescript compilation
-export function packShaders(id: string, source: string) : string
-{
-    const INCLUDE_PREFIX = "//// INCLUDE ";
+export function packShaders(id: string, source: string): string {
+	const INCLUDE_PREFIX = "//// INCLUDE ";
 
-    console.log(`Preprocessing shader ${id}`);
+	console.log(`Preprocessing shader ${id}`);
 
-    const includeWorkingPrefix = path.parse(id).dir;
+	const includeWorkingPrefix = path.parse(id).dir;
 
-    let logIncludes = false;
+	let logIncludes = false;
 
-    const sourceOut = source.split('\n')
-        .map((line) => {
-            if(line.startsWith(INCLUDE_PREFIX))
-            {
-                const fragments = line.trim().substring(INCLUDE_PREFIX.length).split(' ').map((value) => {return value.trim(); }).filter((value) => {return value.length > 0;});
-                if (fragments.length == 0)
-                {
-                    return "";
-                }
-                
-                const includeFilename = fragments.shift()!;
-                const resolvedPath = path.resolve(includeWorkingPrefix, includeFilename);
+	const sourceOut = source
+		.split("\n")
+		.map((line) => {
+			if (line.startsWith(INCLUDE_PREFIX)) {
+				const fragments = line
+					.trim()
+					.substring(INCLUDE_PREFIX.length)
+					.split(" ")
+					.map((value) => {
+						return value.trim();
+					})
+					.filter((value) => {
+						return value.length > 0;
+					});
+				if (fragments.length == 0) {
+					return "";
+				}
 
-                const includeSource = includeMappings.get(resolvedPath);
-                if(includeSource === undefined)
-                {
-                    console.error(`Unrecognized WGSL include: ${resolvedPath} \n     Resolved as: ${resolvedPath}`);
-                    logIncludes = true;
-                    return "";
-                }
+				const includeFilename = fragments.shift()!;
+				const resolvedPath = path.resolve(
+					includeWorkingPrefix,
+					includeFilename
+				);
 
-                return replaceConditionalBlocks(includeFilename, includeSource, fragments);
-            }
+				const includeSource = includeMappings.get(resolvedPath);
+				if (includeSource === undefined) {
+					console.error(
+						`Unrecognized WGSL include: ${resolvedPath} \n     Resolved as: ${resolvedPath}`
+					);
+					logIncludes = true;
+					return "";
+				}
 
-            return line;
-    }).join('\n');
-    
-    if (logIncludes)
-    {
-        console.error(`Absolute paths of known include(s) are:`);
-        includeMappings.forEach((value, key) => {
-            console.error(`    ${key}`);
-        })
-    }
-    
-    return sourceOut;
+				return replaceConditionalBlocks(
+					includeFilename,
+					includeSource,
+					fragments
+				);
+			}
+
+			return line;
+		})
+		.join("\n");
+
+	if (logIncludes) {
+		console.error(`Absolute paths of known include(s) are:`);
+		includeMappings.forEach((value, key) => {
+			console.error(`    ${key}`);
+		});
+	}
+
+	return sourceOut;
 }

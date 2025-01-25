@@ -1,42 +1,44 @@
 .website-header {
-  background-color: #023047;
-  padding: 1em;
-  align-items: start;
-  color: hsl(204, 50%, 95%);
+	background-color: #023047;
+	padding: 1em;
+	align-items: start;
+	color: hsl(204, 50%, 95%);
 }
 
 .website-main {
-  background-color: rgb(50, 99, 121);
-  padding: 2em;
-  flex-grow: 1;
-  color: hsl(204, 50%, 95%);
+	background-color: rgb(50, 99, 121);
+	padding: 2em;
+	flex-grow: 1;
+	color: hsl(204, 50%, 95%);
 }
 
 .website-footer {
-  background-color: rgb(2,48,71);
-  padding: 1em;
-  align-items: start;
-  color: hsl(204, 50%, 95%);
+	background-color: rgb(2, 48, 71);
+	padding: 1em;
+	align-items: start;
+	color: hsl(204, 50%, 95%);
 }
 
 a {
-  text-decoration: none;
+	text-decoration: none;
 }
 
 a:active {
-  color: hsl(32, 100%, 65%)
+	color: hsl(32, 100%, 65%);
 }
 a:visited {
-  color: hsl(32, 72%, 55%)
+	color: hsl(32, 72%, 55%);
 }
 a:link {
-  color: hsl(32, 100%, 65%)
+	color: hsl(32, 100%, 65%);
 }
-a:hover{color:hsl(33, 45%, 45%);}
+a:hover {
+	color: hsl(33, 45%, 45%);
+}
 
 button {
-  padding: 0;
-  border: none;
-  background: none;
-  color: inherit;
+	padding: 0;
+	border: none;
+	background: none;
+	color: inherit;
 }

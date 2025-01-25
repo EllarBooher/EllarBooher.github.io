@@ -1,222 +1,239 @@
-import HelloCubePak from '../shaders/hello_cube.wgsl';
-import { mat4 } from 'wgpu-matrix';
-import { RendererApp, RendererAppConstructor } from "./RendererApp"
+import HelloCubePak from "../shaders/hello_cube.wgsl";
+import { mat4 } from "wgpu-matrix";
+import { RendererApp, RendererAppConstructor } from "./RendererApp";
 import { GUI } from "lil-gui";
 
 // Draw a simple cube
 
 const POSSIBLE_WEBGPU_FEATURES = new Set<string>([
-    "depth-clip-control",
-    "depth32float-stencil8",
-    "texture-compression-bc",
-    "texture-compression-bc-sliced-3d",
-    "texture-compression-etc2",
-    "texture-compression-astc",
-    "texture-compression-astc-sliced-3d",
-    "timestamp-query",
-    "indirect-first-instance",
-    "shader-f16",
-    "rg11b10ufloat-renderable",
-    "bgra8unorm-storage",
-    "float32-filterable",
-    "float32-blendable",
-    "clip-distances",
-    "dual-source-blending",
+	"depth-clip-control",
+	"depth32float-stencil8",
+	"texture-compression-bc",
+	"texture-compression-bc-sliced-3d",
+	"texture-compression-etc2",
+	"texture-compression-astc",
+	"texture-compression-astc-sliced-3d",
+	"timestamp-query",
+	"indirect-first-instance",
+	"shader-f16",
+	"rg11b10ufloat-renderable",
+	"bgra8unorm-storage",
+	"float32-filterable",
+	"float32-blendable",
+	"clip-distances",
+	"dual-source-blending",
 ]);
 
 export class HelloCubeApp implements RendererApp {
-    device: GPUDevice;
-    presentFormat: GPUTextureFormat;
-    quit = false;
+	device: GPUDevice;
+	presentFormat: GPUTextureFormat;
+	quit = false;
 
-    pipeline: GPURenderPipeline;
+	pipeline: GPURenderPipeline;
 
-    vertexBuffer: GPUBuffer;
-    indexBuffer: GPUBuffer;
+	vertexBuffer: GPUBuffer;
+	indexBuffer: GPUBuffer;
 
-    indexCount: number;
+	indexCount: number;
 
-    projViewModelBuffer: GPUBuffer;
-    projViewModelBindGroup: GPUBindGroup;
+	projViewModelBuffer: GPUBuffer;
+	projViewModelBindGroup: GPUBindGroup;
 
-    supportedFeatures: GPUSupportedFeatures;
+	supportedFeatures: GPUSupportedFeatures;
 
-    constructor(device: GPUDevice, presentFormat: GPUTextureFormat) {
-        this.device = device;
-        this.presentFormat = presentFormat;
-        this.supportedFeatures = device.features;
+	constructor(device: GPUDevice, presentFormat: GPUTextureFormat) {
+		this.device = device;
+		this.presentFormat = presentFormat;
+		this.supportedFeatures = device.features;
 
-        const shaderModule = this.device.createShaderModule({
-            code: HelloCubePak,
-        });
-    
-        // Alternating position & color
-        // raw unfiltered cube model
-        const vertices = new Float32Array([
-            -1, -1, -1, 1.0,
-                0.0, 0.0, 0.0, 1.0,
-             1, -1, -1, 1.0,
-                1.0, 0.0, 0.0, 1.0,
-             1,  1, -1, 1.0,
-                1.0, 1.0, 0.0, 1.0,
-            -1,  1, -1, 1.0,
-                0.0, 1.0, 0.0, 1.0,
-            -1, -1,  1, 1.0,
-                0.0, 0.0, 1.0, 1.0,
-             1, -1,  1, 1.0,
-                1.0, 0.0, 1.0, 1.0,
-             1,  1,  1, 1.0,
-                1.0, 1.0, 1.0, 1.0,
-            -1,  1,  1, 1.0,
-                0.0, 1.0, 1.0, 1.0,
-        ]);
-        const indices = new Uint32Array([
-            // -Z
-            0, 1, 2,
-            0, 2, 3,
-            // +X
-            1, 5, 6,
-            1, 6, 2,
-            // +Y
-            2, 6, 7,
-            2, 7, 3,
-            // +Z
-            4, 7, 6,
-            4, 6, 5,
-            // -X
-            0, 3, 7,
-            0, 7, 4,
-            // -Y
-            0, 4, 5,
-            0, 5, 1,
-        ]);
-        this.indexCount = indices.length;
-    
-        this.vertexBuffer = this.device.createBuffer({
-            size: vertices.byteLength,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
-        });
-        this.device.queue.writeBuffer(this.vertexBuffer, 0, vertices, 0, vertices.length);
-        const vertexBuffers: GPUVertexBufferLayout[] = [{ 
-            attributes: [
-                {shaderLocation: 0, offset: 0, format: "float32x4",},
-                {shaderLocation: 1, offset: 16, format: "float32x4"},
-            ],
-            arrayStride: 2 * 16,
-            stepMode: "vertex",
-        }];
-    
-        this.indexBuffer = this.device.createBuffer({size: indices.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST});
-        this.device.queue.writeBuffer(this.indexBuffer, 0, indices, 0, indices.length);
-    
-        const PROJ_VIEW_BUFFER_SIZE = 16 * 4;
+		const shaderModule = this.device.createShaderModule({
+			code: HelloCubePak,
+		});
 
-        this.projViewModelBuffer = this.device.createBuffer({size: PROJ_VIEW_BUFFER_SIZE, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST});
+		// Alternating position & color
+		// raw unfiltered cube model
+		const vertices = new Float32Array([
+			-1, -1, -1, 1.0, 0.0, 0.0, 0.0, 1.0, 1, -1, -1, 1.0, 1.0, 0.0, 0.0,
+			1.0, 1, 1, -1, 1.0, 1.0, 1.0, 0.0, 1.0, -1, 1, -1, 1.0, 0.0, 1.0,
+			0.0, 1.0, -1, -1, 1, 1.0, 0.0, 0.0, 1.0, 1.0, 1, -1, 1, 1.0, 1.0,
+			0.0, 1.0, 1.0, 1, 1, 1, 1.0, 1.0, 1.0, 1.0, 1.0, -1, 1, 1, 1.0, 0.0,
+			1.0, 1.0, 1.0,
+		]);
+		const indices = new Uint32Array([
+			// -Z
+			0, 1, 2, 0, 2, 3,
+			// +X
+			1, 5, 6, 1, 6, 2,
+			// +Y
+			2, 6, 7, 2, 7, 3,
+			// +Z
+			4, 7, 6, 4, 6, 5,
+			// -X
+			0, 3, 7, 0, 7, 4,
+			// -Y
+			0, 4, 5, 0, 5, 1,
+		]);
+		this.indexCount = indices.length;
 
-        const bindGroupLayout = this.device.createBindGroupLayout({entries: [
-            {
-                binding: 0,
-                visibility: GPUShaderStage.VERTEX,
-                buffer: {
-                    type: "uniform"
-                }
-            }
-        ]});
-    
-        this.projViewModelBindGroup = this.device.createBindGroup({
-            layout: bindGroupLayout, 
-            entries: [
-                {
-                    binding: 0,
-                    resource: {
-                        buffer: this.projViewModelBuffer,
-                    },
-                },
-            ],
-        });
-    
-        const pipelineDescriptor: GPURenderPipelineDescriptor = {
-            vertex: {
-                module: shaderModule,
-                entryPoint: "vertex_main",
-                buffers: vertexBuffers,
-            },
-            fragment: {
-                module: shaderModule,
-                entryPoint: "fragment_main",
-                targets: [
-                    {
-                        format: this.presentFormat
-                    },
-                ]
-            },
-            primitive: {
-                topology: "triangle-list",
-                cullMode: "back",
-                frontFace: "cw",
-            },
-            layout: this.device.createPipelineLayout({
-                bindGroupLayouts: [bindGroupLayout],
-            }),
-        };
-        this.pipeline = this.device.createRenderPipeline(pipelineDescriptor);
-    };
+		this.vertexBuffer = this.device.createBuffer({
+			size: vertices.byteLength,
+			usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+		});
+		this.device.queue.writeBuffer(
+			this.vertexBuffer,
+			0,
+			vertices,
+			0,
+			vertices.length
+		);
+		const vertexBuffers: GPUVertexBufferLayout[] = [
+			{
+				attributes: [
+					{ shaderLocation: 0, offset: 0, format: "float32x4" },
+					{ shaderLocation: 1, offset: 16, format: "float32x4" },
+				],
+				arrayStride: 2 * 16,
+				stepMode: "vertex",
+			},
+		];
 
-    setupUI(gui: GUI)
-    {
-        POSSIBLE_WEBGPU_FEATURES.forEach((feature) => {
-            const supported = this.supportedFeatures.has(feature);
-            gui.add({enabled: supported},'enabled').name(feature).disable(true);
-        });
-    }
+		this.indexBuffer = this.device.createBuffer({
+			size: indices.byteLength,
+			usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+		});
+		this.device.queue.writeBuffer(
+			this.indexBuffer,
+			0,
+			indices,
+			0,
+			indices.length
+		);
 
-    draw(
-        presentTexture: GPUTexture, 
-        aspectRatio: number, 
-        time: number): void
-    {
-        const presentView = presentTexture.createView();
+		const PROJ_VIEW_BUFFER_SIZE = 16 * 4;
 
-        const fov = 60 * Math.PI / 180
-        const near = 0.1;
-        const far = 1000;
-        const perspective = mat4.perspective(fov, aspectRatio, near, far);
-        
-        const eye = [3, 5, 10];
-        const target = [0, 0, 0];
-        const up = [0, 1, 0];
-        const view = mat4.lookAt(eye, target, up);
-    
-        const model = mat4.axisRotation([1.0, 1.0, 0.0], time / 1000.0);
-    
-        const projViewModel =  mat4.mul(perspective, mat4.mul(view, model));
-        this.device.queue.writeBuffer(this.projViewModelBuffer, 0, projViewModel, 0, projViewModel.length)
+		this.projViewModelBuffer = this.device.createBuffer({
+			size: PROJ_VIEW_BUFFER_SIZE,
+			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+		});
 
-        const commandEncoder = this.device.createCommandEncoder();
-    
-        const clearColor = {r: 0.5, g: 0.5, b: 0.5, a: 0.0};
-        const passEncoder = commandEncoder.beginRenderPass({
-            colorAttachments: [
-                { 
-                    clearValue: clearColor, 
-                    loadOp: "clear", 
-                    storeOp: "store", 
-                    view: presentView
-                },
-            ],
-        });
-    
-        passEncoder.setPipeline(this.pipeline);
-        passEncoder.setVertexBuffer(0, this.vertexBuffer);
-        passEncoder.setIndexBuffer(this.indexBuffer, "uint32", 0, this.indexBuffer.size)
-        passEncoder.setBindGroup(0, this.projViewModelBindGroup);
-        passEncoder.drawIndexed(this.indexCount, 1, 0, 0, 0);
-    
-        passEncoder.end();
-        this.device.queue.submit([commandEncoder.finish()]);
-    }
+		const bindGroupLayout = this.device.createBindGroupLayout({
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.VERTEX,
+					buffer: {
+						type: "uniform",
+					},
+				},
+			],
+		});
+
+		this.projViewModelBindGroup = this.device.createBindGroup({
+			layout: bindGroupLayout,
+			entries: [
+				{
+					binding: 0,
+					resource: {
+						buffer: this.projViewModelBuffer,
+					},
+				},
+			],
+		});
+
+		const pipelineDescriptor: GPURenderPipelineDescriptor = {
+			vertex: {
+				module: shaderModule,
+				entryPoint: "vertex_main",
+				buffers: vertexBuffers,
+			},
+			fragment: {
+				module: shaderModule,
+				entryPoint: "fragment_main",
+				targets: [
+					{
+						format: this.presentFormat,
+					},
+				],
+			},
+			primitive: {
+				topology: "triangle-list",
+				cullMode: "back",
+				frontFace: "cw",
+			},
+			layout: this.device.createPipelineLayout({
+				bindGroupLayouts: [bindGroupLayout],
+			}),
+		};
+		this.pipeline = this.device.createRenderPipeline(pipelineDescriptor);
+	}
+
+	setupUI(gui: GUI) {
+		POSSIBLE_WEBGPU_FEATURES.forEach((feature) => {
+			const supported = this.supportedFeatures.has(feature);
+			gui.add({ enabled: supported }, "enabled")
+				.name(feature)
+				.disable(true);
+		});
+	}
+
+	draw(presentTexture: GPUTexture, aspectRatio: number, time: number): void {
+		const presentView = presentTexture.createView();
+
+		const fov = (60 * Math.PI) / 180;
+		const near = 0.1;
+		const far = 1000;
+		const perspective = mat4.perspective(fov, aspectRatio, near, far);
+
+		const eye = [3, 5, 10];
+		const target = [0, 0, 0];
+		const up = [0, 1, 0];
+		const view = mat4.lookAt(eye, target, up);
+
+		const model = mat4.axisRotation([1.0, 1.0, 0.0], time / 1000.0);
+
+		const projViewModel = mat4.mul(perspective, mat4.mul(view, model));
+		this.device.queue.writeBuffer(
+			this.projViewModelBuffer,
+			0,
+			projViewModel,
+			0,
+			projViewModel.length
+		);
+
+		const commandEncoder = this.device.createCommandEncoder();
+
+		const clearColor = { r: 0.5, g: 0.5, b: 0.5, a: 0.0 };
+		const passEncoder = commandEncoder.beginRenderPass({
+			colorAttachments: [
+				{
+					clearValue: clearColor,
+					loadOp: "clear",
+					storeOp: "store",
+					view: presentView,
+				},
+			],
+		});
+
+		passEncoder.setPipeline(this.pipeline);
+		passEncoder.setVertexBuffer(0, this.vertexBuffer);
+		passEncoder.setIndexBuffer(
+			this.indexBuffer,
+			"uint32",
+			0,
+			this.indexBuffer.size
+		);
+		passEncoder.setBindGroup(0, this.projViewModelBindGroup);
+		passEncoder.drawIndexed(this.indexCount, 1, 0, 0, 0);
+
+		passEncoder.end();
+		this.device.queue.submit([commandEncoder.finish()]);
+	}
 }
 
-export const HelloCubeAppConstructor: RendererAppConstructor = (device, presentFormat, _time) => {
-    return new HelloCubeApp(device, presentFormat);
-}
+export const HelloCubeAppConstructor: RendererAppConstructor = (
+	device,
+	presentFormat,
+	_time
+) => {
+	return new HelloCubeApp(device, presentFormat);
+};

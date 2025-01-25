@@ -282,6 +282,7 @@ export const RendererComponent = memo(function RendererComponent() {
 				height: "100%",
 				display: "flex",
 				flexDirection: "row",
+				overflow: "hidden",
 			}}
 		>
 			{sampleSidebar}

@@ -8,6 +8,7 @@ import react from "eslint-plugin-react";
 export default tseslint.config(
 	{ ignores: ["dist"] },
 	{
+		name: "Typescript",
 		extends: [
 			js.configs.recommended,
 			...tseslint.configs.recommendedTypeChecked,

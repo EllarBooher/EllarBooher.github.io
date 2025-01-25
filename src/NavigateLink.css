@@ -6,5 +6,6 @@
 }
 
 .nav-button:hover {
+	cursor: pointer;
 	color: hsl(201deg 9% 63%);
 }

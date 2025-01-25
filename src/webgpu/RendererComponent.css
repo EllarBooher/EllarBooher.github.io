@@ -13,6 +13,9 @@
 .sidebar-button {
 	padding-top: 1em;
 	padding-bottom: 1em;
+	border: none;
+	background: none;
+	color: inherit;
 }
 
 .sidebar-button:hover {

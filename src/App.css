@@ -1,7 +1,7 @@
 .app {
 	display: flex;
+	height: 100%;
 	flex-direction: column;
-	min-height: 100vh;
 	margin: 0;
 }
 
@@ -40,6 +40,7 @@ code {
 	transition: 0.3s;
 	color: rgb(255 255 255);
 	cursor: pointer;
+	border: none;
 }
 
 .display-card:hover {

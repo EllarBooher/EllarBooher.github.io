@@ -18,21 +18,16 @@ createRoot(root).render(
 					height: "100vh",
 				}}
 			>
-				<div style={{ flex: "0 1 auto" }}>
+				<div>
 					<NavigationHeader />
 				</div>
-				<Routes>
-					<Route index element={<App />} />
-					<Route
-						path="webgpu-samples"
-						element={
-							<div style={{ flex: 1, overflow: "hidden" }}>
-								<RendererComponent />
-							</div>
-						}
-					/>
-					<Route path="*" element={<Navigate to="/" replace />} />
-				</Routes>
+				<div style={{ flex: "1" }}>
+					<Routes>
+						<Route index element={<App />} />
+						<Route path="webgpu-samples" element={<RendererComponent />} />
+						<Route path="*" element={<Navigate to="/" replace />} />
+					</Routes>
+				</div>
 			</div>
 		</HashRouter>
 	</StrictMode>

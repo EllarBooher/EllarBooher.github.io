@@ -1,5 +1,5 @@
 .website-header {
-	background-color: #023047;
+	background-color: rgb(2 48 71);
 	padding: 1em;
 	align-items: start;
 	color: hsl(204deg 50% 95%);
@@ -37,11 +37,4 @@ a:link {
 
 a:hover {
 	color: hsl(33deg 45% 45%);
-}
-
-button {
-	padding: 0;
-	border: none;
-	background: none;
-	color: inherit;
 }

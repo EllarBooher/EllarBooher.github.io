@@ -30,10 +30,10 @@ const DisplayCard = memo(function DisplayCard({
 	description = `PLACEHOLDER DESCRIPTION`,
 }: DisplayCardProps) {
 	const thumbnails = (
-		<div className="DisplayCard-thumbnails">
+		<div className="display-card-thumbnails">
 			{thumbnailAssets.map((url: URL) => (
-				<div className="DisplayCard-thumbnail" key={url.toString()}>
-					<img className="DisplayCard-image" src={url.toString()} alt="" />
+				<div className="display-card-thumbnail" key={url.toString()}>
+					<img className="display-card-image" src={url.toString()} alt="" />
 				</div>
 			))}
 		</div>
@@ -52,10 +52,10 @@ const DisplayCard = memo(function DisplayCard({
 	};
 
 	return (
-		<button className="DisplayCard" onClick={handleClick}>
+		<button className="display-card" onClick={handleClick}>
 			<div>
-				<div className="DisplayCard-name">{title}</div>
-				<div className="DisplayCard-body">
+				<div className="display-card-name">{title}</div>
+				<div className="display-card-body">
 					{description}
 					{thumbnails}
 				</div>
@@ -119,7 +119,7 @@ function App() {
 	];
 
 	return (
-		<div className="App">
+		<div className="app">
 			<div className="website-main">
 				<div>
 					Hello, my name is Estelle Booher. My passion is realtime rendering and
@@ -134,11 +134,11 @@ function App() {
 					To contact me, please email at {emailLink}.
 					<br />
 					<h1>In-Browser WebGPU Samples</h1>
-					<div className="DisplayGrid">{webGPUCards}</div>
+					<div className="display-grid">{webGPUCards}</div>
 					<h1>Offline Computer Graphics</h1>
-					<div className="DisplayGrid">{offlineCards}</div>
+					<div className="display-grid">{offlineCards}</div>
 					<h1>Video Games</h1>
-					<div className="DisplayGrid">{videogameCards}</div>
+					<div className="display-grid">{videogameCards}</div>
 				</div>
 			</div>
 			<footer className="website-footer">

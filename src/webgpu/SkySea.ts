@@ -9,7 +9,9 @@ import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { RendererApp, RendererAppConstructor } from "./RendererApp"
 import { mat4, Mat4, vec2, Vec2, vec3, Vec3, vec4, Vec4 } from 'wgpu-matrix';
 
-const transmittanceLUTDimensions = {width: 2048, height: 1024};
+const TRANSMITTANCE_LUT_EXTENT = {width: 2048, height: 1024} as const;
+const MULTISCATTER_LUT_EXTENT = {width: 1024, height: 1024} as const;
+const SKYVIEW_LUT_EXTENT = {width: 1024, height: 256} as const;
 
 const TRANSMITTANCE_LUT_FORMAT: GPUTextureFormat = 'rgba32float';
 const TRANSMITTANCE_LUT_SAMPLE_TYPE: GPUTextureSampleType = 'float';
@@ -29,8 +31,11 @@ const GBUFFER_NORMAL_SAMPLE_TYPE: GPUTextureSampleType = 'float';
 
 const ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT: GPUTextureFormat = 'rgba32float';
 
-const multiscatterLUTDimensions = {width: 1024, height: 1024};
-const skyviewLUTDimensions = {width: 1024, height: 256};
+class Extent2D
+{
+    width = 1;
+    height = 1;
+}
 
 abstract class UBO
 {
@@ -142,7 +147,7 @@ class CelestialLightUBO extends UBO
         light: {
             color: vec3.create(1.0, 1.0, 1.0),
             strength: 100.0,
-            forward: vec3.create(0.0, 1.0, 0.0),
+            forward: vec3.create(0.0, -1.0, 0.0),
             angularRadius: 16.0 / 60.0 * (3.141592653589793 / 180.0),
         }
     };
@@ -157,11 +162,10 @@ class CelestialLightUBO extends UBO
         this.stagingBuffer[3] = this.data.light.strength;
         this.stagingBuffer.set(this.data.light.forward, 4);
         this.stagingBuffer[7] = this.data.light.angularRadius;
-
     }
 }
 
-interface GBuffer
+class GBuffer
 {
     colorWithDepthInAlpha: GPUTexture;
     colorWithDepthInAlphaView: GPUTextureView;
@@ -185,394 +189,370 @@ interface GBuffer
     // texture_storage_2d
     writeGroupLayout: GPUBindGroupLayout;
     writeGroup: GPUBindGroup;
-}
 
-function CreateGBuffer(
-    device: GPUDevice, 
-    dimensions: {width: number, height: number},
-    old?: GBuffer,
-): GBuffer
-{
-    const label = 'GBuffer';
-    const colorWithDepthInAlpha = device.createTexture({
-        size: dimensions,
-        dimension: '2d',
-        format: GBUFFER_COLOR_FORMAT,
-        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING, 
-        label: label,
-    });
-    const colorWithDepthInAlphaView = colorWithDepthInAlpha.createView({label: label});
-
-    const normal = device.createTexture({
-        size: dimensions,
-        dimension: '2d',
-        format: GBUFFER_NORMAL_FORMAT,
-        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING, 
-        label: label,
-    });
-    const normalView = normal.createView({label: label});
-
-    const readGroupLayout = old?.readGroupLayout ?? device.createBindGroupLayout({
-        entries: [
-            {
-                binding: 0,
-                visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-                texture: {sampleType: GBUFFER_COLOR_SAMPLE_TYPE},
-            },
-            {
-                binding: 1,
-                visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-                texture: {sampleType: GBUFFER_NORMAL_SAMPLE_TYPE},
-            }
-        ]
-    });
-    const readGroup = device.createBindGroup({
-        layout: readGroupLayout,
-        entries: [
-            {
-                binding: 0,
-                resource: colorWithDepthInAlphaView,
-            },
-            {
-                binding: 1,
-                resource: normalView,
-            }
-        ],
-        label: label,
-    });
-
-    const writeGroupLayout = old?.writeGroupLayout ?? device.createBindGroupLayout({
-        entries: [
-            {
-                binding: 0,
-                visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-                storageTexture: {access: 'write-only',format: GBUFFER_COLOR_FORMAT},
-            },
-            {
-                binding: 1,
-                visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-                storageTexture: {access: 'write-only',format: GBUFFER_NORMAL_FORMAT},
-            }
-        ]
-    });
-    const writeGroup = device.createBindGroup({
-        layout: writeGroupLayout,
-        entries: [
-            {
-                binding: 0,
-                resource: colorWithDepthInAlphaView,
-            },
-            {
-                binding: 1,
-                resource: normalView,
-            }
-        ],
-        label: label,
-    });
-
-    const depth = device.createTexture({
-        size: dimensions,
-        dimension: '2d',
-        format: GBUFFER_DEPTH_FORMAT,
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING, 
-        label: label,
-    });
-    const depthView = depth.createView({label: label});
-
-    return {
-        colorWithDepthInAlpha,
-        colorWithDepthInAlphaView,
-        normal,
-        normalView,
-        depth,
-        depthView,
-        readGroupLayout,
-        readGroup,
-        writeGroupLayout,
-        writeGroup,
-    };
-}
-
-interface TransmittanceLUTPassResources
-{
-    texture: GPUTexture;
-    view: GPUTextureView;
-    group0: GPUBindGroup;
-    pipeline: GPUComputePipeline;
-}
-
-function CreateTransmittanceLUTPassResources(
-    device: GPUDevice, 
-    dimensions: {width: number, height: number},
-): TransmittanceLUTPassResources
-{
-    const label = "Transmittance LUT";
-    const transmittanceLUT = device.createTexture({
-        size: dimensions,
-        dimension: "2d",
-        format: TRANSMITTANCE_LUT_FORMAT,
-        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-        label: label,
-    });
-    const transmittanceLUTView = transmittanceLUT.createView({label: label})
-
-    const bindGroup0Layout = device.createBindGroupLayout({
-        entries: [
-            {
-                binding: 0,
-                visibility: GPUShaderStage.COMPUTE,
-                storageTexture: {
-                    access: "write-only",
-                    format: TRANSMITTANCE_LUT_FORMAT,
+    constructor(device: GPUDevice, dimensions: Extent2D, old?: GBuffer)
+    {
+        this.colorWithDepthInAlpha = device.createTexture({
+            size: dimensions,
+            dimension: '2d',
+            format: GBUFFER_COLOR_FORMAT,
+            usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING, 
+            label: 'GBuffer ColorWithDepthInAlpha',
+        });
+        this.colorWithDepthInAlphaView = this.colorWithDepthInAlpha.createView({label: 'GBuffer ColorWithDepthInAlpha'});
+    
+        this.normal = device.createTexture({
+            size: dimensions,
+            dimension: '2d',
+            format: GBUFFER_NORMAL_FORMAT,
+            usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING, 
+            label: 'GBuffer Normal',
+        });
+        this.normalView = this.normal.createView({label: 'GBuffer Normal'});
+    
+        this.readGroupLayout = old?.readGroupLayout ?? device.createBindGroupLayout({
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                    texture: {sampleType: GBUFFER_COLOR_SAMPLE_TYPE},
+                },
+                {
+                    binding: 1,
+                    visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                    texture: {sampleType: GBUFFER_NORMAL_SAMPLE_TYPE},
                 }
-            },
-        ],
-        label: label
-    });
-
-    const bindGroup0 = device.createBindGroup({
-        layout: bindGroup0Layout,
-        entries: [
-            {
-                binding: 0,
-                resource: transmittanceLUTView,
-            },
-        ],
-        label: label
-    });
-
-    const transmittanceLUTShaderModule = device.createShaderModule({
-        code: TransmittanceLUTPak,
-        label: label
-    });
-    const transmittanceLUTPipeline = device.createComputePipeline({
-        compute: {
-            module: transmittanceLUTShaderModule,
-            entryPoint: "computeTransmittance",
-        },
-        layout: device.createPipelineLayout({
-            bindGroupLayouts: [bindGroup0Layout]
-        }),
-        label: label
-    })
-
-    return {
-        group0: bindGroup0,
-        pipeline: transmittanceLUTPipeline,
-        texture: transmittanceLUT,
-        view: transmittanceLUTView,
+            ],
+            label: 'GBuffer Read Group Layout'
+        });
+        this.readGroup = device.createBindGroup({
+            layout: this.readGroupLayout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: this.colorWithDepthInAlphaView,
+                },
+                {
+                    binding: 1,
+                    resource: this.normalView,
+                }
+            ],
+            label: 'GBuffer Read Group',
+        });
+    
+        this.writeGroupLayout = old?.writeGroupLayout ?? device.createBindGroupLayout({
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                    storageTexture: {access: 'write-only',format: GBUFFER_COLOR_FORMAT},
+                },
+                {
+                    binding: 1,
+                    visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                    storageTexture: {access: 'write-only',format: GBUFFER_NORMAL_FORMAT},
+                }
+            ],
+            label: 'GBuffer Write Group Layout'
+        });
+        this.writeGroup = device.createBindGroup({
+            layout: this.writeGroupLayout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: this.colorWithDepthInAlphaView,
+                },
+                {
+                    binding: 1,
+                    resource: this.normalView,
+                }
+            ],
+            label: 'GBuffer Write Group',
+        });
+    
+        this.depth = device.createTexture({
+            size: dimensions,
+            dimension: '2d',
+            format: GBUFFER_DEPTH_FORMAT,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING, 
+            label: 'GBuffer Depth',
+        });
+        this.depthView = this.depth.createView({label: 'GBuffer Depth'});
     }
 }
 
-interface MultiscatterLUTPassResources
+class TransmittanceLUTPassResources
 {
     texture: GPUTexture;
     view: GPUTextureView;
+
+    /*
+    @group(0) @binding(0) var transmittance_LUT: texture_storage_2d<rgba32float, write>;
+    */
     group0: GPUBindGroup;
     pipeline: GPUComputePipeline;
-}
 
-function CreateMultiscatterLUTPassResources(
-    device: GPUDevice, 
-    dimensions: {width: number, height: number},
-    transmittanceLUT: GPUTextureView,
-): MultiscatterLUTPassResources
-{
-    const label = "Multiscatter LUT";
-    const multiscatterLUT = device.createTexture({
-        size: dimensions,
-        dimension: "2d",
-        format: MULTISCATTER_LUT_FORMAT,
-        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-        label: label,
-    });
-    const multiscatterLUTView = multiscatterLUT.createView({label: label})
-
-    const bindGroup0Layout = device.createBindGroupLayout({
-        entries: [
-            {
-                binding: 0,
-                visibility: GPUShaderStage.COMPUTE,
-                storageTexture: {
-                    access: "write-only",
-                    format: MULTISCATTER_LUT_FORMAT,
-                }
+    constructor(device: GPUDevice, dimensions: Extent2D)
+    {
+        this.texture = device.createTexture({
+            size: dimensions,
+            dimension: "2d",
+            format: TRANSMITTANCE_LUT_FORMAT,
+            usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+            label: 'Transmittance LUT',
+        });
+        this.view = this.texture.createView({label: 'Transmittance LUT'})
+    
+        const bindGroup0Layout = device.createBindGroupLayout({
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.COMPUTE,
+                    storageTexture: {
+                        access: "write-only",
+                        format: TRANSMITTANCE_LUT_FORMAT,
+                    }
+                },
+            ],
+            label: 'Transmittance LUT Group 0'
+        });
+    
+        this.group0 = device.createBindGroup({
+            layout: bindGroup0Layout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: this.view,
+                },
+            ],
+            label: 'Transmittance LUT Group 0'
+        });
+    
+        const transmittanceLUTShaderModule = device.createShaderModule({
+            code: TransmittanceLUTPak,
+            label: 'Transmittance LUT'
+        });
+        this.pipeline = device.createComputePipeline({
+            compute: {
+                module: transmittanceLUTShaderModule,
+                entryPoint: "computeTransmittance",
             },
-            {
-                binding: 1,
-                visibility: GPUShaderStage.COMPUTE,
-                sampler: { type: "filtering" },  
-            },
-            {
-                binding: 2,
-                visibility: GPUShaderStage.COMPUTE,
-                texture: {sampleType: TRANSMITTANCE_LUT_SAMPLE_TYPE}
-            },
-        ],
-        label: label
-    });
-
-    const bindGroup0 = device.createBindGroup({
-        layout: bindGroup0Layout,
-        entries: [
-            {
-                binding: 0,
-                resource: multiscatterLUTView,
-            },
-            {
-                binding: 1,
-                resource: device.createSampler({magFilter: "linear", minFilter: "linear"}),  
-            },
-            {
-                binding: 2,
-                resource: transmittanceLUT,
-            },
-        ],
-        label: label
-    });
-
-    const multiscatterLUTShaderModule = device.createShaderModule({
-        code: MultiscatterLUTPak,
-        label: label
-    });
-    const multiscatterLUTPipeline = device.createComputePipeline({
-        compute: {
-            module: multiscatterLUTShaderModule,
-            entryPoint: "computeMultiscattering",
-        },
-        layout: device.createPipelineLayout({
-            bindGroupLayouts: [bindGroup0Layout]
-        }),
-        label: label
-    })
-
-    return {
-        group0: bindGroup0,
-        pipeline: multiscatterLUTPipeline,
-        texture: multiscatterLUT,
-        view: multiscatterLUTView,
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: [bindGroup0Layout]
+            }),
+            label: 'Transmittance LUT'
+        })
     }
 }
 
-interface SkyViewLUTPassResources
+class MultiscatterLUTPassResources
 {
     texture: GPUTexture;
     view: GPUTextureView;
+    
+    /*
+    @group(0) @binding(0) var multiscatter_lut: texture_storage_2d<rgba32float, write>;
+    @group(0) @binding(1) var lut_sampler: sampler;
+    @group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
+    */
+    group0: GPUBindGroup;
+    pipeline: GPUComputePipeline;
+
+    constructor(device: GPUDevice, dimensions: Extent2D, transmittanceLUT: GPUTextureView)
+    {
+        const label = "Multiscatter LUT";
+        this.texture = device.createTexture({
+            size: dimensions,
+            dimension: "2d",
+            format: MULTISCATTER_LUT_FORMAT,
+            usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+            label: 'Multiscatter LUT',
+        });
+        this.view = this.texture.createView({label: label})
+
+        const bindGroup0Layout = device.createBindGroupLayout({
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.COMPUTE,
+                    storageTexture: {
+                        access: "write-only",
+                        format: MULTISCATTER_LUT_FORMAT,
+                    }
+                },
+                {
+                    binding: 1,
+                    visibility: GPUShaderStage.COMPUTE,
+                    sampler: { type: "filtering" },  
+                },
+                {
+                    binding: 2,
+                    visibility: GPUShaderStage.COMPUTE,
+                    texture: {sampleType: TRANSMITTANCE_LUT_SAMPLE_TYPE}
+                },
+            ],
+            label: 'Multiscatter LUT Group 0'
+        });
+
+        this.group0 = device.createBindGroup({
+            layout: bindGroup0Layout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: this.view,
+                },
+                {
+                    binding: 1,
+                    resource: device.createSampler({magFilter: "linear", minFilter: "linear"}),  
+                },
+                {
+                    binding: 2,
+                    resource: transmittanceLUT,
+                },
+            ],
+            label: 'Multiscatter LUT Group 0'
+        });
+
+        const multiscatterLUTShaderModule = device.createShaderModule({
+            code: MultiscatterLUTPak,
+            label: label
+        });
+        this.pipeline = device.createComputePipeline({
+            compute: {
+                module: multiscatterLUTShaderModule,
+                entryPoint: "computeMultiscattering",
+            },
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: [bindGroup0Layout]
+            }),
+            label: 'Multiscatter LUT'
+        })
+    }
+}
+
+class SkyViewLUTPassResources
+{
+    texture: GPUTexture;
+    view: GPUTextureView;
+
+    /*
+    @group(0) @binding(0) var skyview_lut: texture_storage_2d<rgba32float, write>;
+    @group(0) @binding(1) var lut_sampler: sampler;
+    @group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
+    @group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
+
+    @group(1) @binding(0) var<uniform> b_light: CelestialLightUBO;
+    */
     group0: GPUBindGroup;
     group1: GPUBindGroup;
+
     pipeline: GPUComputePipeline;
-}
 
-function CreateSkyViewLUTPassResources(
-    device: GPUDevice, 
-    dimensions: {width: number, height: number},
-    transmittanceLUT: GPUTextureView,
-    multiscatterLUT: GPUTextureView,
-    lightUBO: CelestialLightUBO,
-): SkyViewLUTPassResources
-{
-    const label = "Skyview LUT";
-    const skyviewLUT = device.createTexture({
-        size: dimensions,
-        dimension: "2d",
-        format: SKYVIEW_LUT_FORMAT,
-        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-        label,
-    });
-    const skyviewLUTView = skyviewLUT.createView({label})
-
-    const bindGroup0Layout = device.createBindGroupLayout({
-        entries: [
-            {
-                binding: 0,
-                visibility: GPUShaderStage.COMPUTE,
-                storageTexture: {
-                    access: "write-only",
-                    format: SKYVIEW_LUT_FORMAT,
+    constructor(    
+        device: GPUDevice, 
+        dimensions: Extent2D,
+        transmittanceLUT: GPUTextureView,
+        multiscatterLUT: GPUTextureView,
+        lightUBO: CelestialLightUBO
+    )
+    {
+        this.texture = device.createTexture({
+            size: dimensions,
+            dimension: "2d",
+            format: SKYVIEW_LUT_FORMAT,
+            usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+            label: 'Skyview LUT',
+        });
+        this.view = this.texture.createView({label: 'Skyview LUT'})
+    
+        const bindGroup0Layout = device.createBindGroupLayout({
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.COMPUTE,
+                    storageTexture: {
+                        access: "write-only",
+                        format: SKYVIEW_LUT_FORMAT,
+                    }
+                },
+                {
+                    binding: 1,
+                    visibility: GPUShaderStage.COMPUTE,
+                    sampler: {type: "filtering"}
+                },
+                {
+                    binding: 2,
+                    visibility: GPUShaderStage.COMPUTE,
+                    texture: {sampleType: TRANSMITTANCE_LUT_SAMPLE_TYPE}
+                },
+                {
+                    binding: 3,
+                    visibility: GPUShaderStage.COMPUTE,
+                    texture: {sampleType: MULTISCATTER_LUT_SAMPLE_TYPE}
                 }
-            },
-            {
-                binding: 1,
-                visibility: GPUShaderStage.COMPUTE,
-                sampler: {type: "filtering"}
-            },
-            {
-                binding: 2,
-                visibility: GPUShaderStage.COMPUTE,
-                texture: {sampleType: TRANSMITTANCE_LUT_SAMPLE_TYPE}
-            },
-            {
-                binding: 3,
-                visibility: GPUShaderStage.COMPUTE,
-                texture: {sampleType: MULTISCATTER_LUT_SAMPLE_TYPE}
-            }
-        ],
-        label
-    });
+            ],
+            label: 'Skyview LUT'
+        });
 
-    const bindGroup0 = device.createBindGroup({
-        layout: bindGroup0Layout,
-        entries: [
-            {
-                binding: 0,
-                resource: skyviewLUTView,
-            },
-            {
-                binding: 1,
-                resource: device.createSampler({magFilter: "linear", minFilter: "linear"}),  
-            },
-            {
-                binding: 2,
-                resource: transmittanceLUT,
-            },
-            {
-                binding: 3,
-                resource: multiscatterLUT,
-            }
-        ],
-        label
-    });
+        this.group0 = device.createBindGroup({
+            layout: bindGroup0Layout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: this.view,
+                },
+                {
+                    binding: 1,
+                    resource: device.createSampler({magFilter: "linear", minFilter: "linear"}),  
+                },
+                {
+                    binding: 2,
+                    resource: transmittanceLUT,
+                },
+                {
+                    binding: 3,
+                    resource: multiscatterLUT,
+                }
+            ],
+            label: 'Skyview LUT Group 0'
+        });
+    
+        const bindGroup1Layout = device.createBindGroupLayout({
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: {}
+                }
+            ],
+            label: 'Skyview LUT Group 1'
+        });
 
-    const bindGroup1Layout = device.createBindGroupLayout({
-        entries: [
-            {
-                binding: 0,
-                visibility: GPUShaderStage.COMPUTE,
-                buffer: {}
-            }
-        ]
-    });
-    const bindGroup1 = device.createBindGroup({
-        layout: bindGroup1Layout,
-        entries: [
-            {
-                binding: 0,
-                resource: {buffer: lightUBO.buffer}
-            }
-        ]
-    });
+        this.group1 = device.createBindGroup({
+            layout: bindGroup1Layout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: {buffer: lightUBO.buffer}
+                }
+            ],
+            label: 'Skyview LUT Group 1'
+        });
+    
+        const skyviewLUTShaderModule = device.createShaderModule({
+            code: SkyViewLUTPak,
+        });
 
-    const skyviewLUTShaderModule = device.createShaderModule({
-        code: SkyViewLUTPak,
-        label
-    });
-    const skyviewLUTPipeline = device.createComputePipeline({
-        compute: {
-            module: skyviewLUTShaderModule,
-            entryPoint: "computeSkyViewLuminance",
-        },
-        layout: device.createPipelineLayout({
-            bindGroupLayouts: [bindGroup0Layout, bindGroup1Layout]
-        }),
-        label
-    })
-
-    return {
-        group0: bindGroup0,
-        group1: bindGroup1,
-        pipeline: skyviewLUTPipeline,
-        texture: skyviewLUT,
-        view: skyviewLUTView,
+        this.pipeline = device.createComputePipeline({
+            compute: {
+                module: skyviewLUTShaderModule,
+                entryPoint: "computeSkyViewLuminance",
+            },
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: [bindGroup0Layout, bindGroup1Layout]
+            }),
+            label: 'Skyview LUT'
+        });
     }
 }
 
@@ -605,7 +585,9 @@ class FFTWaveSpectrumResources
         const FLOAT32_PER_GAUSSIAN_NOISE_TEXEL = 2;
         const BYTES_PER_TEXEL = 8;
         const BYTES_PER_ROW = BYTES_PER_TEXEL  * this.spectrumDimension;
-        let randomNumbers = new Float32Array(this.spectrumDimension * this.spectrumDimension * FLOAT32_PER_GAUSSIAN_NOISE_TEXEL);
+        const randomNumbers = new Float32Array(
+            this.spectrumDimension * this.spectrumDimension * FLOAT32_PER_GAUSSIAN_NOISE_TEXEL
+        );
 
         for(let i = 0; i < randomNumbers.length; i++)
         {
@@ -637,7 +619,7 @@ class FFTWaveSpectrumResources
 
 // Holds a compute pass for computing the displacement of a bunch of vertices,
 // then a graphics pass for rasterizing these vertices
-interface WaveSurfaceDisplacementPassResources
+class WaveSurfaceDisplacementPassResources
 {
     /*
     @group(0) @binding(0) var<storage, read_write> output_vertices: array<vec4<f32>, VERTEX_COUNT>;
@@ -666,311 +648,312 @@ interface WaveSurfaceDisplacementPassResources
     displacementGerstnerPipeline: GPUComputePipeline;
 
     surfaceRasterizationPipeline: GPURenderPipeline;
-}
 
-function CreateWaveSurfaceDisplacementPassResources(
-    device: GPUDevice,
-    cameraUBO: CameraUBO,
-    timeUBO: TimeUBO,
-)
-{
-    const label = "Wave Surface Displacement";
-
-    // Grid of vertices + extra quad for ocean horizon
-
-    // vec4<f32>
-    const VERTEX_SIZE_BYTES = 4 * 4;
-    const VERTEX_DIMENSION = 2048;
-    const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
-
-    // u32
-    const INDEX_SIZE_BYTES = 4;
-    const TRIANGLE_COUNT = 2 * (VERTEX_DIMENSION - 1) * (VERTEX_DIMENSION - 1);
-    const INDEX_COUNT = 3 * TRIANGLE_COUNT;
-
-    const vertices = device.createBuffer({
-        size: VERTEX_SIZE_BYTES * VERTEX_COUNT,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
-        label,
-    });
-    const worldNormals = device.createBuffer({
-        size: VERTEX_SIZE_BYTES * VERTEX_COUNT,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
-        label,
-    });
-
-    const indices = device.createBuffer({
-        size: INDEX_COUNT * INDEX_SIZE_BYTES,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
-    });
-
-    interface PlaneWave
+    constructor(device: GPUDevice, cameraUBO: CameraUBO, timeUBO: TimeUBO)
     {
-        direction: Vec2,
-        amplitude: number,
-        wavelength: number,
-    };
+        // Grid of vertices + extra quad for ocean horizon
 
-    // Could use instancing instead of duplicating the indices, since these are all a bunch of quads
-    const indicesSource = new Uint32Array(INDEX_COUNT);
-    let indicesSourceOffset = 0;
-    for(let y = 0; y < VERTEX_DIMENSION - 1; y++)
-    {
-        for(let x = 0; x < VERTEX_DIMENSION - 1; x++)
+        // vec4<f32>
+        const VERTEX_SIZE_BYTES = 4 * 4;
+        const VERTEX_DIMENSION = 2048;
+        const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
+
+        // u32
+        const INDEX_SIZE_BYTES = 4;
+        const TRIANGLE_COUNT = 2 * (VERTEX_DIMENSION - 1) * (VERTEX_DIMENSION - 1);
+        const INDEX_COUNT = 3 * TRIANGLE_COUNT;
+
+        this.vertices = device.createBuffer({
+            size: VERTEX_SIZE_BYTES * VERTEX_COUNT,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
+            label: 'Wave Surface Displacement Vertices',
+        });
+        this.worldNormals = device.createBuffer({
+            size: VERTEX_SIZE_BYTES * VERTEX_COUNT,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
+            label: 'Wave Surface Displacement Normals',
+        });
+
+        this.indices = device.createBuffer({
+            size: INDEX_COUNT * INDEX_SIZE_BYTES,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
+            label: 'Wave Surface Displacement Indices',
+        });
+
+        // Could use instancing instead of duplicating the indices, since these are all a bunch of quads
+        const indicesSource = new Uint32Array(INDEX_COUNT);
+        let indicesSourceOffset = 0;
+        for(let y = 0; y < VERTEX_DIMENSION - 1; y++)
         {
-            // Looking at the grid from above we have 4 indices per cell of adjacent vertices
-            // y 2 3
-            // | 0 1
-            // ----x
+            for(let x = 0; x < VERTEX_DIMENSION - 1; x++)
+            {
+                // Looking at the grid from above we have 4 indices per cell of adjacent vertices
+                // y 2 3
+                // | 0 1
+                // ----x
 
-            const index0 = x + y * VERTEX_DIMENSION;
-            const index1 = index0 + 1;
-            const index2 = index0 + VERTEX_DIMENSION;
-            const index3 = index2 + 1; 
+                const index0 = x + y * VERTEX_DIMENSION;
+                const index1 = index0 + 1;
+                const index2 = index0 + VERTEX_DIMENSION;
+                const index3 = index2 + 1; 
 
-            const twoTriangleIndices = new Uint32Array([
-               index0, index2, index1,
-               index1, index2, index3, 
-            ]);
-            indicesSource.set(twoTriangleIndices, indicesSourceOffset);
-            indicesSourceOffset += twoTriangleIndices.length;
+                const twoTriangleIndices = new Uint32Array([
+                index0, index2, index1,
+                index1, index2, index3, 
+                ]);
+                indicesSource.set(twoTriangleIndices, indicesSourceOffset);
+                indicesSourceOffset += twoTriangleIndices.length;
+            }
         }
+        device.queue.writeBuffer(this.indices, 0, indicesSource);
+
+        const WAVE_COUNT = 6;
+        const WAVE_SIZE_FLOATS = 4;
+        const WAVE_SIZE_BYTES = 4 * WAVE_SIZE_FLOATS;
+        const waves = device.createBuffer({
+            size: WAVE_COUNT * WAVE_SIZE_BYTES,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
+            label: 'Wave Surface Displacement Waves'
+        });
+
+        // We ensure that the waves can loop, and determine this loop period
+        // To ensure this, the phase speeds must be an integer ratio
+        // Our model uses the dispersion relationship for deep ocean waves:
+        // c := wave speed
+        // g := gravity = 9.8
+        // k := wave number = wavelength / 2pi
+        // T := period in seconds
+        //
+        // c = sqrt(g * k) = sqrt(g * wavelength / 2pi)
+        // T = wavelength / c = sqrt(wavelength * 2pi / g)
+        // 
+        // Thus we pick some base largest wavelength to determine the animation period
+        // Then, all smaller periods must be T/n for some integer n.
+        // So all smaller wavelengths are wavelength / n^2 for some integer n. 
+        //
+        // Note: we do not actually need to render the largest wave, this just ensures that the periods work out.
+
+        const gravity = 9.8;
+        const animationPeriod = 60.0;
+        // ~5615 meter wavelength
+        const baseWavelength = animationPeriod * animationPeriod * gravity / (2.0 * Math.PI);
+
+        // Mirrors GPU structure size and alignment
+        interface PlaneWave
+        {
+            direction: Vec2,
+            amplitude: number,
+            wavelength: number,
+        };
+
+        // Arbitrarily picked wavelengths/directions/amplitudes
+        // Loops may occur but I did not see any with these parameters
+        const wavesSource = new Array<PlaneWave>(
+            {
+                direction: vec2.create(1.0, 2.0),
+                amplitude: 0.75,
+                wavelength: baseWavelength / (16.0 * 16.0),
+            },
+            {
+                direction: vec2.create(1.2, 2.0),
+                amplitude: 0.75,
+                wavelength: baseWavelength / (14.0 * 14.0),
+            },
+            {
+                direction: vec2.create(0.8, 2.0),
+                amplitude: 0.75,
+                wavelength: baseWavelength / (12.0 * 12.0),
+            },
+            {
+                direction: vec2.create(1.25, 2.0),
+                amplitude: 0.75,
+                wavelength: baseWavelength / (16.0 * 16.0),
+            },
+            {
+                direction: vec2.create(-2.0, 1.0),
+                amplitude: 0.1,
+                wavelength: baseWavelength / (19.0 * 19.0),
+            },
+            {
+                direction: vec2.create(0.0, 1.0),
+                amplitude: 0.1,
+                wavelength: baseWavelength / (19.0 * 19.0),
+            },
+        );
+        const wavesFloats = new Float32Array(WAVE_COUNT * WAVE_SIZE_FLOATS);
+        let wavesFloatsIndex = 0;
+        wavesSource.forEach(value => {
+            wavesFloats.set(value.direction, wavesFloatsIndex);
+            wavesFloats[wavesFloatsIndex + 2] = value.amplitude;
+            wavesFloats[wavesFloatsIndex + 3] = value.wavelength;
+            wavesFloatsIndex += 4;
+        });
+        device.queue.writeBuffer(waves, 0, wavesFloats);
+
+        const group0LayoutCompute = device.createBindGroupLayout({
+            entries: [
+                {
+                    binding: 0, 
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: {type: 'storage'}
+                },
+                {
+                    binding: 1, 
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: {type: 'storage'}
+                },
+                {
+                    binding: 2,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: {type: 'uniform'}
+                },
+            ],
+            label: 'Wave Surface Displacement Group 0 Compute',
+        });
+
+        this.group0Compute = device.createBindGroup({
+            layout: group0LayoutCompute,
+            entries: [
+                {binding: 0, resource: {buffer: this.vertices}},
+                {binding: 1, resource: {buffer: this.worldNormals}},
+                {binding: 2, resource: {buffer: waves}},
+            ],
+            label: 'Wave Surface Displacement Group 0 Compute',
+        });
+
+        const group0LayoutGraphics = device.createBindGroupLayout({
+            entries: [
+                {
+                    binding: 0, 
+                    visibility: GPUShaderStage.VERTEX,
+                    buffer: {type: 'read-only-storage'}
+                },
+                {
+                    binding: 1, 
+                    visibility: GPUShaderStage.VERTEX,
+                    buffer: {type: 'read-only-storage'}
+                }
+            ],
+            label: 'Wave Surface Displacement Group 0 Graphics',
+        });
+
+        this.group0Graphics = device.createBindGroup({
+            layout: group0LayoutGraphics,
+            entries: [
+                {binding: 0, resource: {buffer: this.vertices}},
+                {binding: 1, resource: {buffer: this.worldNormals}},
+            ],
+            label: 'Wave Surface Displacement Group 0 Graphics',
+        });
+
+        const group1Layout = device.createBindGroupLayout({                    
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.VERTEX,
+                    buffer: {}
+                },
+                {
+                    binding: 1,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: {}
+                }
+            ], 
+            label: 'Wave Surface Displacement Group 1',
+        });
+        this.group1 = device.createBindGroup({
+            layout: group1Layout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: {buffer: cameraUBO.buffer }
+                },
+                {
+                    binding: 1,
+                    resource: {buffer: timeUBO.buffer }
+                }
+            ],
+            label: 'Wave Surface Displacement Group 1',
+        });
+
+        const shaderModule = device.createShaderModule({
+            code: WaveSurfaceDisplacementPak, 
+            label: 'Wave Surface Displacement',
+        });
+
+        this.displacementCosinePipeline = device.createComputePipeline({
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: [group0LayoutCompute, group1Layout],
+            }),
+            compute: {
+                module: shaderModule,
+                entryPoint: 'displaceVertices',
+                constants: {
+                    0: 0,
+                }
+            },
+            label: 'Wave Surface Displacement Cosine Kernel'
+        });
+        this.displacementGerstnerPipeline = device.createComputePipeline({
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: [group0LayoutCompute, group1Layout],
+            }),
+            compute: {
+                module: shaderModule,
+                entryPoint: 'displaceVertices',
+                constants: {
+                    0: 1,
+                }
+            },
+            label: 'Wave Surface Displacement Gerstner Kernel'
+        });
+
+        this.surfaceRasterizationPipeline = device.createRenderPipeline({
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: [group0LayoutGraphics, group1Layout],
+            }),
+            vertex: {
+                module: shaderModule,
+                entryPoint: 'rasterizationVertex',
+            },
+            fragment: {
+                module: shaderModule,
+                entryPoint: 'rasterizationFragment',
+                targets: [
+                    {format: GBUFFER_COLOR_FORMAT},
+                    {format: GBUFFER_NORMAL_FORMAT},
+                ]
+            },
+            primitive: {
+                topology: 'triangle-list',
+                cullMode: 'back',
+                frontFace: 'ccw',
+            },
+            depthStencil: {
+                format: GBUFFER_DEPTH_FORMAT,
+                depthWriteEnabled: true,
+                depthCompare: 'less',
+            },
+            label: 'Wave Surface Displacement Surface Rasterization'
+        });
     }
-    device.queue.writeBuffer(indices, 0, indicesSource, 0, indicesSource.length);
-
-
-    const WAVE_COUNT = 6;
-    const WAVE_SIZE_FLOATS = 4;
-    const WAVE_SIZE_BYTES = 4 * WAVE_SIZE_FLOATS;
-    const waves = device.createBuffer({
-        size: WAVE_COUNT * WAVE_SIZE_BYTES,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
-    });
-
-    // We ensure that the waves can loop, and determine this loop period
-    // To ensure this, the phase speeds must be an integer ratio
-    // Our model uses the dispersion relationship for deep ocean waves:
-    // c := wave speed
-    // g := gravity = 9.8
-    // k := wave number = wavelength / 2pi
-    // T := period in seconds
-    //
-    // c = sqrt(g * k) = sqrt(g * wavelength / 2pi)
-    // T = wavelength / c = sqrt(wavelength * 2pi / g)
-    // 
-    // Thus we pick some base largest wavelength to determine the animation period
-    // Then, all smaller periods must be T/n for some integer n.
-    // So all smaller wavelengths are wavelength / n^2 for some integer n. 
-    //
-    // Note: we do not actually need to render the largest wave, this just ensures that the periods work out.
-
-    const gravity = 9.8;
-    const animationPeriod = 60.0;
-    // ~5615 meter wavelength
-    const baseWavelength = animationPeriod * animationPeriod * gravity / (2.0 * Math.PI);
-
-    // Arbitrarily picked wavelengths/directions/amplitudes
-    // Loops may occur but I did not see any with these parameters
-    const wavesSource = new Array<PlaneWave>(
-        {
-            direction: vec2.create(1.0, 2.0),
-            amplitude: 0.75,
-            wavelength: baseWavelength / (16.0 * 16.0),
-        },
-        {
-            direction: vec2.create(1.2, 2.0),
-            amplitude: 0.75,
-            wavelength: baseWavelength / (14.0 * 14.0),
-        },
-        {
-            direction: vec2.create(0.8, 2.0),
-            amplitude: 0.75,
-            wavelength: baseWavelength / (12.0 * 12.0),
-        },
-        {
-            direction: vec2.create(1.25, 2.0),
-            amplitude: 0.75,
-            wavelength: baseWavelength / (16.0 * 16.0),
-        },
-        {
-            direction: vec2.create(-2.0, 1.0),
-            amplitude: 0.1,
-            wavelength: baseWavelength / (19.0 * 19.0),
-        },
-        {
-            direction: vec2.create(0.0, 1.0),
-            amplitude: 0.1,
-            wavelength: baseWavelength / (19.0 * 19.0),
-        },
-    );
-    const wavesFloats = new Float32Array(WAVE_COUNT * WAVE_SIZE_FLOATS);
-    let wavesFloatsIndex = 0;
-    wavesSource.forEach(value => {
-        wavesFloats.set(value.direction, wavesFloatsIndex);
-        wavesFloats[wavesFloatsIndex + 2] = value.amplitude;
-        wavesFloats[wavesFloatsIndex + 3] = value.wavelength;
-        wavesFloatsIndex += 4;
-    });
-    device.queue.writeBuffer(waves, 0, wavesFloats);
-
-    const group0LayoutCompute = device.createBindGroupLayout({
-        entries: [
-            {
-                binding: 0, 
-                visibility: GPUShaderStage.COMPUTE,
-                buffer: {type: 'storage'}
-            },
-            {
-                binding: 1, 
-                visibility: GPUShaderStage.COMPUTE,
-                buffer: {type: 'storage'}
-            },
-            {
-                binding: 2,
-                visibility: GPUShaderStage.COMPUTE,
-                buffer: {type: 'uniform'}
-            },
-        ],
-        label,
-    });
-
-    const group0Compute = device.createBindGroup({
-        layout: group0LayoutCompute,
-        entries: [
-            {binding: 0, resource: {buffer: vertices}},
-            {binding: 1, resource: {buffer: worldNormals}},
-            {binding: 2, resource: {buffer: waves}},
-        ],
-        label,
-    });
-
-    const group0LayoutGraphics = device.createBindGroupLayout({
-        entries: [
-            {
-                binding: 0, 
-                visibility: GPUShaderStage.VERTEX,
-                buffer: {type: 'read-only-storage'}
-            },
-            {
-                binding: 1, 
-                visibility: GPUShaderStage.VERTEX,
-                buffer: {type: 'read-only-storage'}
-            }
-        ],
-        label,
-    });
-
-    const group0Graphics = device.createBindGroup({
-        layout: group0LayoutGraphics,
-        entries: [
-            {binding: 0, resource: {buffer: vertices}},
-            {binding: 1, resource: {buffer: worldNormals}},
-        ],
-        label,
-    });
-
-    const group1Layout = device.createBindGroupLayout({                    
-        entries: [
-            {
-                binding: 0,
-                visibility: GPUShaderStage.VERTEX,
-                buffer: {}
-            },
-            {
-                binding: 1,
-                visibility: GPUShaderStage.COMPUTE,
-                buffer: {}
-            }
-        ], 
-        label,
-    });
-    const group1 = device.createBindGroup({
-        layout: group1Layout,
-        entries: [
-            {
-                binding: 0,
-                resource: {buffer: cameraUBO.buffer }
-            },
-            {
-                binding: 1,
-                resource: {buffer: timeUBO.buffer }
-            }
-        ],
-        label,
-    });
-
-    const shaderModule = device.createShaderModule({code: WaveSurfaceDisplacementPak, label});
-
-    const displacementCosinePipeline = device.createComputePipeline({
-        layout: device.createPipelineLayout({
-            bindGroupLayouts: [group0LayoutCompute, group1Layout],
-        }),
-        compute: {
-            module: shaderModule,
-            entryPoint: 'displaceVertices',
-            constants: {
-                0: 0,
-            }
-        },
-        label
-    });
-    const displacementGerstnerPipeline = device.createComputePipeline({
-        layout: device.createPipelineLayout({
-            bindGroupLayouts: [group0LayoutCompute, group1Layout],
-        }),
-        compute: {
-            module: shaderModule,
-            entryPoint: 'displaceVertices',
-            constants: {
-                0: 1,
-            }
-        },
-        label
-    });
-
-    const surfaceRasterizationPipeline = device.createRenderPipeline({
-        layout: device.createPipelineLayout({
-            bindGroupLayouts: [group0LayoutGraphics, group1Layout],
-        }),
-        vertex: {
-            module: shaderModule,
-            entryPoint: 'rasterizationVertex',
-        },
-        fragment: {
-            module: shaderModule,
-            entryPoint: 'rasterizationFragment',
-            targets: [
-                {format: GBUFFER_COLOR_FORMAT},
-                {format: GBUFFER_NORMAL_FORMAT},
-            ]
-        },
-        primitive: {
-            topology: 'triangle-list',
-            cullMode: 'back',
-            frontFace: 'ccw',
-        },
-        depthStencil: {
-            format: GBUFFER_DEPTH_FORMAT,
-            depthWriteEnabled: true,
-            depthCompare: 'less',
-        }
-    });
-
-    return {
-        group0Compute,
-        group0Graphics,
-        group1,
-        vertices,
-        worldNormals,
-        indices,
-        displacementCosinePipeline,
-        displacementGerstnerPipeline,
-        surfaceRasterizationPipeline,
-    };
 }
 
-interface AtmosphereCameraPassResources
+class AtmosphereCameraPassResources
 {
+    /*
+    @group(0) @binding(0) var output_color: texture_storage_2d<rgba32float, write>;
+    @group(0) @binding(1) var lut_sampler: sampler;
+    @group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
+    @group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
+    @group(0) @binding(4) var skyview_lut: texture_2d<f32>;
+    
+    @group(1) @binding(0) var<uniform> b_camera: CameraUBO;
+    @group(1) @binding(1) var<uniform> b_light: CelestialLightUBO;
+
+    @group(2) @binding(0) var gbuffer_color_with_depth_in_alpha: texture_2d<f32>;
+    @group(2) @binding(1) var gbuffer_normal: texture_2d<f32>;
+    */
     group0Layout: GPUBindGroupLayout;
     group1Layout: GPUBindGroupLayout;
 
@@ -981,157 +964,147 @@ interface AtmosphereCameraPassResources
     outputColorView: GPUTextureView;
 
     pipeline: GPUComputePipeline;
+
+    constructor(
+        device: GPUDevice,
+        gbufferReadGroupLayout: GPUBindGroupLayout,
+        transmittanceLUTView: GPUTextureView,
+        multiscatterLUTView: GPUTextureView,
+        skyviewLUTView: GPUTextureView,
+        cameraUBO: CameraUBO,
+        lightUBO: CelestialLightUBO,
+    )
+    {
+        this.group0Layout = device.createBindGroupLayout({
+            entries: [
+                { // output texture
+                    binding: 0,
+                    visibility: GPUShaderStage.COMPUTE,
+                    storageTexture: {format: ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT}
+                },
+                { // sampler for the LUTs
+                    binding: 1,
+                    visibility: GPUShaderStage.COMPUTE,
+                    sampler: {type: 'filtering'}
+                },
+                { // transmittance
+                    binding: 2,
+                    visibility: GPUShaderStage.COMPUTE,
+                    texture: {
+                        sampleType: TRANSMITTANCE_LUT_SAMPLE_TYPE,
+                        viewDimension: "2d"
+                    }
+                },
+                { // multiscatter
+                    binding: 3,
+                    visibility: GPUShaderStage.COMPUTE,
+                    texture: {
+                        sampleType: MULTISCATTER_LUT_SAMPLE_TYPE,
+                        viewDimension: "2d"
+                    }
+                },
+                { // skyview
+                    binding: 4,
+                    visibility: GPUShaderStage.COMPUTE,
+                    texture: {
+                        sampleType: SKYVIEW_LUT_SAMPLE_TYPE,
+                        viewDimension: "2d"
+                    }
+                },
+            ], 
+            label: "Atmosphere Camera Group 0"
+        });
+        this.group1Layout = device.createBindGroupLayout({
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: {}
+                },
+                {
+                    binding: 1,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: {}
+                }
+            ], 
+            label: "Atmosphere Camera Group 1"
+        });
+
+        this.outputColor = device.createTexture({
+            format: ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT,
+            size: {width: 1, height: 1},
+            usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+            label: 'Atmosphere Camera Output Color'
+        });
+        this.outputColorView = this.outputColor.createView();
+    
+        this.group0 = device.createBindGroup({
+            layout: this.group0Layout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: this.outputColorView,
+                },
+                {
+                    binding: 1,
+                    resource: device.createSampler({
+                        magFilter: 'linear',
+                        minFilter: 'linear',
+                    }),
+                },
+                {
+                    binding: 2,
+                    resource: transmittanceLUTView,
+                },
+                {
+                    binding: 3,
+                    resource: multiscatterLUTView,
+                },
+                {
+                    binding: 4,
+                    resource: skyviewLUTView,
+                },
+            ],
+            label: "Atmosphere Camera Group 0"
+        });
+    
+        this.group1 = device.createBindGroup({
+            layout: this.group1Layout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: {buffer: cameraUBO.buffer},
+                },
+                {
+                    binding: 1,
+                    resource: {buffer: lightUBO.buffer},
+                },
+            ],
+            label: "Atmosphere Camera Group 1"
+        })
+    
+        const atmosphereCameraShaderModule = device.createShaderModule({
+            code: AtmosphereCameraPak,
+            label: "Atmosphere Camera",
+        });
+        this.pipeline = device.createComputePipeline({
+            compute: {
+                module: atmosphereCameraShaderModule,
+                entryPoint: "renderCompositedAtmosphere",
+            },
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: [
+                    this.group0Layout, this.group1Layout, gbufferReadGroupLayout
+                ],
+            }),
+            label: "Atmosphere Camera"
+        })
+    }
 }
 
-function CreateAtmosphereCameraPassResources(
-    device: GPUDevice,
-    gbufferReadGrouplayout: GPUBindGroupLayout,
-    transmittanceLUTView: GPUTextureView,
-    multiscatterLUTView: GPUTextureView,
-    skyviewLUTView: GPUTextureView,
-    cameraUBO: CameraUBO,
-    lightUBO: CelestialLightUBO,
-)
+class FullscreenQuadPassResources
 {
-    const group0Layout = device.createBindGroupLayout({
-        entries: [
-            { // output texture
-                binding: 0,
-                visibility: GPUShaderStage.COMPUTE,
-                storageTexture: {format: ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT}
-            },
-            { // sampler for the LUTs
-                binding: 1,
-                visibility: GPUShaderStage.COMPUTE,
-                sampler: {type: 'filtering'}
-            },
-            { // transmittance
-                binding: 2,
-                visibility: GPUShaderStage.COMPUTE,
-                texture: {
-                    sampleType: TRANSMITTANCE_LUT_SAMPLE_TYPE,
-                    viewDimension: "2d"
-                }
-            },
-            { // multiscatter
-                binding: 3,
-                visibility: GPUShaderStage.COMPUTE,
-                texture: {
-                    sampleType: MULTISCATTER_LUT_SAMPLE_TYPE,
-                    viewDimension: "2d"
-                }
-            },
-            { // skyview
-                binding: 4,
-                visibility: GPUShaderStage.COMPUTE,
-                texture: {
-                    sampleType: SKYVIEW_LUT_SAMPLE_TYPE,
-                    viewDimension: "2d"
-                }
-            },
-        ], label: "Atmosphere sampler/LUT/UBO Group"
-    });
-    const group1Layout = device.createBindGroupLayout({
-        entries: [
-            {
-                binding: 0,
-                visibility: GPUShaderStage.COMPUTE,
-                buffer: {}
-            },
-            {
-                binding: 1,
-                visibility: GPUShaderStage.COMPUTE,
-                buffer: {}
-            }
-        ], label: "Atmosphere Camera Group 1"
-    });
-
-    const atmosphereCameraLayouts = [
-        group0Layout,
-        group1Layout,
-        gbufferReadGrouplayout
-    ];
-
-    const outputColor = device.createTexture({
-        format: ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT,
-        size: {width: 1, height: 1},
-        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING
-    });
-    const outputColorView = outputColor.createView();
-
-    const group0 = device.createBindGroup({
-        layout: group0Layout,
-        entries: [
-            {
-                binding: 0,
-                resource: outputColorView,
-            },
-            {
-                binding: 1,
-                resource: device.createSampler({
-                    magFilter: 'linear',
-                    minFilter: 'linear',
-                }),
-            },
-            {
-                binding: 2,
-                resource: transmittanceLUTView,
-            },
-            {
-                binding: 3,
-                resource: multiscatterLUTView,
-            },
-            {
-                binding: 4,
-                resource: skyviewLUTView,
-            },
-        ],
-        label: "Atmosphere Camera Group 0"
-    });
-
-    const group1 = device.createBindGroup({
-        layout: atmosphereCameraLayouts[1],
-        entries: [
-            {
-                binding: 0,
-                resource: {buffer: cameraUBO.buffer},
-            },
-            {
-                binding: 1,
-                resource: {buffer: lightUBO.buffer},
-            },
-        ],
-        label: "Atmosphere Camera Group 1"
-    })
-
-    const atmosphereCameraShaderModule = device.createShaderModule({
-        code: AtmosphereCameraPak,
-        label: "Atmosphere Camera",
-    });
-    const pipeline = device.createComputePipeline({
-        compute: {
-            module: atmosphereCameraShaderModule,
-            entryPoint: "renderCompositedAtmosphere",
-        },
-        layout: device.createPipelineLayout({
-            bindGroupLayouts: atmosphereCameraLayouts,
-        }),
-        label: "Atmosphere Camera"
-    })
-
-    return {
-        group0Layout,
-        group1Layout,
-        group0,
-        group1,
-        outputColor,
-        outputColorView,
-        pipeline,
-    };
-}
-
-interface FullscreenQuadPassResources
-{
+    // keep layout for resetting textures when resizing them
     group0Layout: GPUBindGroupLayout;
 
     group0ByOutputTexture: Map<RenderOutput, GPUBindGroup>;
@@ -1143,115 +1116,125 @@ interface FullscreenQuadPassResources
     group1: GPUBindGroup;
 
     pipeline: GPURenderPipeline;
-}
 
-// For showing a single texture stretched across the screen
-function CreateFullscreenQuadPassResources(
-    device: GPUDevice,
-    textures: Map<RenderOutput, GPUTextureView>,
-    outputFormat: GPUTextureFormat,
-)
-{
-    const label = "Fullscreen Quad";
-    const group0Layout = 
-        device.createBindGroupLayout({
-            entries: [
-                {
-                    binding: 0,
-                    visibility: GPUShaderStage.FRAGMENT,
-                    texture: {sampleType: 'float'}
-                },
-                {
-                    binding: 1,
-                    visibility: GPUShaderStage.FRAGMENT,
-                    sampler: { type: 'filtering' }
-                }
-            ], label
+    constructor(    
+        device: GPUDevice,
+        textures: Map<RenderOutput, GPUTextureView>,
+        outputFormat: GPUTextureFormat
+    )
+    {
+        this.group0Layout = 
+            device.createBindGroupLayout({
+                entries: [
+                    {
+                        binding: 0,
+                        visibility: GPUShaderStage.FRAGMENT,
+                        texture: {sampleType: 'float'}
+                    },
+                    {
+                        binding: 1,
+                        visibility: GPUShaderStage.FRAGMENT,
+                        sampler: { type: 'filtering' }
+                    }
+                ], 
+                label: 'Fullscreen Quad Group 0'
+            });
+    
+        this.group0ByOutputTexture = new Map<RenderOutput, GPUBindGroup>();
+        this.uboDataByOutputTexture = new Map<RenderOutput, FullscreenQuadUBOData>();
+    
+        this.group0Sampler = device.createSampler({magFilter: 'linear', minFilter: 'linear'});
+    
+        textures.forEach((view, key) => {
+            this.group0ByOutputTexture.set(key, device.createBindGroup({
+                layout: this.group0Layout,
+                entries: [
+                    {
+                        binding: 0,
+                        resource: view,
+                    },
+                    {
+                        binding: 1,
+                        resource: this.group0Sampler,
+                    },
+                ],
+                label: `Fullscreen Quad Group 0 Texture '${key.toString()}'`
+            }));
+            this.uboDataByOutputTexture.set(key, new FullscreenQuadUBOData());
         });
-
-    const group0ByOutputTexture = new Map<RenderOutput, GPUBindGroup>();
-
-    const uboDataByOutputTexture = new Map<RenderOutput, FullscreenQuadUBOData>();
-
-    const group0Sampler = device.createSampler({magFilter: 'linear', minFilter: 'linear'});
-
-    textures.forEach((view, key) => {
-        group0ByOutputTexture.set(key, device.createBindGroup({
-            layout: group0Layout,
+    
+        this.ubo = new FullscreenQuadUBO(device);
+    
+        const group1Layout = device.createBindGroupLayout({
             entries: [
                 {
                     binding: 0,
-                    resource: view,
-                },
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.VERTEX,
+                    buffer: {type: 'uniform' }
+                }
+            ], 
+            label: 'Fullscreen Quad Group 1',
+        });
+        this.group1 = device.createBindGroup({
+            layout: group1Layout,
+            entries: [
                 {
-                    binding: 1,
-                    resource: group0Sampler,
-                },
-            ],
-            label: label + key.toString()
-        }))
-        uboDataByOutputTexture.set(key, new FullscreenQuadUBOData());
-    });
-
-    const ubo = new FullscreenQuadUBO(device);
-
-    const group1Layout = device.createBindGroupLayout({
-        entries: [
-            {
-                binding: 0,
-                visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.VERTEX,
-                buffer: {type: 'uniform' }
-            }
-        ], label
-    });
-    const group1 = device.createBindGroup({
-        layout: group1Layout,
-        entries: [
-            {
-                binding: 0,
-                resource: {buffer: ubo.buffer }
-            }
-        ]
-    });
-
-    const shaderModule = device.createShaderModule({
-        code: FullscreenQuadPak,
-        label
-    });
-    const pipeline = device.createRenderPipeline({
-        vertex: {
-            module: shaderModule,
-            entryPoint: "vertex_main",
-        },
-        fragment: {
-            module: shaderModule,
-            entryPoint: "fragment_main",
-            targets: [
-                {
-                    format: outputFormat
-                },
+                    binding: 0,
+                    resource: {buffer: this.ubo.buffer }
+                }
             ]
-        },
-        primitive: {
-            topology: "triangle-list",
-            cullMode: "none",
-            frontFace: "ccw",
-        },
-        layout: device.createPipelineLayout({
-            bindGroupLayouts: [ group0Layout, group1Layout ],
-        }),
-        label
-    })
+        });
+    
+        const shaderModule = device.createShaderModule({
+            code: FullscreenQuadPak,
+            label: 'Fullscreen Quad'
+        });
+        this.pipeline = device.createRenderPipeline({
+            vertex: {
+                module: shaderModule,
+                entryPoint: "vertex_main",
+            },
+            fragment: {
+                module: shaderModule,
+                entryPoint: "fragment_main",
+                targets: [
+                    {
+                        format: outputFormat
+                    },
+                ]
+            },
+            primitive: {
+                topology: "triangle-list",
+                cullMode: "none",
+                frontFace: "ccw",
+            },
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: [ this.group0Layout, group1Layout ],
+            }),
+            label: 'Fullscreen Quad'
+        })
+    }
 
-    return {
-        group0Layout,
-        group0ByOutputTexture,
-        group0Sampler,
-        uboDataByOutputTexture,
-        ubo,
-        group1,
-        pipeline,
-    };
+    rebuildOutputTextureBinding(device: GPUDevice, id: RenderOutput, view: GPUTextureView)
+    {
+        this.group0ByOutputTexture.set(
+            id, 
+            device.createBindGroup({
+                layout: this.group0Layout,
+                entries: [
+                    {
+                        binding: 0,
+                        resource: view
+                    },
+                    {
+                        binding: 1,
+                        resource: this.group0Sampler,
+                    }  
+                ],
+                label: `Fullscreen Quad Group 0 Texture '${id.toString()}'`
+            })
+        );
+    }
 }
 
 enum RenderOutput {
@@ -1266,7 +1249,7 @@ enum RenderOutput {
 
 class OutputTexturePostProcessSettings
 {
-    flip: boolean = false;
+    flip = false;
     color_gain: {
         r: number,
         g: number,
@@ -1339,8 +1322,8 @@ class SkySeaApp implements RendererApp {
     fullscreenQuadPassResources: FullscreenQuadPassResources;
 
     gbuffer: GBuffer;
-    scaledSize: {width: number, height: number};
-    rawSize: {width: number, height: number};
+    scaledSize: Extent2D;
+    rawSize: Extent2D;
 
     settings: {
         outputTexture: RenderOutput,
@@ -1441,7 +1424,7 @@ class SkySeaApp implements RendererApp {
         outputTextureFolder.add(this.settings.currentOutputTextureSettings.color_gain, 'g').name('G').min(0.0).max(100.0).listen();
         outputTextureFolder.add(this.settings.currentOutputTextureSettings.color_gain, 'b').name('B').min(0.0).max(100.0).listen();
         outputTextureController.onChange((newValue: RenderOutput,) => {
-            const previousValue = outputTextureController._listenPrevValue;
+            const previousValue = outputTextureController._listenPrevValue as RenderOutput;
 
             if(!this.settings.outputTextureSettings.has(previousValue))
             {
@@ -1577,18 +1560,19 @@ class SkySeaApp implements RendererApp {
 
         this.celestialLightUBO = new CelestialLightUBO(device);
 
-        this.gbuffer = CreateGBuffer(device, {width: 1, height: 1});
+        this.gbuffer = new GBuffer(device, {width: 1, height: 1});
 
-        this.transmittanceLUTPassResources = CreateTransmittanceLUTPassResources(
-            this.device, transmittanceLUTDimensions
+        this.transmittanceLUTPassResources = new TransmittanceLUTPassResources(
+            this.device, TRANSMITTANCE_LUT_EXTENT
         );
-        this.multiscatterLUTPassResources = CreateMultiscatterLUTPassResources(
-            this.device, multiscatterLUTDimensions, 
+
+        this.multiscatterLUTPassResources = new MultiscatterLUTPassResources(
+            this.device, MULTISCATTER_LUT_EXTENT, 
             this.transmittanceLUTPassResources.view
         );
 
-        this.skyviewLUTPassResources = CreateSkyViewLUTPassResources(
-            this.device, skyviewLUTDimensions, 
+        this.skyviewLUTPassResources = new SkyViewLUTPassResources(
+            this.device, SKYVIEW_LUT_EXTENT, 
             this.transmittanceLUTPassResources.view, 
             this.multiscatterLUTPassResources.view,
             this.celestialLightUBO,
@@ -1596,7 +1580,7 @@ class SkySeaApp implements RendererApp {
 
         this.fftWaveSpectrumResources = new FFTWaveSpectrumResources(this.device);
 
-        this.waveSurfaceDisplacementPassResources = CreateWaveSurfaceDisplacementPassResources(
+        this.waveSurfaceDisplacementPassResources = new WaveSurfaceDisplacementPassResources(
             this.device, this.cameraUBO, this.timeUBO,
         );
 
@@ -1607,7 +1591,7 @@ class SkySeaApp implements RendererApp {
         this.fullscreenQuadIndexBuffer = device.createBuffer({size: fullscreenQuadIndices.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST});
         device.queue.writeBuffer(this.fullscreenQuadIndexBuffer, 0, fullscreenQuadIndices, 0, fullscreenQuadIndices.length);
 
-        this.atmosphereCameraPassResources = CreateAtmosphereCameraPassResources(
+        this.atmosphereCameraPassResources = new AtmosphereCameraPassResources(
             this.device,
             this.gbuffer.readGroupLayout,
             this.transmittanceLUTPassResources.view,
@@ -1617,7 +1601,7 @@ class SkySeaApp implements RendererApp {
             this.celestialLightUBO,
         );
 
-        this.fullscreenQuadPassResources = CreateFullscreenQuadPassResources(
+        this.fullscreenQuadPassResources = new FullscreenQuadPassResources(
             this.device, 
             new Map<RenderOutput, GPUTextureView>([
                 [RenderOutput.Scene, this.atmosphereCameraPassResources.outputColorView],
@@ -1637,8 +1621,8 @@ class SkySeaApp implements RendererApp {
         passEncoder.setPipeline(this.transmittanceLUTPassResources.pipeline);
         passEncoder.setBindGroup(0, this.transmittanceLUTPassResources.group0);
         passEncoder.dispatchWorkgroups(
-            Math.ceil(transmittanceLUTDimensions.width / 16), 
-            Math.ceil(transmittanceLUTDimensions.height / 16),
+            Math.ceil(TRANSMITTANCE_LUT_EXTENT.width / 16), 
+            Math.ceil(TRANSMITTANCE_LUT_EXTENT.height / 16),
         );
         passEncoder.end();
 
@@ -1646,8 +1630,8 @@ class SkySeaApp implements RendererApp {
         passEncoder.setPipeline(this.multiscatterLUTPassResources.pipeline);
         passEncoder.setBindGroup(0, this.multiscatterLUTPassResources.group0);
         passEncoder.dispatchWorkgroups(
-            Math.ceil(multiscatterLUTDimensions.width / 16), 
-            Math.ceil(multiscatterLUTDimensions.height / 16),
+            Math.ceil(MULTISCATTER_LUT_EXTENT.width / 16), 
+            Math.ceil(MULTISCATTER_LUT_EXTENT.height / 16),
         ); 
         passEncoder.end();
 
@@ -1865,9 +1849,9 @@ class SkySeaApp implements RendererApp {
         skyviewLUTPassEncoder.setBindGroup(0, this.skyviewLUTPassResources.group0);
         skyviewLUTPassEncoder.setBindGroup(1, this.skyviewLUTPassResources.group1);
         skyviewLUTPassEncoder.dispatchWorkgroups(
-            Math.ceil(skyviewLUTDimensions.width / 16),
+            Math.ceil(SKYVIEW_LUT_EXTENT.width / 16),
             // divide by 31, since we can skip most of the lower half of the LUT 
-            Math.ceil(skyviewLUTDimensions.height / 31),
+            Math.ceil(SKYVIEW_LUT_EXTENT.height / 31),
         );
         skyviewLUTPassEncoder.end();
 
@@ -2003,41 +1987,17 @@ class SkySeaApp implements RendererApp {
         console.log(`Resizing to (${this.scaledSize.width},${this.scaledSize.height})`);
 
         this.rawSize = {width: newWidth, height: newHeight};
-        this.gbuffer = CreateGBuffer(this.device, this.scaledSize, this.gbuffer);
+        this.gbuffer = new GBuffer(this.device, this.scaledSize, this.gbuffer);
 
-        this.fullscreenQuadPassResources.group0ByOutputTexture.set(
+        this.fullscreenQuadPassResources.rebuildOutputTextureBinding(
+            this.device, 
             RenderOutput.GBufferColor, 
-            this.device.createBindGroup({
-                layout: this.fullscreenQuadPassResources.group0Layout,
-                entries: [
-                    {
-                        binding: 0,
-                        resource: this.gbuffer.colorWithDepthInAlphaView
-                    },
-                    {
-                        binding: 1,
-                        resource: this.fullscreenQuadPassResources.group0Sampler,
-                    }  
-                ],
-                label: 'Fullscreen Quad Pass Bing Group 0 GBuffer Color Resized'
-            })
+            this.gbuffer.colorWithDepthInAlphaView
         );
-        this.fullscreenQuadPassResources.group0ByOutputTexture.set(
-            RenderOutput.GBufferNormal, 
-            this.device.createBindGroup({
-                layout: this.fullscreenQuadPassResources.group0Layout,
-                entries: [
-                    {
-                        binding: 0,
-                        resource: this.gbuffer.normalView
-                    },
-                    {
-                        binding: 1,
-                        resource: this.fullscreenQuadPassResources.group0Sampler,
-                    }  
-                ],
-                label: 'Fullscreen Quad Pass Bing Group 0 GBuffer Normal Resized'
-            })
+        this.fullscreenQuadPassResources.rebuildOutputTextureBinding(
+            this.device,
+            RenderOutput.GBufferNormal,
+            this.gbuffer.normalView
         );
 
         this.atmosphereCameraPassResources.outputColor = this.device.createTexture({
@@ -2047,22 +2007,10 @@ class SkySeaApp implements RendererApp {
         });
         this.atmosphereCameraPassResources.outputColorView = this.atmosphereCameraPassResources.outputColor.createView();
 
-        this.fullscreenQuadPassResources.group0ByOutputTexture.set(
-            RenderOutput.Scene, 
-            this.device.createBindGroup({
-                layout: this.fullscreenQuadPassResources.group0Layout,
-                entries: [
-                    {
-                        binding: 0,
-                        resource: this.atmosphereCameraPassResources.outputColorView
-                    },
-                    {
-                        binding: 1,
-                        resource: this.fullscreenQuadPassResources.group0Sampler,
-                    }  
-                ],
-                label: 'Fullscreen Quad Pass Bing Group 0 GBuffer Normal Resized'
-            })
+        this.fullscreenQuadPassResources.rebuildOutputTextureBinding(
+            this.device,
+            RenderOutput.Scene,
+            this.atmosphereCameraPassResources.outputColorView,
         );
 
         this.atmosphereCameraPassResources.group0 = this.device.createBindGroup({

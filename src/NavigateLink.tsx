@@ -60,5 +60,15 @@ export const NavigationHeader = memo(function NavigationHeader() {
 		);
 	}
 
-	return <header className="website-header">{navSteps}</header>;
+	return (
+		<nav
+			aria-label="Main"
+			style={{
+				padding: "1em",
+				alignItems: "start",
+			}}
+		>
+			{navSteps}
+		</nav>
+	);
 });

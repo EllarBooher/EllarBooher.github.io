@@ -18,6 +18,7 @@ interface DisplayCardProps {
 	hyperlink: string;
 	externalLink?: boolean;
 	thumbnailAssets: URL[];
+	thumbnailAltTexts: string[];
 	title: string;
 	description: string;
 }
@@ -26,14 +27,19 @@ const DisplayCard = memo(function DisplayCard({
 	hyperlink,
 	externalLink = true,
 	thumbnailAssets = [],
+	thumbnailAltTexts,
 	title = `PLACEHOLDER TITLE`,
 	description = `PLACEHOLDER DESCRIPTION`,
 }: DisplayCardProps) {
 	const thumbnails = (
 		<div className="display-card-thumbnails">
-			{thumbnailAssets.map((url: URL) => (
+			{thumbnailAssets.map((url: URL, index) => (
 				<div className="display-card-thumbnail" key={url.toString()}>
-					<img className="display-card-image" src={url.toString()} alt="" />
+					<img
+						className="display-card-image"
+						src={url.toString()}
+						alt={thumbnailAltTexts[index] ?? null}
+					/>
 				</div>
 			))}
 		</div>
@@ -54,9 +60,9 @@ const DisplayCard = memo(function DisplayCard({
 	return (
 		<button className="display-card" onClick={handleClick}>
 			<div>
-				<div className="display-card-name">{title}</div>
+				<h2 className="display-card-name">{title}</h2>
 				<div className="display-card-body">
-					{description}
+					<p>{description}</p>
 					{thumbnails}
 				</div>
 			</div>
@@ -73,6 +79,7 @@ function App() {
 				hyperlink={`/webgpu-samples?sample=${key}`}
 				externalLink={false}
 				thumbnailAssets={[]}
+				thumbnailAltTexts={[]}
 				title={value.name}
 				description={value.description}
 			/>
@@ -84,6 +91,9 @@ function App() {
 			key="Syzygy"
 			hyperlink={`https://github.com/EllarBooher/Syzygy`}
 			thumbnailAssets={[new URL("./assets/syzygy1.png", import.meta.url)]}
+			thumbnailAltTexts={[
+				"A computer rendered sun rises over chess pieces. Application interface elements appear to the left and bottom.",
+			]}
 			title={`Syzygy`}
 			description={`
                 A sandbox renderer I started to study C++ and Vulkan.
@@ -94,6 +104,9 @@ function App() {
 			key="SSAO"
 			hyperlink={`https://github.com/EllarBooher/VulkanTemplate/tree/SSAO`}
 			thumbnailAssets={[new URL("./assets/ssao1.png", import.meta.url)]}
+			thumbnailAltTexts={[
+				"A computer rendered building, with various decorations such as banners and pillars. Only the shadows are visible, with no color information.",
+			]}
 			title={`SSAO`}
 			description={`
                 An implementation of Screen-Space Ambient Occlusion written in C++ with Vulkan.
@@ -109,6 +122,10 @@ function App() {
 				new URL("./assets/snailblazer1.png", import.meta.url),
 				new URL("./assets/snailblazer2.png", import.meta.url),
 			]}
+			thumbnailAltTexts={[
+				"A smirking cartoon character with yellow hair faces off against a grimacing cartoon character with blue hair. In the middle is an arena filled with magma and colorful battle effects.",
+				"A crying cartoon character with yellow hair faces off against a scowling cartoon character with blue hair. In the middle is an arena filled with magma and colorful battle effects.",
+			]}
 			title={`Snail Blazer`}
 			description={`
                 A short bullet-hell made for the Bullet Hell Jam 2023 on itch.io.
@@ -119,33 +136,38 @@ function App() {
 	];
 
 	return (
-		<div className="app">
-			<div className="website-main">
-				<div>
+		<>
+			<main
+				style={{
+					flexDirection: "column",
+					flex: "1",
+					padding: "2em",
+				}}
+			>
+				<h1 className="visuallyhidden">Portfolio Landing Page</h1>
+				<p>
 					Hello, my name is Estelle Booher. My passion is realtime rendering and
 					engine infrastructure, and I am actively working on building a
 					portfolio and career in computer graphics. This website is a landing
 					spot where I will host links to various projects of mine.
-					<br />
-					<br />
+				</p>
+				<p>
 					My github is at {githubLink}, where I host the source code of my
 					projects including this website.
-					<br />
-					To contact me, please email at {emailLink}.
-					<br />
-					<h1>In-Browser WebGPU Samples</h1>
-					<div className="display-grid">{webGPUCards}</div>
-					<h1>Offline Computer Graphics</h1>
-					<div className="display-grid">{offlineCards}</div>
-					<h1>Video Games</h1>
-					<div className="display-grid">{videogameCards}</div>
-				</div>
-			</div>
-			<footer className="website-footer">
+				</p>
+				<p>To contact me, please email at {emailLink}.</p>
+				<h2>In-Browser WebGPU Samples</h2>
+				<div className="display-grid">{webGPUCards}</div>
+				<h2>Offline Computer Graphics</h2>
+				<div className="display-grid">{offlineCards}</div>
+				<h2>Video Games</h2>
+				<div className="display-grid">{videogameCards}</div>
+			</main>
+			<footer style={{ padding: "1em" }}>
 				All works present are copyrighted, unless provided with external
 				attributions or license.
 			</footer>
-		</div>
+		</>
 	);
 }
 

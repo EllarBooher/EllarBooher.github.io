@@ -100,24 +100,33 @@ const RenderingCanvas = function RenderingCanvas({
 	return (
 		<div
 			style={{
-				display: "flex",
-				color: "hsl(204, 50%, 95%)",
+				flex: "1",
 				position: "relative",
-				width: "100%",
-				height: "100%",
+				display: "flex",
 			}}
 		>
-			<div style={{ flex: 1 }}>
+			<div
+				style={{
+					flex: "1",
+					position: "relative",
+					overflow: "hidden",
+				}}
+			>
 				<canvas
-					ref={canvasRef}
 					style={{
+						position: "absolute",
 						width: "100%",
 						height: "100%",
 					}}
+					ref={canvasRef}
 				/>
 			</div>
 			<div
-				style={{ flex: 0, position: "absolute", right: 0 }}
+				style={{
+					position: "absolute",
+					top: 0,
+					right: 0,
+				}}
 				ref={guiPaneRef}
 			/>
 		</div>
@@ -128,7 +137,7 @@ export const RendererComponent = memo(function RendererComponent() {
 	const [app, setApp] = useState<RendererApp>();
 	const [error, setError] = useState("");
 	const [initialized, setInitialized] = useState(false);
-	const [searchParams, setSearchParams] = useSearchParams();
+	const [searchParams, _setSearchParams] = useSearchParams();
 
 	const getSample = useCallback(() => {
 		const sampleID = searchParams.get("sample");
@@ -215,11 +224,9 @@ export const RendererComponent = memo(function RendererComponent() {
 	}, [app, quitApp, getSample]);
 
 	const bodyStyle = {
-		backgroundColor: "rgb(50, 99, 121)",
 		margin: 0,
 		padding: "2em",
 		flexGrow: "1",
-		color: "hsl(204, 50%, 95%)",
 		whiteSpace: "pre-line",
 		fontSize: "1.5em",
 	};
@@ -239,58 +246,55 @@ export const RendererComponent = memo(function RendererComponent() {
 	const sampleSidebarLinks: ReactElement[] = [];
 	samplesByQueryParam.forEach((value, key) => {
 		sampleSidebarLinks.push(
-			<button
-				className="sidebar-button"
-				onClick={() => {
-					setSearchParams({ sample: key });
-				}}
+			<li
 				key={key}
+				style={{
+					display: "flex",
+					alignContent: "center",
+					listStyleType: "none",
+				}}
 			>
-				{value.name}
-			</button>
+				<a href={`/#/webgpu-samples?sample=${key}`} key={key}>
+					{value.name}
+				</a>
+			</li>
 		);
 	});
 
 	const sampleSidebar = (
-		<div
+		<nav
+			aria-label="WebGPU Samples"
 			style={{
-				color: "hsl(204, 50%, 95%)",
-				flexShrink: 0,
-				whiteSpace: "pre-line",
-				fontSize: "1.0em",
+				justifyItems: "center",
 			}}
 		>
-			<div style={{ paddingLeft: "0.5em", paddingRight: "0.5em" }}>
-				<div style={{ padding: "0.5em" }}>Samples</div>
-				<hr />
-			</div>
-			<div
+			<h2 style={{ paddingInline: "1em", margin: "0" }}>Samples</h2>
+			<hr />
+			<ul
 				style={{
-					display: "flex",
-					flexDirection: "column",
+					padding: 0,
+					margin: 0,
 				}}
 			>
 				{sampleSidebarLinks}
-			</div>
-		</div>
+			</ul>
+		</nav>
 	);
 
 	return (
-		<div
+		<main
 			style={{
-				width: "100%",
-				height: "100%",
+				flex: "1",
 				display: "flex",
-				flexDirection: "row",
-				overflow: "hidden",
 			}}
 		>
+			<h1 className="visuallyhidden">WebGPU Animated Sample</h1>
 			{sampleSidebar}
 			{initialized ? (
 				<>{app ? <RenderingCanvas app={app} /> : errorBlock}</>
 			) : (
 				<>{loadingBlock}</>
 			)}
-		</div>
+		</main>
 	);
 });

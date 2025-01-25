@@ -1,23 +1,15 @@
 .lil-gui {
 	--background-color: rgb(50 99 121);
-	--text-color: hsl(204deg 50% 95%);
+	--text-color: white;
 	--title-background-color: #023047;
-	--title-text-color: hsl(204deg 50% 95%);
+	--title-text-color: white;
 	--widget-color: #023047;
 	--hover-color: #144963;
 	--focus-color: #144963;
 	--number-color: rgb(96 190 234);
-	--string-color: hsl(204deg 50% 95%);
+	--string-color: white;
 }
 
-.sidebar-button {
-	padding-top: 1em;
-	padding-bottom: 1em;
-	border: none;
-	background: none;
-	color: inherit;
-}
-
-.sidebar-button:hover {
-	background-color: #144963;
+.lil-gui option {
+	color: black;
 }

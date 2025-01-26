@@ -1,26 +1,26 @@
 struct Atmosphere
 {
-    scatteringRayleighPerMm : vec3<f32>,
-    densityScaleRayleighMm : f32,
-    absorptionRayleighPerMm : vec3<f32>,
+    scattering_rayleigh_per_Mm : vec3<f32>,
+    density_scale_rayleigh_Mm : f32,
+    absorption_rayleigh_per_Mm : vec3<f32>,
 
-    planetRadiusMm : f32,
+    planet_radius_Mm : f32,
 
-    scatteringMiePerMm : vec3<f32>,
-    densityScaleMieMm : f32,
-    absorptionMiePerMm : vec3<f32>,
+    scattering_mie_per_Mm : vec3<f32>,
+    density_scale_mie_Mm : f32,
+    absorption_mie_per_Mm : vec3<f32>,
 
-    atmosphereRadiusMm : f32,
+    atmosphere_radius_Mm : f32,
 
-    groundAlbedo : vec3<f32>,
+    ground_albedo : vec3<f32>,
 
     padding0 : f32,
 
-    scatteringOzonePerMm : vec3<f32>,
+    scattering_ozone_per_Mm : vec3<f32>,
 
     padding1 : f32,
 
-    absorptionOzonePerMm : vec3<f32>,
+    absorption_ozone_per_Mm : vec3<f32>,
 
     padding2 : f32,
 
@@ -30,7 +30,7 @@ struct Atmosphere
 const ATMOSPHERE_GLOBAL: Atmosphere = Atmosphere(
     vec3<f32>(5.802, 13.558, 33.1),
     0.008, // 8.0 km
-    vec3<f32>(0.0), 
+    vec3<f32>(0.0),
 
     6.360,
 
@@ -56,7 +56,7 @@ struct CelestialLight
     color: vec3<f32>,
     strength: f32,
     forward: vec3<f32>,
-    angularRadius: f32,
+    angular_radius: f32,
 }
 
 struct CelestialLightUBO

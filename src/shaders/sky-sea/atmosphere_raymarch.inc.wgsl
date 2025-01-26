@@ -41,8 +41,8 @@ fn raycastAtmosphere(atmosphere: ptr<function, Atmosphere>, origin: vec3<f32>, d
 {
 	var result: AtmosphereRaycastResult;
 
-    let planet_hit = raySphereIntersection(origin, direction, (*atmosphere).planetRadiusMm);
-    let atmosphere_hit = raySphereIntersection(origin, direction, (*atmosphere).atmosphereRadiusMm);
+    let planet_hit = raySphereIntersection(origin, direction, (*atmosphere).planet_radius_Mm);
+    let atmosphere_hit = raySphereIntersection(origin, direction, (*atmosphere).atmosphere_radius_Mm);
 
     let inside_planet = planet_hit.hit && planet_hit.t0 < 0.0 && planet_hit.t1 > 0.0;
     let intersects_atmosphere = atmosphere_hit.hit && atmosphere_hit.t1 > 0.0;
@@ -79,7 +79,7 @@ fn raycastAtmosphere(atmosphere: ptr<function, Atmosphere>, origin: vec3<f32>, d
 struct ScatteringResult
 {
     luminance: vec3<f32>,
-    multiScattTransfer: vec3<f32>,
+    multiscattering_transfer: vec3<f32>,
 }
 
 // TODO: should compile-time optional parameters just be accessed by the global resource introduced before this file is included?
@@ -98,9 +98,9 @@ fn computeLuminanceScatteringIntegral(
     atmosphere: ptr<function, Atmosphere>,
     light:  ptr<function, CelestialLight>,
     lut_sampler: sampler,
-    transmittanceLUT: texture_2d<f32>,
+    transmittance_lut: texture_2d<f32>,
 //// IF MULTISCATTERING
-    multiscatterLUT: texture_2d<f32>,
+    multiscatter_lut: texture_2d<f32>,
 //// ENDIF
     origin: vec3<f32>,
     direction: vec3<f32>,
@@ -111,7 +111,7 @@ fn computeLuminanceScatteringIntegral(
 {
     var result: ScatteringResult;
     result.luminance = vec3<f32>(0.0);
-    result.multiScattTransfer = vec3<f32>(0.0);
+    result.multiscattering_transfer = vec3<f32>(0.0);
 
 	if(sample_distance == 0.0)
 	{
@@ -119,15 +119,15 @@ fn computeLuminanceScatteringIntegral(
 	}
 
     // This is the direction of the incoming light, which is the light we are interested in computing the magnitude of.
-    // For the purposes of calculating phase functions, this is the direction we want to use.
-    let scatteringDir = -direction;
+    // This is the parameter of the phase functions
+	let incident_cosine = dot((*light).forward, -direction);
 
     let start_radius: f32 = length(origin);
     let start_mu: f32 = dot(origin, direction) / (length(origin) * length(direction));
     let start_mu_light: f32 = dot(origin, -(*light).forward) / (length(origin) * length((*light).forward));
     let nu: f32 = dot(-(*light).forward, direction) / (length((*light).forward) * length(direction));
 
-    let originStep = RaymarchStep(start_radius, start_mu, start_mu_light, nu);
+    let origin_step = RaymarchStep(start_radius, start_mu, start_mu_light, nu);
 
     // We estimate the integral in Equation (1) of Hillaire's paper.
 
@@ -136,110 +136,108 @@ fn computeLuminanceScatteringIntegral(
 //// IF HIGH_SAMPLE_COUNT
     const SAMPLE_COUNT = 256.0;
 //// ELSE
-    const SAMPLE_COUNT = 16.0;
+    const SAMPLE_COUNT = 64.0;
 //// ENDIF
 
-    let dT: f32 = 1.0 / SAMPLE_COUNT;
-    let d_sample_distance: f32 = sample_distance * dT;
+    let d_t: f32 = 1.0 / SAMPLE_COUNT;
+    let d_sample_distance: f32 = sample_distance * d_t;
     for (var i = 0u; f32(i) < SAMPLE_COUNT; i++)
     {
-        var tBegin: f32 = f32(i) * dT;
-        var tEnd: f32 = f32(i + 1) * dT;
+        var t_begin: f32 = f32(i) * d_t;
+        var t_end: f32 = f32(i + 1) * d_t;
 
 //// IF SCATTERING_NONLINEAR_SAMPLE
-        tBegin = tBegin * tBegin;
-        tEnd = tEnd * tEnd;
+        t_begin = t_begin * t_begin;
+        t_end = t_end * t_end;
 //// ENDIF
 
-        tBegin = tBegin * sample_distance;
-        tEnd = min(tEnd * sample_distance, sample_distance);
+        t_begin = t_begin * sample_distance;
+        t_end = min(t_end * sample_distance, sample_distance);
 
-        let t: f32 = mix(tBegin, tEnd, 0.5);
+        let t: f32 = mix(t_begin, t_end, 0.5);
 
-        let sampleStep: RaymarchStep = stepRadiusMu(originStep, tBegin);
-        let midwayStep: RaymarchStep = stepRadiusMu(originStep, tEnd);
+        let sample_step: RaymarchStep = stepRadiusMu(origin_step, t_begin);
 
-        let altitude = sampleStep.radius - (*atmosphere).planetRadiusMm;
-        let extinctionSample: ExtinctionSample = sampleExtinction(atmosphere, altitude);
+        let altitude = sample_step.radius - (*atmosphere).planet_radius_Mm;
+        let extinction_sample: ExtinctionSample = sampleExtinction(atmosphere, altitude);
 
         // Terms of Equation (3) we assume to not vary over the path segment
 
         // We could accumulate samples across loops like:
         //
-        // const vec3 sampleTransmittance = exp(-dSampleDistance * extinctionSample.extinction);
+        // const vec3 sampleTransmittance = exp(-dSampleDistance * extinction_sample.extinction);
         // ... compute luminance using transmittance ...
         // transmittance *= sampleTransmittance;
         //
         // But at the cost of performance, resampling the transmittance LUT is more accurate for larger step sizes
 
-        let transmittanceToBegin = sampleTransmittanceLUT_RayMarchStep(transmittanceLUT, lut_sampler, atmosphere, originStep, t);
-        let incidentCosine = dot((*light).forward, scatteringDir);
+        let transmittance_to_t_begin = sampleTransmittanceLUT_RayMarchStep(transmittance_lut, lut_sampler, atmosphere, origin_step, t);
 
 //// IF ISOTROPIC_PHASE
-        let phaseTimesScattering = extinctionSample.scattering * ISOTROPIC_PHASE;
+        let phase_times_scattering = extinction_sample.scattering * ISOTROPIC_PHASE;
 //// ELSE
         // Ozone does not scatter light normally, so we arbitrarily use rayleigh's phase function in case ozone's scattering
         // coefficient is nonzero
-        let phaseTimesScattering: vec3<f32> =
-            extinctionSample.scatteringRayleigh * phaseRayleigh(incidentCosine)
-            + extinctionSample.scatteringMie * phaseMie(incidentCosine, 0.8)
-            + extinctionSample.scatteringOzone * phaseRayleigh(incidentCosine);
+        let phase_times_scattering: vec3<f32> =
+            extinction_sample.scattering_rayleigh * phaseRayleigh(incident_cosine)
+            + extinction_sample.scattering_mie * phaseMie(incident_cosine, 0.8)
+            + extinction_sample.scattering_ozone * phaseRayleigh(incident_cosine);
 //// ENDIF
 
 //// IF MULTISCATTERING
-        let multiscatter = sampleMultiscatterLUT(multiscatterLUT, lut_sampler, atmosphere, sampleStep.radius, sampleStep.mu_light);
+        let multiscatter = sampleMultiscatterLUT(multiscatter_lut, lut_sampler, atmosphere, sample_step.radius, sample_step.mu_light);
 //// ELSE
         let multiscatter = vec3<f32>(0.0);
 //// ENDIF
 
         var shadow_count: f32 = 0;
         {
-            let horizon_sin = (*atmosphere).planetRadiusMm / sampleStep.radius;
+            let horizon_sin = (*atmosphere).planet_radius_Mm / sample_step.radius;
             let horizon_mu = -safeSqrt(1.0 - horizon_sin * horizon_sin);
 
-            shadow_count += f32(sampleStep.mu_light < horizon_mu);
+            shadow_count += f32(sample_step.mu_light < horizon_mu);
         }
         {
-            let horizon_sin = (*atmosphere).planetRadiusMm / midwayStep.radius;
+        	let midway_step: RaymarchStep = stepRadiusMu(origin_step, t_end);
+            let horizon_sin = (*atmosphere).planet_radius_Mm / midway_step.radius;
             let horizon_mu = -safeSqrt(1.0 - horizon_sin * horizon_sin);
 
-            shadow_count += f32(midwayStep.mu_light < horizon_mu);
+            shadow_count += f32(midway_step.mu_light < horizon_mu);
         }
 
-        let transmittance_to_sun = sampleTransmittanceLUT_Sun(transmittanceLUT, lut_sampler, atmosphere, light, sampleStep.radius, sampleStep.mu_light);
+        let transmittance_to_sun = sampleTransmittanceLUT_RadiusMu(transmittance_lut, lut_sampler, atmosphere, sample_step.radius, sample_step.mu_light);
         var shadowing = vec3<f32>(transmittance_to_sun * (1.0 - 0.5 * f32(shadow_count)));
 
         // Integrate transmittance := e^(-extinction(x) * ||x - begin||) from begin to end
         // This is a single interval of the integral in Equation (1) from Hillaire's paper,
         // with all constant terms factored out above
-        let transmittanceAlongPath = sampleTransmittanceLUT_Segment(transmittanceLUT, lut_sampler, atmosphere, sampleStep.radius, sampleStep.mu, d_sample_distance, intersects_ground);
-        let scatteringIlluminanceIntegral = (vec3(1.0) - transmittanceAlongPath) / extinctionSample.extinction;
+        let transmittance_along_path = sampleTransmittanceLUT_Segment(transmittance_lut, lut_sampler, atmosphere, sample_step.radius, sample_step.mu, d_sample_distance, intersects_ground);
+        let scattering_illuminance_integral = (vec3(1.0) - transmittance_along_path) / extinction_sample.extinction;
 
         result.luminance +=
-            (phaseTimesScattering * shadowing + multiscatter * extinctionSample.scattering)
-            * scatteringIlluminanceIntegral * transmittanceToBegin
+            (phase_times_scattering * shadowing + multiscatter * extinction_sample.scattering)
+            * scattering_illuminance_integral * transmittance_to_t_begin
 //// IF LIGHT_ILLUMINANCE_IS_ONE
             * 1.0;
 //// ELSE
             * (*light).color.rgb * (*light).strength;
 //// ENDIF
-        result.multiScattTransfer += extinctionSample.scattering * scatteringIlluminanceIntegral * transmittanceToBegin;
-
+        result.multiscattering_transfer += extinction_sample.scattering * scattering_illuminance_integral * transmittance_to_t_begin;
     }
 
     if (include_ground && intersects_ground)
     {
-        let sampleStep: RaymarchStep = stepRadiusMu(originStep, sample_distance);
+        let sample_step: RaymarchStep = stepRadiusMu(origin_step, sample_distance);
 
-        let transmittanceToSurface = sampleTransmittanceLUT_RayMarchStep(transmittanceLUT, lut_sampler, atmosphere, originStep, sample_distance);
-        let transmittance_to_sun = sampleTransmittanceLUT_Sun(transmittanceLUT, lut_sampler, atmosphere, light, sampleStep.radius, sampleStep.mu_light);
+        let transmittance_to_surface = sampleTransmittanceLUT_RayMarchStep(transmittance_lut, lut_sampler, atmosphere, origin_step, sample_distance);
+        let transmittance_to_sun = sampleTransmittanceLUT_RadiusMu(transmittance_lut, lut_sampler, atmosphere, sample_step.radius, sample_step.mu_light);
 
-        let normalDotLight = clamp(sampleStep.mu_light, 0.0, 1.0);
+        let normal_dot_light = clamp(sample_step.mu_light, 0.0, 1.0);
 
-        let diffuse = (*atmosphere).groundAlbedo / PI;
+        let diffuse = (*atmosphere).ground_albedo / PI;
 
         result.luminance +=
-            transmittanceToSurface * transmittance_to_sun * normalDotLight * diffuse
+            transmittance_to_surface * transmittance_to_sun * normal_dot_light * diffuse
 //// IF LIGHT_ILLUMINANCE_IS_ONE
             * 1.0;
 //// ELSE

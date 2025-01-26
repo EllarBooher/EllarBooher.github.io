@@ -36,13 +36,13 @@ fn sampleSkyViewLUT(
 ) -> vec3<f32>
 {
     // Horizon zenith cannot be less than PI/2, so we use sin and assume it is a quadrant 2 angle
-    let sinHorizonZenith = clamp((*atmosphere).planetRadiusMm / length(position), -1.0, 1.0);
-    let horizonZenith = PI - asin(sinHorizonZenith);
+    let sin_horizon_zenith = clamp((*atmosphere).planet_radius_Mm / length(position), -1.0, 1.0);
+    let horizon_zenith = PI - asin(sin_horizon_zenith);
 
-    let cosViewZenith = clamp(dot(position, direction) / (length(position) * length(direction)), -1.0, 1.0);
-    let cosHorizonZenith = -safeSqrt(1.0 - sinHorizonZenith * sinHorizonZenith);
+    let cos_view_zenith = clamp(dot(position, direction) / (length(position) * length(direction)), -1.0, 1.0);
+    let cos_horizon_zenith = -safeSqrt(1.0 - sin_horizon_zenith * sin_horizon_zenith);
 
-    let viewZenith = acos(cosViewZenith);
+    let view_zenith = acos(cos_view_zenith);
 
     // We still want uv.y = 0 and uv.y = 1 to the extreme zenith angles
     // But since we make the horizon a straight line through the middle, and its zenith may not be PI/2,
@@ -51,25 +51,25 @@ fn sampleSkyViewLUT(
     var u = 0.0;
     var v = 0.0;
 
-    if (cosViewZenith > cosHorizonZenith)
+    if (cos_view_zenith > cos_horizon_zenith)
     {
         // Above horizon, v shall range from 0.0 to 0.5
-        // viewZenith varies from 0 to horizonZenith
+        // view_zenith varies from 0 to horizon_zenith
 
-        let angleFraction = viewZenith / horizonZenith;
+        let angle_fraction = view_zenith / horizon_zenith;
 
         // Increase angle density towards v = 0.5
-        v = (1.0 - sqrt(1.0 - angleFraction)) * 0.5;
+        v = (1.0 - sqrt(1.0 - angle_fraction)) * 0.5;
     }
     else
     {
         // Below horizon, v shall range from 0.5 to 1
-        // viewZenith varies from horizonZenith to PI
+        // view_zenith varies from horizon_zenith to PI
 
-        let angleFraction = (viewZenith - horizonZenith) / (PI - horizonZenith);
+        let angle_fraction = (view_zenith - horizon_zenith) / (PI - horizon_zenith);
 
         // Increase angle density towards v = 0.5
-        v = sqrt(angleFraction) * 0.5 + 0.5;
+        v = sqrt(angle_fraction) * 0.5 + 0.5;
     }
 
     {
@@ -99,67 +99,22 @@ fn sampleSunDisk(
     direction: vec3<f32>
 ) -> vec3<f32>
 {
-    let directionToSun = -(*light).forward;
+	// Note: This is distinct from the usual mu and mu_light.
+    let cos_direction_light = dot(normalize(direction), normalize(-(*light).forward));
 
-    let cosDirectionSun = dot(direction, directionToSun) / (length(direction) * length(directionToSun));
-
-    if (cosDirectionSun < 0.0)
+    if (cos_direction_light < 0.0)
     {
         return vec3(0.0);
     }
 
     // Small angle approximation
-    let sinSunRadius = (*light).angularRadius;
+    let sin_light_radius = (*light).angular_radius;
 
-    let sinDirectionSun = safeSqrt(1.0 - cosDirectionSun * cosDirectionSun);
+    let sin_direction_light = safeSqrt(1.0 - cos_direction_light * cos_direction_light);
 
-    let transmittanceToSun = sampleTransmittanceLUT_Ray(transmittance_lut, lut_sampler, atmosphere, position, direction);
+    let transmittance_to_light = sampleTransmittanceLUT_Ray(transmittance_lut, lut_sampler, atmosphere, position, direction);
 
-    return transmittanceToSun * (1.0 - smoothstep(0.2 * sinSunRadius, sinSunRadius, sinDirectionSun));
-}
-
-fn computeFractionOfSunVisible(
-    atmosphere: ptr<function, Atmosphere>,
-    light: ptr<function, CelestialLight>,
-    position: vec3<f32>,
-) -> f32
-{
-    let sinHorizonZenith = (*atmosphere).planetRadiusMm / length(position);
-    let cosSunZenith = dot(-(*light).forward, normalize(position));
-
-    // Do some trig to estimate the fraction of the sun above the horizon
-
-    // Ignore third dimension, since earth is a symmetrical sphere
-    let directionToHorizon = normalize(vec2<f32>(
-        sinHorizonZenith,
-        safeSqrt(1.0 - sinHorizonZenith * sinHorizonZenith)
-    ));
-    let directionToSun = normalize(vec2<f32>(
-        safeSqrt(1.0 - cosSunZenith * cosSunZenith),
-        cosSunZenith
-    ));
-
-    let cosHorizonSun = dot(directionToHorizon, directionToSun);
-
-    // + when above horizon, - when below
-    let sinHorizonSun =
-        sign(directionToSun.y - directionToHorizon.y)
-        * safeSqrt(1.0 - cosHorizonSun * cosHorizonSun);
-
-    // Small angle approximation
-    let sinSunRadius = (*light).angularRadius;
-
-    if (sinHorizonSun > sinSunRadius)
-    {
-        return 1.0;
-    }
-    else if (sinHorizonSun < -sinSunRadius)
-    {
-        return 0.0;
-    }
-
-    // Approximation of the area of the chorded segment above the horizon divided by the area of the circle
-    return 0.5 * (sinHorizonSun / sinSunRadius) + 0.5;
+    return transmittance_to_light * (1.0 - smoothstep(0.2 * sin_light_radius, sin_light_radius, sin_direction_light));
 }
 
 fn sampleSkyLuminance(
@@ -176,11 +131,10 @@ fn sampleSkyLuminance(
         let radius = length(position);
         let mu_light = dot(position, light_direction) / radius;
 
-        let transmittance_to_light = sampleTransmittanceLUT_Sun(
+        let transmittance_to_light = sampleTransmittanceLUT_RadiusMu(
             transmittance_lut,
             lut_sampler,
             atmosphere,
-            light,
             radius,
             mu_light
         );
@@ -287,7 +241,7 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     let uv = (vec2<f32>(texel_coord) + offset) / vec2<f32>(size);
 
     const METERS_PER_MM = 1000000.0;
-    let origin = vec3<f32>(0.0, atmosphere.planetRadiusMm, 0.0) + b_camera.position.xyz / METERS_PER_MM;
+    let origin = vec3<f32>(0.0, atmosphere.planet_radius_Mm, 0.0) + b_camera.position.xyz / METERS_PER_MM;
 
     let ndc_space_coord = (uv - vec2<f32>(0.5)) * 2.0 * vec2<f32>(1.0, -1.0);
     let near_plane_depth = 1.0;
@@ -301,7 +255,7 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
 
     var luminance_transfer = vec3<f32>(0.0);
 
-    let sin_horizon: f32 = atmosphere.planetRadiusMm / length(origin);
+    let sin_horizon: f32 = atmosphere.planet_radius_Mm / length(origin);
     let cos_horizon: f32 = -safeSqrt(1.0 - sin_horizon * sin_horizon);
     let intersects_ground = dot(normalize(origin), normalize(direction_world)) < cos_horizon;
 

@@ -78,8 +78,8 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // We evaluate scattering luminance and transfer in all directions from our sample point.
     // So we sample a finite amount of uniformly distributed directions.
 
-    var luminanceSecondOrder = vec3<f32>(0.0);
-    var multiScattTransfer = vec3<f32>(0.0);
+    var luminance_second_order = vec3<f32>(0.0);
+    var multiscattering_transfer = vec3<f32>(0.0);
 
     const SPHERE_SOLID_ANGLE = 4.0 * PI;
     const ISOTROPIC_PHASE = 1.0 / (4.0 * PI);
@@ -90,28 +90,28 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // prime/odd numbers seem to avoid bands that occur at higher altitudes, that is independent of sun angle.
     const SAMPLE_COUNT_SQRT = 5u;
     const SAMPLE_COUNT = SAMPLE_COUNT_SQRT * SAMPLE_COUNT_SQRT;
-    for (var sampleIndex = 0u; sampleIndex < SAMPLE_COUNT; sampleIndex++) {
+    for (var sample_index = 0u; sample_index < SAMPLE_COUNT; sample_index++) {
         // 0, 0, 0, 0, 1, 1, 1, 1, ...
-        let azimuthalIndex = f32(sampleIndex) / f32(SAMPLE_COUNT_SQRT);
+        let azimuthal_index = f32(sample_index) / f32(SAMPLE_COUNT_SQRT);
 
         // 0, 1, 2, 3, 0, 1, 2, 3, ...
-        let zenithIndex = f32(sampleIndex % SAMPLE_COUNT_SQRT) + 0.5;
-        // let zenithIndex = 0;
+        let zenith_index = f32(sample_index % SAMPLE_COUNT_SQRT) + 0.5;
+        // let zenith_index = 0;
 
-        let azimuth = 2.0 * PI * f32(azimuthalIndex) / f32(SAMPLE_COUNT_SQRT);
+        let azimuth = 2.0 * PI * f32(azimuthal_index) / f32(SAMPLE_COUNT_SQRT);
 
-        let cosAzimuth = cos(azimuth);
-        let sinAzimuth = sin(azimuth);
+        let cos_azimuth = cos(azimuth);
+        let sin_azimuth = sin(azimuth);
 
-        // sinZenith is always positive since zenith ranges from 0 to pi
-        let cosZenith = clamp(
-            2.0 * f32(zenithIndex) / f32(SAMPLE_COUNT_SQRT) - 1.0,
+        // sin_zenith is always positive since zenith ranges from 0 to pi
+        let cos_zenith = clamp(
+            2.0 * f32(zenith_index) / f32(SAMPLE_COUNT_SQRT) - 1.0,
             -1.0, 1.0
         );
-        let sinZenith = sqrt(1.0 - cosZenith * cosZenith);
+        let sin_zenith = sqrt(1.0 - cos_zenith * cos_zenith);
 
         // Uniformly distributed on unit sphere direction
-        let direction = vec3<f32>(sinAzimuth * sinZenith, cosZenith, cosAzimuth * sinZenith);
+        let direction = vec3<f32>(sin_azimuth * sin_zenith, cos_zenith, cos_azimuth * sin_zenith);
 
 		let atmosphere_raycast = raycastAtmosphere(&atmosphere, origin, direction);
 
@@ -130,22 +130,22 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id: vec3<u32>) {
         // let scattering = ScatteringResult(vec3<f32>(0.0), vec3<f32>(0.0));
 
         // dw in equations (5) and (7) in Hillaire 2020
-        let sampleSolidAngle = SPHERE_SOLID_ANGLE / f32(SAMPLE_COUNT);
+        let sample_solid_angle = SPHERE_SOLID_ANGLE / f32(SAMPLE_COUNT);
 
         // Equations (6) and (8)
-        luminanceSecondOrder += scattering.luminance * sampleSolidAngle;
-        multiScattTransfer += scattering.multiScattTransfer * sampleSolidAngle;
+        luminance_second_order += scattering.luminance * sample_solid_angle;
+        multiscattering_transfer += scattering.multiscattering_transfer * sample_solid_angle;
     }
 
     // Equations (5) and (7)
-    let inscattering = luminanceSecondOrder * ISOTROPIC_PHASE;
-    let scatteringTransfer = multiScattTransfer * ISOTROPIC_PHASE;
+    let inscattering = luminance_second_order * ISOTROPIC_PHASE;
+    let scattering_transfer = multiscattering_transfer * ISOTROPIC_PHASE;
 
-    // Geometric sum with r = multiScattTransfer
-    let infiniteScatterTransfer = vec3<f32>(1.0 / (1.0 - scatteringTransfer));
+    // Geometric sum with r = multiscattering_transfer
+    let infinite_scattering_transfer = vec3<f32>(1.0 / (1.0 - scattering_transfer));
 
     // Equation (10)
-    let multiscattering = infiniteScatterTransfer * inscattering;
+    let multiscattering = infinite_scattering_transfer * inscattering;
 
     textureStore(multiscatter_lut, texel_coord, vec4<f32>(multiscattering, 1.0));
 }

@@ -40,29 +40,29 @@ fn uv_to_azimuthElevation(
 ) -> vec2<f32>
 {
     // Horizon zenith cannot be less than PI/2, so we use sin and assume it is a quadrant 2 angle
-    let sinHorizonZenith = (*atmosphere).planetRadiusMm / radius;
-    let horizonZenith = PI - asin(sinHorizonZenith);
+    let sin_horizon_zenith = (*atmosphere).planet_radius_Mm / radius;
+    let horizon_zenith = PI - asin(sin_horizon_zenith);
 
     let azimuth = 2.0 * PI * (uv.x - 0.5);
 
-    var viewZenith: f32;
+    var view_zenith: f32;
 
     if (uv.y < 0.5)
     {
         let unnormalized_v = 2.0 * uv.y - 1.0;
-        let angleFraction = 1.0 - unnormalized_v * unnormalized_v;
+        let angle_fraction = 1.0 - unnormalized_v * unnormalized_v;
 
-        viewZenith = angleFraction * horizonZenith;
+        view_zenith = angle_fraction * horizon_zenith;
     }
     else
     {
         let unnormalized_v = 2.0 * uv.y - 1.0;
-        let angleFraction = unnormalized_v * unnormalized_v;
+        let angle_fraction = unnormalized_v * unnormalized_v;
 
-        viewZenith = (PI - horizonZenith) * angleFraction + horizonZenith;
+        view_zenith = (PI - horizon_zenith) * angle_fraction + horizon_zenith;
     }
 
-    let elevation = -(viewZenith - PI / 2.0);
+    let elevation = -(view_zenith - PI / 2.0);
 
     return vec2<f32>(azimuth, elevation);
 }
@@ -84,7 +84,7 @@ fn computeSkyViewLuminance(@builtin(global_invocation_id) global_id : vec3<u32>,
 
 	// TODO: load camera position
     const TEN_METERS_MM = 10.0 / 1000000.0;
-    let origin = vec3<f32>(0.0, atmosphere.planetRadiusMm + TEN_METERS_MM, 0.0);
+    let origin = vec3<f32>(0.0, atmosphere.planet_radius_Mm + TEN_METERS_MM, 0.0);
 
     let azimuth_elevation = uv_to_azimuthElevation(
         &atmosphere,

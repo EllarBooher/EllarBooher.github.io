@@ -36,19 +36,19 @@ fn unitRangeFromTextureCoord(coord: f32 , length: u32) -> f32
 // Mu is the cosine of the angle between the position vector and the direction vector we want to sample the
 // transmittance in
 fn transmittanceLUT_RMu_to_UV(
-    atmosphere: ptr<function,Atmosphere>, 
-    radius: f32, 
+    atmosphere: ptr<function,Atmosphere>,
+    radius: f32,
     mu: f32
 ) -> vec2<f32>
 {
-    let atmosphereRadiusMmSquared: f32 = (*atmosphere).atmosphereRadiusMm * (*atmosphere).atmosphereRadiusMm;
-    let planetRadiusMmSquared: f32 = (*atmosphere).planetRadiusMm * (*atmosphere).planetRadiusMm;
+    let atmosphere_radius_Mm_squared: f32 = (*atmosphere).atmosphere_radius_Mm * (*atmosphere).atmosphere_radius_Mm;
+    let planet_radius_Mm_squared: f32 = (*atmosphere).planet_radius_Mm * (*atmosphere).planet_radius_Mm;
 
     // Ground level, horizontal ray distance to atmospheric boundary
-    let h: f32 = safeSqrt(atmosphereRadiusMmSquared - planetRadiusMmSquared);
+    let h: f32 = safeSqrt(atmosphere_radius_Mm_squared - planet_radius_Mm_squared);
 
     // Distance to horizon, which is also the exact position the previous horizontal ray starts at
-    let rho: f32 = safeSqrt(radius * radius - planetRadiusMmSquared);
+    let rho: f32 = safeSqrt(radius * radius - planet_radius_Mm_squared);
 
     // rho + H = distance to atmosphere boundary when looking at the horizon
     // It represents the distance along the biggest angle (most negative mu) that has nonzero transmittance,
@@ -57,8 +57,8 @@ fn transmittanceLUT_RMu_to_UV(
     // at any given radius value
 
     // Distance to edge of atmosphere, with both its min and max values at this given radius.
-    let d: f32 = max(-radius * mu + safeSqrt(radius * radius * (mu * mu - 1.0) + atmosphereRadiusMmSquared), 0.0);
-    let d_min: f32 = (*atmosphere).atmosphereRadiusMm - radius;
+    let d: f32 = max(-radius * mu + safeSqrt(radius * radius * (mu * mu - 1.0) + atmosphere_radius_Mm_squared), 0.0);
+    let d_min: f32 = (*atmosphere).atmosphere_radius_Mm - radius;
     let d_max: f32 = rho + h;
 
     let x_mu: f32 = (d - d_min) / (d_max - d_min);
@@ -73,24 +73,24 @@ fn transmittanceLUT_RMu_to_UV(
 // Inverse of transmittanceLUT_RMu_to_UV
 // Allocates more texture space to interesting rays near the horizon.
 fn transmittanceLUT_UV_to_RMu(
-    atmosphere: ptr<function,Atmosphere>, 
+    atmosphere: ptr<function,Atmosphere>,
     uv: vec2<f32>
 ) -> vec2<f32>
 {
     let x_mu : f32 = unitRangeFromTextureCoord(uv.x, TRANSMITTANCE_LUT_WIDTH);
     let x_radius : f32 = unitRangeFromTextureCoord(uv.y, TRANSMITTANCE_LUT_HEIGHT);
 
-    let atmospherRadiusMmSquared : f32 = (*atmosphere).atmosphereRadiusMm * (*atmosphere).atmosphereRadiusMm;
-    let planetRadiusMmSquared : f32 = (*atmosphere).planetRadiusMm * (*atmosphere).planetRadiusMm;
+    let atmosphere_radius_Mm_squared : f32 = (*atmosphere).atmosphere_radius_Mm * (*atmosphere).atmosphere_radius_Mm;
+    let planet_radius_Mm_squared : f32 = (*atmosphere).planet_radius_Mm * (*atmosphere).planet_radius_Mm;
 
     // Ground level, horizontal ray distance to atmospheric boundary
-    let h : f32 = safeSqrt(atmospherRadiusMmSquared - planetRadiusMmSquared);
+    let h : f32 = safeSqrt(atmosphere_radius_Mm_squared - planet_radius_Mm_squared);
 
     let rho : f32 = h * x_radius;
 
-    let radius : f32 = safeSqrt(rho * rho + planetRadiusMmSquared);
+    let radius : f32 = safeSqrt(rho * rho + planet_radius_Mm_squared);
 
-    let d_min : f32 = (*atmosphere).atmosphereRadiusMm - radius;
+    let d_min : f32 = (*atmosphere).atmosphere_radius_Mm - radius;
     let d_max : f32 = rho + h;
 
     let d : f32 = (d_max - d_min) * x_mu + d_min;
@@ -106,8 +106,8 @@ fn transmittanceLUT_UV_to_RMu(
     }
 
     let mu : f32 = (h * h - rho * rho - d * d) / (2.0 * radius * d);
-    // Equivalenty, mu = (atmospherRadiusMmSquared - radius * radius - d*d) / (2.0 * radius * d)
-    // But atmospherRadiusMmSquared and radius * radius are large, so this avoids floating point errors from adding
+    // Equivalently, mu = (atmosphere_radius_Mm_squared - radius * radius - d*d) / (2.0 * radius * d)
+    // But atmosphere_radius_Mm_squared and radius * radius are large, so this avoids floating point errors from adding
     // these to the much smaller d * d
 
     // This clamp is very important
@@ -115,15 +115,15 @@ fn transmittanceLUT_UV_to_RMu(
 }
 
 fn multiscatterLUT_RMu_to_UV(
-    atmosphere: ptr<function,Atmosphere>, 
-    radius: f32, 
+    atmosphere: ptr<function,Atmosphere>,
+    radius: f32,
     mu_light: f32
 ) -> vec2<f32>
 {
     let u_unit: f32 = 0.5 + 0.5 * mu_light;
     let v_unit: f32 = clamp(
-        (radius - (*atmosphere).planetRadiusMm) 
-            / ((*atmosphere).atmosphereRadiusMm - (*atmosphere).planetRadiusMm), 
+        (radius - (*atmosphere).planet_radius_Mm)
+            / ((*atmosphere).atmosphere_radius_Mm - (*atmosphere).planet_radius_Mm),
         0.0, 1.0
     );
 
@@ -134,7 +134,7 @@ fn multiscatterLUT_RMu_to_UV(
 }
 
 fn multiscatterLUT_UV_to_RMu(
-    atmosphere: ptr<function,Atmosphere>, 
+    atmosphere: ptr<function,Atmosphere>,
     uv: vec2<f32>,
 ) -> vec2<f32>
 {
@@ -146,8 +146,8 @@ fn multiscatterLUT_UV_to_RMu(
     // The exact radius is not too critical, and multiscattering is sensitive to being out of range, so we squeeze into
     // a slightly smaller planet radius to ensure we are valid.
     let radius: f32 = mix(
-        (*atmosphere).planetRadiusMm * (1.0002), 
-        (*atmosphere).atmosphereRadiusMm * (0.9998), 
+        (*atmosphere).planet_radius_Mm * (1.0002),
+        (*atmosphere).atmosphere_radius_Mm * (0.9998),
         v_unit
     );
 
@@ -168,10 +168,10 @@ fn sampleMultiscatterLUT(
 }
 
 fn sampleTransmittanceLUT_RadiusMu(
-    lut: texture_2d<f32>, 
+    lut: texture_2d<f32>,
     s: sampler,
-    atmosphere: ptr<function,Atmosphere>, 
-    radius: f32, 
+    atmosphere: ptr<function,Atmosphere>,
+    radius: f32,
     mu: f32
 ) -> vec3<f32>
 {
@@ -183,10 +183,10 @@ fn sampleTransmittanceLUT_RadiusMu(
 }
 
 fn sampleTransmittanceLUT_Ray(
-    lut: texture_2d<f32>, 
+    lut: texture_2d<f32>,
     s: sampler,
-    atmosphere: ptr<function,Atmosphere>, 
-    position: vec3<f32>, 
+    atmosphere: ptr<function,Atmosphere>,
+    position: vec3<f32>,
     direction: vec3<f32>
 ) -> vec3<f32>
 {
@@ -199,8 +199,8 @@ fn sampleTransmittanceLUT_Ray(
 
 fn sampleTransmittanceLUT_Segment(
     lut: texture_2d<f32>,
-    s: sampler, 
-    atmosphere: ptr<function,Atmosphere>, 
+    s: sampler,
+    atmosphere: ptr<function,Atmosphere>,
     r_start: f32,
     mu_start: f32,
     d: f32,
@@ -209,7 +209,7 @@ fn sampleTransmittanceLUT_Segment(
 {
     let r_end = clamp(
         safeSqrt(d * d + 2.0 * r_start * mu_start * d + r_start * r_start),
-        (*atmosphere).planetRadiusMm, (*atmosphere).atmosphereRadiusMm
+        (*atmosphere).planet_radius_Mm, (*atmosphere).atmosphere_radius_Mm
     );
     let mu_end = clamp((r_start * mu_start + d) / r_end, -1.0, 1.0);
 
@@ -233,13 +233,13 @@ fn sampleTransmittanceLUT_Segment(
 
 struct ExtinctionSample
 {
-    scatteringRayleigh: vec3<f32>,
-    scatteringMie: vec3<f32>,
-    scatteringOzone: vec3<f32>,
+    scattering_rayleigh: vec3<f32>,
+    scattering_mie: vec3<f32>,
+    scattering_ozone: vec3<f32>,
 
-    absorptionRayleigh: vec3<f32>,
-    absorptionMie: vec3<f32>,
-    absorptionOzone: vec3<f32>,
+    absorption_rayleigh: vec3<f32>,
+    absorption_mie: vec3<f32>,
+    absorption_ozone: vec3<f32>,
 
     // This parameter is redundant, but convenient.
     // It is the sum of all scattering values.
@@ -248,9 +248,9 @@ struct ExtinctionSample
     extinction: vec3<f32>,
 }
 
-// Ensure altitude and densityScale are the same units.
-fn densityExponential(altitude: f32, densityScale: f32) -> f32
-{ return exp(-altitude / densityScale); }
+// Ensure altitude and density_scale are the same units.
+fn densityExponential(altitude: f32, density_scale: f32) -> f32
+{ return exp(-altitude / density_scale); }
 
 // Hardcoded with values for ozone
 fn densityTent(altitude_km: f32) -> f32
@@ -260,31 +260,31 @@ fn densityTent(altitude_km: f32) -> f32
 // radius := altitude + planetRadius
 fn sampleExtinction(atmosphere: ptr<function,Atmosphere>, altitude_Mm: f32) -> ExtinctionSample
 {
-    let densityRayleigh: f32 = densityExponential(altitude_Mm, (*atmosphere).densityScaleRayleighMm);
-    let scatteringRayleigh: vec3<f32> = (*atmosphere).scatteringRayleighPerMm * densityRayleigh;
-    let absorptionRayleigh: vec3<f32> = (*atmosphere).absorptionRayleighPerMm * densityRayleigh;
+    let density_rayleigh: f32 = densityExponential(altitude_Mm, (*atmosphere).density_scale_rayleigh_Mm);
+    let scattering_rayleigh: vec3<f32> = (*atmosphere).scattering_rayleigh_per_Mm * density_rayleigh;
+    let absorption_rayleigh: vec3<f32> = (*atmosphere).absorption_rayleigh_per_Mm * density_rayleigh;
 
-    let densityMie: f32 = densityExponential(altitude_Mm, (*atmosphere).densityScaleMieMm);
-    let scatteringMie: vec3<f32> = (*atmosphere).scatteringMiePerMm * densityMie;
-    let absorptionMie: vec3<f32> = (*atmosphere).absorptionMiePerMm * densityMie;
+    let density_mie: f32 = densityExponential(altitude_Mm, (*atmosphere).density_scale_mie_Mm);
+    let scattering_mie: vec3<f32> = (*atmosphere).scattering_mie_per_Mm * density_mie;
+    let absorption_mie: vec3<f32> = (*atmosphere).absorption_mie_per_Mm * density_mie;
 
-    let densityOzone: f32 = densityTent(altitude_Mm * 1000.0);
-    let scatteringOzone: vec3<f32> = (*atmosphere).scatteringOzonePerMm * densityOzone;
-    let absorptionOzone: vec3<f32> = (*atmosphere).absorptionOzonePerMm * densityOzone;
+    let density_ozone: f32 = densityTent(altitude_Mm * 1000.0);
+    let scattering_ozone: vec3<f32> = (*atmosphere).scattering_ozone_per_Mm * density_ozone;
+    let absorption_ozone: vec3<f32> = (*atmosphere).absorption_ozone_per_Mm * density_ozone;
 
-    var extinctionSample: ExtinctionSample;
-    extinctionSample.scatteringRayleigh = scatteringRayleigh;
-    extinctionSample.scatteringMie = scatteringMie;
-    extinctionSample.scatteringOzone = scatteringOzone;
+    var extinction_sample: ExtinctionSample;
+    extinction_sample.scattering_rayleigh = scattering_rayleigh;
+    extinction_sample.scattering_mie = scattering_mie;
+    extinction_sample.scattering_ozone = scattering_ozone;
 
-    extinctionSample.absorptionRayleigh = absorptionRayleigh;
-    extinctionSample.absorptionMie = absorptionMie;
-    extinctionSample.absorptionOzone = absorptionOzone;
+    extinction_sample.absorption_rayleigh = absorption_rayleigh;
+    extinction_sample.absorption_mie = absorption_mie;
+    extinction_sample.absorption_ozone = absorption_ozone;
 
-    extinctionSample.scattering = scatteringRayleigh + scatteringMie + scatteringOzone;
-    extinctionSample.extinction = extinctionSample.scattering + absorptionRayleigh + absorptionMie + absorptionOzone;
+    extinction_sample.scattering = scattering_rayleigh + scattering_mie + scattering_ozone;
+    extinction_sample.extinction = extinction_sample.scattering + absorption_rayleigh + absorption_mie + absorption_ozone;
 
-    return extinctionSample;
+    return extinction_sample;
 }
 
 struct RaySphereHit
@@ -297,8 +297,8 @@ struct RaySphereHit
 // t1 > t0, values can be negative. Function returns true even if the sphere is behind the ray.
 // If this returns false, t0 and t1 are unchanged.
 fn raySphereIntersection(
-    ray_origin: vec3<f32>, 
-    ray_direction_normalized: vec3<f32>, 
+    ray_origin: vec3<f32>,
+    ray_direction_normalized: vec3<f32>,
     radius: f32
 ) -> RaySphereHit
 {
@@ -310,14 +310,14 @@ fn raySphereIntersection(
     let f: vec3<f32> = ray_origin;
     let d: vec3<f32> = ray_direction_normalized;
     let b: f32 = -1.0 * dot(f, d);
-    let centerToIntersectionChord: vec3<f32> = f + b * d;
-    let discriminant: f32 = radius * radius - dot(centerToIntersectionChord, centerToIntersectionChord);
+    let center_to_intersection_chord: vec3<f32> = f + b * d;
+    let discriminant: f32 = radius * radius - dot(center_to_intersection_chord, center_to_intersection_chord);
     let c: f32 = dot(f, f) - radius * radius;
 
     var output : RaySphereHit;
     output.hit = false;
     output.t0 = 0.0;
-    output.t1 = 0.0; 
+    output.t1 = 0.0;
 
     if (discriminant < 0.0)
     {
@@ -348,18 +348,6 @@ fn raySphereIntersection(
     return output;
 }
 
-// Returns true if the ray hits the sphere with radius in the direction indicated.
-// Returns false if the sphere is not hit or if the sphere is behind the ray.
-fn raySphereTest(
-    rayOrigin: vec3<f32>, 
-    rayDirectionNormalized: vec3<f32>, 
-    radius: f32
-) -> bool
-{
-    var result: RaySphereHit = raySphereIntersection(rayOrigin, rayDirectionNormalized, radius);
-    return result.hit && result.t1 > 0.0;
-}
-
 // Input cosine is the cosine of the angle between incident and outgoing scattering directions
 fn phaseRayleigh(cosine: f32) -> f32
 {
@@ -380,36 +368,6 @@ fn phaseMie(cosine: f32, g: f32) -> f32
     return scalar * numerator / denominator;
 }
 
-// Compute the distance a ray travels through the atmosphere, stopped by the planet
-// Returns 0.0 if origin is outside the atmosphere 
-fn rayAtmosphereIntersectionLength(
-    atmosphere: ptr<function,Atmosphere>,                   
-    origin: vec3<f32>,
-    direction: vec3<f32>) -> f32
-{
-    let hitAtmosphere: RaySphereHit = raySphereIntersection(origin, direction, (*atmosphere).atmosphereRadiusMm);
-    
-    if (!hitAtmosphere.hit || hitAtmosphere.t1 <= 0.0)
-    {
-        return 0.0;
-    }
-    
-    let hitPlanet: RaySphereHit = raySphereIntersection(origin, direction, (*atmosphere).planetRadiusMm);
-
-    // If starting outside of atmosphere, move forward
-    let t0: f32 = max(0.0, hitAtmosphere.t0);
-
-    var t1: f32 = hitAtmosphere.t1;
-    // TODO: Figure out what to do when inside the planet
-    if (hitPlanet.hit && hitPlanet.t0 > 0.0)
-    {
-        // Planet is in front of us
-        t1 = min(hitPlanet.t0, t1);
-    }
-
-    return t1 - t0;
-}
-
 // (float, float) 2d encoding of position + direction
 struct RaymarchStep
 {
@@ -417,17 +375,17 @@ struct RaymarchStep
     radius: f32,
     // Cosine of the angle between (0, radius, 0) and implicit direction vector
     mu: f32,
-    // Cosine of the angle with the direction to the sun
+    // Cosine of the angle with the direction to the light
     mu_light: f32,
-    // Cosine of travel direction vector and sun direction vector
+    // Cosine of travel direction vector and light direction vector
     nu: f32,
 };
 
-// Returns 'start' moved 'stepDistance' units along the implicit direction vector 
-// nu is the dot product between normalized direction and sun direction vector
+// Returns 'start' moved 'step_distance' units along the implicit direction vector
+// nu is the dot product between normalized direction and light direction vector
 fn stepRadiusMu(
-    start: RaymarchStep, 
-    stepDistance: f32,
+    start: RaymarchStep,
+    step_distance: f32,
 ) -> RaymarchStep
 {
     // Consider starting position (0, radius, 0)
@@ -438,12 +396,12 @@ fn stepRadiusMu(
 
     var result: RaymarchStep;
     result.radius = safeSqrt(
-        stepDistance * stepDistance + 2.0 * start.radius * start.mu * stepDistance
+        step_distance * step_distance + 2.0 * start.radius * start.mu * step_distance
             + start.radius * start.radius
     );
-    result.mu = (start.radius * start.mu + stepDistance) / result.radius;
+    result.mu = (start.radius * start.mu + step_distance) / result.radius;
     result.nu = start.nu;
-    result.mu_light = (start.radius * start.mu_light + stepDistance * start.nu) / result.radius;
+    result.mu_light = (start.radius * start.mu_light + step_distance * start.nu) / result.radius;
 
     return result;
 }
@@ -454,16 +412,16 @@ fn sampleTransmittanceLUT_RayMarchStep(
     s: sampler,
     atmosphere: ptr<function,Atmosphere>,
     start: RaymarchStep,
-    stepDistance: f32
+    step_distance: f32
 ) -> vec3<f32>
 {
     const STEP_DISTANCE_EPSILON = 0.0000001;
-    if (stepDistance < STEP_DISTANCE_EPSILON)
+    if (step_distance < STEP_DISTANCE_EPSILON)
     {
         return vec3<f32>(1.0);
     }
 
-    let end: RaymarchStep = stepRadiusMu(start, stepDistance);
+    let end: RaymarchStep = stepRadiusMu(start, step_distance);
 
     var transmittance = vec3<f32>(0.0);
     if (start.mu > 0.0)
@@ -481,49 +439,4 @@ fn sampleTransmittanceLUT_RayMarchStep(
     }
 
     return clamp(transmittance, vec3<f32>(0.0), vec3<f32>(1.0));
-}
-
-fn sampleTransmittanceLUT_Sun(
-    transmittance_lut: texture_2d<f32>,
-    lut_sampler: sampler,
-    atmosphere: ptr<function,Atmosphere>,
-    sun: ptr<function,CelestialLight>,
-    radius: f32,
-    cos_sunZenith: f32) -> vec3<f32>
-{
-    let sin_sunRadius: f32 = sin((*sun).angularRadius);
-    let cos_sunRadius: f32 = cos((*sun).angularRadius);
-
-    /*
-    Possible small angle approximation
-    const float sin_sunRadius = SUN_ANGULAR_RADIUS_RADIANS;
-    const float cos_sunRadius = 1.0;
-    */
-
-    // Cos is negative since the horizon zenith varies from PI/2 to PI
-    let sin_horizonZenith: f32 = (*atmosphere).planetRadiusMm / radius;
-    let cos_horizonZenith: f32 = -safeSqrt(1.0 - sin_horizonZenith * sin_horizonZenith);
-
-    // This sample makes no assumption about ground intersection
-    let transmittanceThroughAtmosphere: vec3<f32> = sampleTransmittanceLUT_RadiusMu(
-        transmittance_lut, 
-        lut_sampler,
-        atmosphere, 
-        radius, 
-        cos_sunZenith
-    );
-
-    // angularFactor goes from 1 to 0 as sunZenith varies from horizonZenith - sunRadius to horizonZenith + sunRadius
-    // Or as cos(sunZenith) varies from cos(horizonZenith - sunRadius) to cos(horizonZenith + sunRadius)
-    // Using angle sum identity, we get that:
-    // cos(horizonZenith - sunRadius) = cos(horizonZenith)cos(sunRadius) + sin(sunRadius)sin(horizonZenith)
-    // cos(horizonZenith + sunRadius) = cos(horizonZenith)cos(sunRadius) - sin(sunRadius)sin(horizonZenith)
-
-    let angularFactor: f32 = smoothstep(
-        -sin_horizonZenith * sin_sunRadius,
-        sin_horizonZenith * sin_sunRadius,
-        cos_sunZenith - cos_horizonZenith * cos_sunRadius
-    );
-
-    return transmittanceThroughAtmosphere * angularFactor;
 }

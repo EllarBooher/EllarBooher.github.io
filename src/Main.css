@@ -15,8 +15,7 @@ body {
 }
 
 header,
-footer,
-nav {
+footer {
 	background-color: rgb(2 48 71);
 }
 
@@ -28,6 +27,10 @@ main {
 	display: flex;
 	flex-direction: column;
 	min-height: 100vh;
+}
+
+#root > main {
+	flex: 1;
 }
 
 h1,
@@ -68,4 +71,30 @@ a:hover {
 	margin: 0;
 	overflow: visible;
 	position: static;
+}
+
+.nav-card-container {
+	display: flex;
+	margin-block: 1rem;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+
+.nav-card {
+	width: 30rem;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	padding: 1rem;
+	background-color: hsl(199deg 35% 40%);
+	border-radius: 1rem;
+	transition: 0.3s;
+	cursor: pointer;
+	border: 0.2em solid transparent;
+	text-decoration: none;
+}
+
+.nav-card:hover {
+	background-color: hsl(199deg 35% 43%);
+	border: 0.2em solid white;
 }

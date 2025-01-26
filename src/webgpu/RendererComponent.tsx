@@ -6,8 +6,8 @@ import {
 	memo,
 	ReactElement,
 } from "react";
-import { useSearchParams } from "react-router";
-import { defaultSample, samplesByQueryParam } from "./Samples";
+import { Link, useSearchParams } from "react-router";
+import { SampleEntry, samplesByQueryParam } from "./Samples";
 import { RendererApp, getDevice } from "./RendererApp";
 import { GUI } from "lil-gui";
 import "./RendererComponent.css";
@@ -91,7 +91,7 @@ const RenderingCanvas = function RenderingCanvas({
 		animateRequestRef.current = requestAnimationFrame(animate);
 
 		return () => {
-			if (animateRequestRef.current) {
+			if (animateRequestRef.current !== undefined) {
 				cancelAnimationFrame(animateRequestRef.current);
 			}
 		};
@@ -105,95 +105,70 @@ const RenderingCanvas = function RenderingCanvas({
 	);
 };
 
-export const RendererComponent = memo(function RendererComponent() {
-	const [app, setApp] = useState<RendererApp>();
+const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 	const [errors, setErrors] = useState<string[]>();
+	const appRef = useRef<RendererApp>();
 	const [initialized, setInitialized] = useState(false);
-	const [searchParams, _setSearchParams] = useSearchParams();
-
-	const getSample = useCallback(() => {
-		const sampleID = searchParams.get("sample");
-
-		if (!sampleID) {
-			return defaultSample;
-		}
-
-		const sample = samplesByQueryParam.get(sampleID);
-		if (!sample) {
-			return defaultSample;
-		}
-
-		return sample;
-	}, [searchParams]);
 
 	const quitApp = useCallback(() => {
-		if (!app) {
+		if (!appRef.current) {
 			return;
 		}
-		app.quit = true;
-	}, [app]);
+		appRef.current.quit = true;
+	}, []);
+
+	const createApp = useCallback(
+		(_adapter: GPUAdapter, device: GPUDevice) => {
+			if (appRef.current) {
+				quitApp();
+			}
+			console.log("Got WebGPU device, initializing sample app.");
+
+			// We could try to recreate the device and app, but outside of hotloading/dev that seems unnecessary
+			// The user can just reload the page if a crash occurs
+			device.lost.then(
+				(reason) => {
+					console.log(
+						`WebGPU device lost - ("${reason.reason}"):\n ${reason.message}`
+					);
+				},
+				(err) => {
+					// This shouldn't happen
+					throw new Error(`WebGPU device lost rejected`, {
+						cause: err,
+					});
+				}
+			);
+			device.onuncapturederror = (ev) => {
+				console.error(`WebGPU device uncaptured error: ${ev.error.message}`);
+				setErrors([ev.error.message]);
+				quitApp();
+			};
+
+			const presentFormat = navigator.gpu.getPreferredCanvasFormat();
+			appRef.current = sample.create(device, presentFormat, performance.now());
+
+			console.log("Finished initializing app.");
+		},
+		[sample, quitApp]
+	);
 
 	useEffect(() => {
-		setApp(undefined);
-	}, [searchParams, setApp]);
-
-	useEffect(() => {
-		if (app) {
-			return;
-		}
 		setInitialized(false);
-		const sample = getSample();
+		// Adapter is one-time, and samples can have different feature requirements, so we need to create everything from scratch
 		getDevice(sample.requiredFeatures, sample.optionalFeatures)
 			.then(
-				({ adapter: _adapter, device }) => {
-					if (app) {
-						// We need to override, since a rerender due to refresh vs due to strict mode is indistinguishable
-						// I am not 100% certain of this
-						console.warn(
-							"Device found, but app was already created. This is due to either a duplicate component rerender, or the sample changing without a full page refresh. Overriding the original."
-						);
-						quitApp();
-					} else {
-						console.log("Got WebGPU device, initializing sample app.");
-					}
-
-					// We could try to recreate the device and app, but outside of hotloading/dev that seems unnecessary
-					// The user can just reload the page if a crash occurs
-					device.lost.then(
-						(reason) => {
-							console.log(
-								`WebGPU device lost - ("${reason.reason}"):\n ${reason.message}`
-							);
-						},
-						(err) => {
-							// This shouldn't happen
-							throw new Error(`WebGPU device lost rejected`, {
-								cause: err,
-							});
-						}
-					);
-					device.onuncapturederror = (ev) => {
-						console.error(
-							`WebGPU device uncaptured error: ${ev.error.message}`
-						);
-						setErrors([ev.error.message]);
-						quitApp();
-					};
-
-					const presentFormat = navigator.gpu.getPreferredCanvasFormat();
-					setApp(sample.create(device, presentFormat, performance.now()));
-
-					console.log("Finished initializing app.");
-				},
+				({ adapter, device }) => createApp(adapter, device),
 				(err: Error) => {
 					console.error(err);
 					setErrors([err.message, err.cause?.toString?.() ?? "Unknown Cause"]);
 				}
 			)
 			.finally(() => {
+				console.log("Set Initialized to True");
 				setInitialized(true);
 			});
-	}, [app, quitApp, getSample]);
+	}, [sample, createApp]);
 
 	const errorBlock = (
 		<>
@@ -214,14 +189,52 @@ export const RendererComponent = memo(function RendererComponent() {
 		<div className="sample-text">{errors ? errorBlock : loadingBlock}</div>
 	);
 
+	return (
+		<>
+			{initialized && appRef.current ? (
+				<RenderingCanvas app={appRef.current} />
+			) : (
+				textBlock
+			)}
+		</>
+	);
+};
+
+export const RendererComponent = memo(function RendererComponent() {
+	const [searchParams, setSearchParams] = useSearchParams();
+	const [sample, setSample] = useState<SampleEntry>();
+
+	useEffect(() => {
+		const sampleQueryParam = searchParams.get("sample");
+		if (!sampleQueryParam) {
+			setSample(undefined);
+			return;
+		}
+		const sample = samplesByQueryParam.get(sampleQueryParam);
+		if (!sample) {
+			searchParams.delete("sample");
+			setSearchParams(searchParams);
+		} else {
+			setSample(sample);
+		}
+	}, [searchParams, setSearchParams]);
+
 	const sampleSidebarLinks: ReactElement[] = [];
+	const sampleNavCards: ReactElement[] = [];
 	samplesByQueryParam.forEach((value, key) => {
+		const sampleLink = `/webgpu-samples?sample=${key}`;
 		sampleSidebarLinks.push(
 			<li key={key}>
-				<a href={`/#/webgpu-samples?sample=${key}`} key={key}>
+				<Link to={sampleLink} key={key}>
 					{value.name}
-				</a>
+				</Link>
 			</li>
+		);
+		sampleNavCards.push(
+			<Link key={key} className="nav-card" to={sampleLink}>
+				<h2>{value.name}</h2>
+				<p>{value.description}</p>
+			</Link>
 		);
 	});
 
@@ -235,9 +248,20 @@ export const RendererComponent = memo(function RendererComponent() {
 
 	return (
 		<main className="sample">
-			<h1 className="visuallyhidden">WebGPU Animated Sample</h1>
-			{sampleSidebar}
-			{initialized && app ? <RenderingCanvas app={app} /> : textBlock}
+			{sample ? (
+				<>
+					<h1 className="visuallyhidden">WebGPU Animated Sample</h1>
+					{sampleSidebar}
+					<AppLoader sample={sample} />
+				</>
+			) : (
+				<div className="sample-text">
+					<h1>WebGPU Samples</h1>
+					<nav aria-label="WebGPU Samples" className="nav-card-container">
+						{sampleNavCards}
+					</nav>
+				</div>
+			)}
 		</main>
 	);
 });

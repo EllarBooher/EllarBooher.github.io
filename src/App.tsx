@@ -1,6 +1,6 @@
 import { memo, ReactElement } from "react";
 import "./App.css";
-import { useNavigate } from "react-router";
+import { Link } from "react-router";
 import { samplesByQueryParam } from "./webgpu/Samples";
 
 const emailLink = (
@@ -25,7 +25,6 @@ interface DisplayCardProps {
 
 const DisplayCard = memo(function DisplayCard({
 	hyperlink,
-	externalLink = true,
 	thumbnailAssets = [],
 	thumbnailAltTexts,
 	title = `PLACEHOLDER TITLE`,
@@ -45,28 +44,12 @@ const DisplayCard = memo(function DisplayCard({
 		</div>
 	);
 
-	const navigate = useNavigate();
-
-	const handleClick = () => {
-		if (externalLink) {
-			window.location.href = hyperlink;
-		} else {
-			navigate(hyperlink)?.catch((err) => {
-				throw new Error("Unable to navigate", { cause: err });
-			});
-		}
-	};
-
 	return (
-		<button className="display-card" onClick={handleClick}>
-			<div>
-				<h2 className="display-card-name">{title}</h2>
-				<div className="display-card-body">
-					<p>{description}</p>
-					{thumbnails}
-				</div>
-			</div>
-		</button>
+		<Link className="nav-card" to={hyperlink}>
+			<h2>{title}</h2>
+			<p>{description}</p>
+			{thumbnails}
+		</Link>
 	);
 });
 
@@ -137,13 +120,7 @@ function App() {
 
 	return (
 		<>
-			<main
-				style={{
-					flexDirection: "column",
-					flex: "1",
-					padding: "2em",
-				}}
-			>
+			<main className="landing-main">
 				<h1 className="visuallyhidden">Portfolio Landing Page</h1>
 				<p>
 					Hello, my name is Estelle Booher. My passion is realtime rendering and
@@ -157,11 +134,17 @@ function App() {
 				</p>
 				<p>To contact me, please email at {emailLink}.</p>
 				<h2>In-Browser WebGPU Samples</h2>
-				<div className="display-grid">{webGPUCards}</div>
+				<nav className="display-grid" aria-label="WebGPU Samples">
+					{webGPUCards}
+				</nav>
 				<h2>Offline Computer Graphics</h2>
-				<div className="display-grid">{offlineCards}</div>
+				<nav className="display-grid" aria-label="Offline Computer Graphics">
+					{offlineCards}
+				</nav>
 				<h2>Video Games</h2>
-				<div className="display-grid">{videogameCards}</div>
+				<nav className="display-grid" aria-label="Video Games">
+					{videogameCards}
+				</nav>
 			</main>
 			<footer style={{ padding: "1em" }}>
 				All works present are copyrighted, unless provided with external

@@ -1,42 +1,21 @@
-import { useNavigate, useLocation } from "react-router";
+import { useLocation, useSearchParams, Link } from "react-router";
 import "./NavigateLink.css";
 import { memo, Fragment } from "react";
-
-interface NavigateLinkProps {
-	link: string;
-	label: string;
-}
+import { defaultSample, samplesByQueryParam } from "./webgpu/Samples";
 
 const pathSegmentToTitles = new Map<string, string>([
 	["", "Estelle Booher"],
 	["webgpu-samples", "WebGPU Samples"],
 ]);
 
-const NavigateLink = memo(function NavigateLink({
-	link,
-	label,
-}: NavigateLinkProps) {
-	const navigate = useNavigate();
-
-	const handleClick = () => {
-		navigate(link)?.catch((err) => {
-			throw new Error("Unable to navigate", { cause: err });
-		});
-	};
-	return (
-		<button className="nav-button" onClick={handleClick} type="button">
-			{label}
-		</button>
-	);
-});
-
 export const NavigationHeader = memo(function NavigationHeader() {
 	const location = useLocation();
+	const [searchParams, _setSearchParams] = useSearchParams();
 
 	const navSteps = [
-		<Fragment key={"root"}>
-			<NavigateLink link={"/"} label={pathSegmentToTitles.get("")!} />
-		</Fragment>,
+		<Link key={"root"} to={"/"}>
+			{pathSegmentToTitles.get("")!}
+		</Link>,
 	];
 
 	if (location.pathname != "/") {
@@ -50,24 +29,30 @@ export const NavigationHeader = memo(function NavigationHeader() {
 				return (
 					<Fragment key={accumulatedLink}>
 						{" > "}
-						<NavigateLink
-							link={accumulatedLink}
-							label={prettySegment ? prettySegment : segment}
-						/>
+						<Link to={accumulatedLink}>
+							{prettySegment ? prettySegment : segment}
+						</Link>
 					</Fragment>
 				);
 			})
 		);
 	}
 
+	const sampleQueryParam = searchParams.get("sample");
+	if (sampleQueryParam && location.pathname == "/webgpu-samples") {
+		navSteps.push(
+			<Fragment key="sample-caboose">
+				{" > "}
+				<Link to={location.pathname + location.search}>
+					{samplesByQueryParam.get(sampleQueryParam)?.name ??
+						defaultSample.name}
+				</Link>
+			</Fragment>
+		);
+	}
+
 	return (
-		<nav
-			aria-label="Main"
-			style={{
-				padding: "1em",
-				alignItems: "start",
-			}}
-		>
+		<nav className="main-nav" aria-label="Main">
 			{navSteps}
 		</nav>
 	);

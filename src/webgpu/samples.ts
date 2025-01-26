@@ -2,7 +2,7 @@ import { HelloCubeAppConstructor as HelloCube } from "./HelloCube";
 import { SkySeaAppConstructor as SkySea } from "./SkySea";
 import { RendererAppConstructor } from "./RendererApp";
 
-interface SampleEntry {
+export interface SampleEntry {
 	name: string;
 	// GPUAdapter requires all desired features, optional or not, to be provided at creation time. So we track both and fail when any features in requiredFeatures are missing.
 	requiredFeatures: ReadonlySet<GPUFeatureName>;
@@ -10,6 +10,7 @@ interface SampleEntry {
 	description: string;
 	create: RendererAppConstructor;
 }
+export const defaultSampleQueryParam = "hello-cube";
 export const defaultSample = {
 	name: "Hello Cube",
 	requiredFeatures: new Set(),
@@ -35,7 +36,7 @@ export const defaultSample = {
 	create: HelloCube,
 } satisfies SampleEntry;
 export const samplesByQueryParam = new Map<string, SampleEntry>([
-	["hello-cube", defaultSample],
+	[defaultSampleQueryParam, defaultSample],
 	[
 		"sky-sea",
 		{

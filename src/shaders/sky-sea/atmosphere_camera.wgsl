@@ -189,29 +189,26 @@ fn sampleGeometryLuminance(
 
     var light_luminance_transfer = vec3<f32>(0.0);
 
-    // TODO: shadowmap, occlusion texture
+	// TODO: Better lighting model of the water
 
     // Model water as perfect reflections with some diffuse scattering to emulate light coming up from underwater
 
-    let diffuse = diffuseBRDF(material);
+    let surface_position = position + direction * distance;
 
+	// reflection image on ocean surface
+	//
     // shift reflection vector up to make up for the lack of secondary bounces
     // Otherwise, the environmental luminance will be 0 and we get random black patches
     var reflection_direction = reflect(normalize(direction), normalize(material.normal));
     reflection_direction.y = max(reflection_direction.y, 0.001);
     reflection_direction = normalize(reflection_direction);
 
-    let surface_position = position + direction * distance;
-
-    light_luminance_transfer +=
+	light_luminance_transfer +=
         transmittance_to_surface
         * sampleSkyLuminance(atmosphere, light, surface_position, reflection_direction)
-        * mix(
-            diffuse,
-            vec3<f32>(1.0),
-            computeFresnelPerfectReflection(material, reflection_direction)
-        );
+        * computeFresnelPerfectReflection(material, reflection_direction);
 
+	let diffuse = diffuseBRDF(material);
     light_luminance_transfer +=
         transmittance_to_surface
         * diffuse

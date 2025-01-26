@@ -202,22 +202,6 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 
 export const RendererComponent = memo(function RendererComponent() {
 	const [searchParams, setSearchParams] = useSearchParams();
-	const [sample, setSample] = useState<SampleEntry>();
-
-	useEffect(() => {
-		const sampleQueryParam = searchParams.get("sample");
-		if (!sampleQueryParam) {
-			setSample(undefined);
-			return;
-		}
-		const sample = samplesByQueryParam.get(sampleQueryParam);
-		if (!sample) {
-			searchParams.delete("sample");
-			setSearchParams(searchParams);
-		} else {
-			setSample(sample);
-		}
-	}, [searchParams, setSearchParams]);
 
 	const sampleSidebarLinks: ReactElement[] = [];
 	const sampleNavCards: ReactElement[] = [];
@@ -238,6 +222,27 @@ export const RendererComponent = memo(function RendererComponent() {
 		);
 	});
 
+	const sampleQueryParam = searchParams.get("sample");
+	const sample = sampleQueryParam
+		? samplesByQueryParam.get(sampleQueryParam)
+		: undefined;
+	if (sampleQueryParam && !sample) {
+		searchParams.delete("sample");
+		setSearchParams(searchParams);
+	}
+	if (sample == undefined) {
+		return (
+			<main className="sample">
+				<div className="sample-text">
+					<h1>WebGPU Samples</h1>
+					<nav aria-label="WebGPU Samples" className="nav-card-container">
+						{sampleNavCards}
+					</nav>
+				</div>
+			</main>
+		);
+	}
+
 	const sampleSidebar = (
 		<nav aria-label="WebGPU Samples" className="sample-sidebar">
 			<h2>Samples</h2>
@@ -248,20 +253,9 @@ export const RendererComponent = memo(function RendererComponent() {
 
 	return (
 		<main className="sample">
-			{sample ? (
-				<>
-					<h1 className="visuallyhidden">WebGPU Animated Sample</h1>
-					{sampleSidebar}
-					<AppLoader sample={sample} />
-				</>
-			) : (
-				<div className="sample-text">
-					<h1>WebGPU Samples</h1>
-					<nav aria-label="WebGPU Samples" className="nav-card-container">
-						{sampleNavCards}
-					</nav>
-				</div>
-			)}
+			<h1 className="visuallyhidden">WebGPU Animated Sample</h1>
+			{sampleSidebar}
+			<AppLoader sample={sample} />
 		</main>
 	);
 });

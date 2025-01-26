@@ -30,8 +30,8 @@ struct CameraUBO
 //// INCLUDE pbr.inc.wgsl
 
 fn sampleSkyViewLUT(
-    atmosphere: ptr<function, Atmosphere>, 
-    position: vec3<f32>, 
+    atmosphere: ptr<function, Atmosphere>,
+    position: vec3<f32>,
     direction: vec3<f32>
 ) -> vec3<f32>
 {
@@ -93,9 +93,9 @@ fn sampleSkyViewLUT(
 }
 
 fn sampleSunDisk(
-    atmosphere: ptr<function, Atmosphere>, 
-    light: ptr<function, CelestialLight>, 
-    position: vec3<f32>, 
+    atmosphere: ptr<function, Atmosphere>,
+    light: ptr<function, CelestialLight>,
+    position: vec3<f32>,
     direction: vec3<f32>
 ) -> vec3<f32>
 {
@@ -119,9 +119,9 @@ fn sampleSunDisk(
 }
 
 fn computeFractionOfSunVisible(
-    atmosphere: ptr<function, Atmosphere>, 
-    light: ptr<function, CelestialLight>, 
-    position: vec3<f32>, 
+    atmosphere: ptr<function, Atmosphere>,
+    light: ptr<function, CelestialLight>,
+    position: vec3<f32>,
 ) -> f32
 {
     let sinHorizonZenith = (*atmosphere).planetRadiusMm / length(position);
@@ -131,19 +131,19 @@ fn computeFractionOfSunVisible(
 
     // Ignore third dimension, since earth is a symmetrical sphere
     let directionToHorizon = normalize(vec2<f32>(
-        sinHorizonZenith, 
+        sinHorizonZenith,
         safeSqrt(1.0 - sinHorizonZenith * sinHorizonZenith)
     ));
     let directionToSun = normalize(vec2<f32>(
-        safeSqrt(1.0 - cosSunZenith * cosSunZenith), 
+        safeSqrt(1.0 - cosSunZenith * cosSunZenith),
         cosSunZenith
     ));
 
     let cosHorizonSun = dot(directionToHorizon, directionToSun);
 
     // + when above horizon, - when below
-    let sinHorizonSun = 
-        sign(directionToSun.y - directionToHorizon.y) 
+    let sinHorizonSun =
+        sign(directionToSun.y - directionToHorizon.y)
         * safeSqrt(1.0 - cosHorizonSun * cosHorizonSun);
 
     // Small angle approximation
@@ -163,9 +163,9 @@ fn computeFractionOfSunVisible(
 }
 
 fn sampleSkyLuminance(
-    atmosphere: ptr<function, Atmosphere>, 
-    light: ptr<function, CelestialLight>, 
-    position: vec3<f32>, 
+    atmosphere: ptr<function, Atmosphere>,
+    light: ptr<function, CelestialLight>,
+    position: vec3<f32>,
     direction: vec3<f32>
 ) -> vec3<f32>
 {
@@ -177,10 +177,10 @@ fn sampleSkyLuminance(
         let mu_light = dot(position, light_direction) / radius;
 
         let transmittance_to_light = sampleTransmittanceLUT_Sun(
-            transmittance_lut, 
+            transmittance_lut,
             lut_sampler,
-            atmosphere, 
-            light, 
+            atmosphere,
+            light,
             radius,
             mu_light
         );
@@ -210,9 +210,9 @@ fn sampleGeometryLuminance(
 
     let surface_step: RaymarchStep = stepRadiusMu(origin_step, distance);
     let transmittance_to_surface = sampleTransmittanceLUT_Segment(
-        transmittance_lut, 
+        transmittance_lut,
         lut_sampler,
-        atmosphere, 
+        atmosphere,
         origin_step.radius,
         origin_step.mu,
         distance,
@@ -230,40 +230,42 @@ fn sampleGeometryLuminance(
     // shift reflection vector up to make up for the lack of secondary bounces
     // Otherwise, the environmental luminance will be 0 and we get random black patches
     var reflection_direction = reflect(normalize(direction), normalize(material.normal));
-    reflection_direction.y = max(reflection_direction.y, 0.001); 
+    reflection_direction.y = max(reflection_direction.y, 0.001);
     reflection_direction = normalize(reflection_direction);
 
     let surface_position = position + direction * distance;
 
-    light_luminance_transfer += 
+    light_luminance_transfer +=
         transmittance_to_surface
-        * sampleSkyLuminance(atmosphere, light, surface_position, reflection_direction) 
+        * sampleSkyLuminance(atmosphere, light, surface_position, reflection_direction)
         * mix(
-            diffuse, 
-            vec3<f32>(1.0), 
+            diffuse,
+            vec3<f32>(1.0),
             computeFresnelPerfectReflection(material, reflection_direction)
         );
 
-    light_luminance_transfer += 
+    light_luminance_transfer +=
         transmittance_to_surface
         * diffuse
         * sampleMultiscatterLUT(multiscatter_lut, lut_sampler, atmosphere, surface_step.radius, surface_step.mu_light);
 
-    { 
+	/*
+    {
         // Aerial perspective, the light scattered by air between viewer and the surface
         // TODO: aerial perspective LUT
         let include_ground = false;
         light_luminance_transfer += computeLuminanceScatteringIntegral(
-            atmosphere, 
-            light, 
+            atmosphere,
+            light,
             lut_sampler,
-            transmittance_lut, 
-            multiscatter_lut, 
-            position, 
-            direction, 
+            transmittance_lut,
+            multiscatter_lut,
+            position,
+            direction,
             include_ground
         ).luminance;
     }
+	*/
 
     return light_luminance_transfer;
 }
@@ -293,7 +295,7 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     let direction_world = normalize((b_camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
 
     let color_with_depth_in_alpha = textureLoad(gbuffer_color_with_depth_in_alpha, texel_coord, 0);
-    let normal = textureLoad(gbuffer_normal, texel_coord, 0); 
+    let normal = textureLoad(gbuffer_normal, texel_coord, 0);
 
     let depth = color_with_depth_in_alpha.a / METERS_PER_MM;
 
@@ -302,7 +304,7 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     let sin_horizon: f32 = atmosphere.planetRadiusMm / length(origin);
     let cos_horizon: f32 = -safeSqrt(1.0 - sin_horizon * sin_horizon);
     let intersects_ground = dot(normalize(origin), normalize(direction_world)) < cos_horizon;
-    
+
     if (depth <= 0.0)
     {
         // View of virtual environment: either the sky, or the floor
@@ -318,7 +320,7 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     }
     else
     {
-        // View of geometry in gbuffer 
+        // View of geometry in gbuffer
         let material: PBRTexel = convertPBRProperties(color_with_depth_in_alpha.xyz, normal.xyz);
         luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, intersects_ground);
     }

@@ -12,8 +12,11 @@
 
 // All units are Mm/megameters (10^6 meters) unless marked km/kilometers (10^3 meters)
 
-// This shader builds a 2D sky-view LUT, which is a lattitude-longitude map of
-// the sky with only the planet's surface shadowing.
+// See 'atmosphere_common.inc.wgsl' for sources on what this method is based on.
+
+// Skyview LUT
+//
+// This shader builds a 2D sky-view LUT, which is a lattitude-longitude map of the sky with only the planet's surface shadowing.
 // This map contains the total luminance from in-scattering due to atmospheric effects.
 //
 // The purpose of this map is to provide a fast-path when rendering the sky. This texture can be sampled instead of
@@ -31,8 +34,8 @@
 // v varies from -pi/2 to pi/2
 
 fn uv_to_azimuthElevation(
-    atmosphere: ptr<function, Atmosphere>, 
-    radius: f32, 
+    atmosphere: ptr<function, Atmosphere>,
+    radius: f32,
     uv: vec2<f32>,
 ) -> vec2<f32>
 {
@@ -79,11 +82,12 @@ fn computeSkyViewLuminance(@builtin(global_invocation_id) global_id : vec3<u32>,
     let offset = vec2<f32>(0.5, 0.5);
     let uv = (vec2<f32>(texel_coord) + offset) / vec2<f32>(size);
 
+	// TODO: load camera position
     const TEN_METERS_MM = 10.0 / 1000000.0;
     let origin = vec3<f32>(0.0, atmosphere.planetRadiusMm + TEN_METERS_MM, 0.0);
 
     let azimuth_elevation = uv_to_azimuthElevation(
-        &atmosphere,  
+        &atmosphere,
         length(origin),
         uv
     );
@@ -92,21 +96,25 @@ fn computeSkyViewLuminance(@builtin(global_invocation_id) global_id : vec3<u32>,
     let elevation = azimuth_elevation.y;
 
     let direction = normalize(vec3(
-        sin(azimuth) * cos(elevation), 
-        sin(elevation), 
+        sin(azimuth) * cos(elevation),
+        sin(elevation),
         cos(azimuth) * cos(elevation)
     ));
 
+	let atmosphere_raycast = raycastAtmosphere(&atmosphere, origin, direction);
+
     let include_ground = false;
     let luminance = computeLuminanceScatteringIntegral(
-        &atmosphere, 
+        &atmosphere,
         &light,
         lut_sampler,
-        transmittance_lut, 
-        multiscatter_lut, 
-        origin, 
-        direction, 
-        include_ground
+        transmittance_lut,
+        multiscatter_lut,
+        origin + direction * atmosphere_raycast.t_min,
+        direction,
+        include_ground,
+		atmosphere_raycast.intersects_ground,
+		atmosphere_raycast.t_max - atmosphere_raycast.t_min
     ).luminance;
 
     textureStore(skyview_lut, texel_coord, vec4(luminance, 1.0));

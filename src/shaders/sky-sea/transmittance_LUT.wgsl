@@ -4,9 +4,16 @@
 
 //// INCLUDE atmosphere_common.inc.wgsl
 
+// See 'atmosphere_common.inc.wgsl' for sources on what this method is based on.
+
+// Transmittance LUT
+//
+// This map builds a transmittance LUT, a map of the transmittance of light interacting with the atmosphere parameterized by altitude and facing direction.
+// This map depends entirely on the atmosphere's parameters, and NOT on any lights, cameras, or geometry.
+
 const SAMPLE_COUNT: u32 = 500;
 
-@compute @workgroup_size(16, 16, 1) 
+@compute @workgroup_size(16, 16, 1)
 fn computeTransmittance(@builtin(global_invocation_id) global_id : vec3<u32>,)
 {
     let texel_coord = vec2<u32>(global_id.xy);

@@ -7,7 +7,7 @@
 //// INCLUDE atmosphere_common.inc.wgsl
 //// INCLUDE atmosphere_raymarch.inc.wgsl ISOTROPIC_PHASE LIGHT_ILLUMINANCE_IS_ONE HIGH_SAMPLE_COUNT
 
-// Based on "A Scalable and Production Ready Sky and Atmosphere Rendering Technique" by Sebastien Hillaire (2020)
+// See 'atmosphere_common.inc.wgsl' for sources on what this method is based on.
 
 // This shader builds a 2D multiscattering LUT, where each position stores the light from second and higher order
 // scattering in a large neighborhood.
@@ -46,12 +46,10 @@
 // v := clamp((|x| - R_bot)/(R_top - R_bot), 0, 1)
 
 @compute @workgroup_size(16, 16, 1)
-fn computeMultiscattering(@builtin(global_invocation_id) global_id : vec3<u32>,)
-{
+fn computeMultiscattering(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let texel_coord = vec2<u32>(global_id.xy);
     let size = textureDimensions(multiscatter_lut);
-    if(texel_coord.x >= size.x || texel_coord.y >= size.y)
-    {
+    if texel_coord.x >= size.x || texel_coord.y >= size.y {
         return;
     }
     var atmosphere: Atmosphere = ATMOSPHERE_GLOBAL;
@@ -68,7 +66,7 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id : vec3<u32>,)
 
     // SunZenith is relative to origin
     // As established, scattering is symmetrical around up axis, so just pick an azimuth = 0 for sun
-    // PORTING NOTE: should y be negative? I'm getting flipped around with the coordinates 
+    // PORTING NOTE: should y be negative? I'm getting flipped around with the coordinates
     let sun_direction = vec3<f32>(0.0, cos_sun_zenith, sin_sun_zenith);
 
     // TODO: remove this
@@ -92,8 +90,7 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id : vec3<u32>,)
     // prime/odd numbers seem to avoid bands that occur at higher altitudes, that is independent of sun angle.
     const SAMPLE_COUNT_SQRT = 5u;
     const SAMPLE_COUNT = SAMPLE_COUNT_SQRT * SAMPLE_COUNT_SQRT;
-    for (var sampleIndex = 0u; sampleIndex < SAMPLE_COUNT; sampleIndex++)
-    {
+    for (var sampleIndex = 0u; sampleIndex < SAMPLE_COUNT; sampleIndex++) {
         // 0, 0, 0, 0, 1, 1, 1, 1, ...
         let azimuthalIndex = f32(sampleIndex) / f32(SAMPLE_COUNT_SQRT);
 
@@ -108,7 +105,7 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id : vec3<u32>,)
 
         // sinZenith is always positive since zenith ranges from 0 to pi
         let cosZenith = clamp(
-            2.0 * f32(zenithIndex) / f32(SAMPLE_COUNT_SQRT) - 1.0, 
+            2.0 * f32(zenithIndex) / f32(SAMPLE_COUNT_SQRT) - 1.0,
             -1.0, 1.0
         );
         let sinZenith = sqrt(1.0 - cosZenith * cosZenith);
@@ -116,15 +113,19 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id : vec3<u32>,)
         // Uniformly distributed on unit sphere direction
         let direction = vec3<f32>(sinAzimuth * sinZenith, cosZenith, cosAzimuth * sinZenith);
 
-        let includeGround = true;
+		let atmosphere_raycast = raycastAtmosphere(&atmosphere, origin, direction);
+
+        let include_ground = true;
         let scattering = computeLuminanceScatteringIntegral(
-            &atmosphere, 
-            &light, 
+            &atmosphere,
+            &light,
             lut_sampler,
-            transmittance_lut, 
-            origin, 
-            direction, 
-            includeGround
+            transmittance_lut,
+			origin + direction * atmosphere_raycast.t_min,
+			direction,
+			include_ground,
+			atmosphere_raycast.intersects_ground,
+			atmosphere_raycast.t_max - atmosphere_raycast.t_min
         );
         // let scattering = ScatteringResult(vec3<f32>(0.0), vec3<f32>(0.0));
 

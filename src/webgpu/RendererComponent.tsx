@@ -98,44 +98,16 @@ const RenderingCanvas = function RenderingCanvas({
 	}, [animate, app]);
 
 	return (
-		<div
-			style={{
-				flex: "1",
-				position: "relative",
-				display: "flex",
-			}}
-		>
-			<div
-				style={{
-					flex: "1",
-					position: "relative",
-					overflow: "hidden",
-				}}
-			>
-				<canvas
-					style={{
-						position: "absolute",
-						width: "100%",
-						height: "100%",
-					}}
-					ref={canvasRef}
-				/>
-			</div>
-			<div
-				style={{
-					position: "absolute",
-					top: 0,
-					right: 0,
-				}}
-				ref={guiPaneRef}
-			/>
+		<div className="canvas-container">
+			<canvas className="sample-canvas" ref={canvasRef} />
+			<div className="gui-pane" ref={guiPaneRef} />
 		</div>
 	);
 };
 
 export const RendererComponent = memo(function RendererComponent() {
 	const [app, setApp] = useState<RendererApp>();
-	const [error, setError] = useState("");
+	const [errors, setErrors] = useState<string[]>();
 	const [initialized, setInitialized] = useState(false);
 	const [searchParams, _setSearchParams] = useSearchParams();
 
@@ -204,7 +176,7 @@ export const RendererComponent = memo(function RendererComponent() {
 						console.error(
 							`WebGPU device uncaptured error: ${ev.error.message}`
 						);
-						setError(ev.error.message);
+						setErrors([ev.error.message]);
 						quitApp();
 					};
 
@@ -215,7 +187,7 @@ export const RendererComponent = memo(function RendererComponent() {
 				},
 				(err: Error) => {
 					console.error(err);
-					setError(`${err.message}\n${err.cause?.toString?.()}`);
+					setErrors([err.message, err.cause?.toString?.() ?? "Unknown Cause"]);
 				}
 			)
 			.finally(() => {
@@ -223,37 +195,29 @@ export const RendererComponent = memo(function RendererComponent() {
 			});
 	}, [app, quitApp, getSample]);
 
-	const bodyStyle = {
-		margin: 0,
-		padding: "2em",
-		flexGrow: "1",
-		whiteSpace: "pre-line",
-		fontSize: "1.5em",
-	};
-
 	const errorBlock = (
-		<p style={bodyStyle}>
-			{`Sorry, there was an issue.
+		<>
+			<p>
+				{`Sorry, there was an issue.
             This app uses WebGPU, which has somewhat limited support.
-            Try using another browser, updating your browser, or downloading a Beta or Nightly version.
-
-        `}
-			{error}
-		</p>
+            Try using another browser, updating your browser, or downloading a Beta or Nightly version.`}
+			</p>
+			<ol className="sample-errors">
+				{errors?.map((value) => {
+					return <li key={value}>{value}</li>;
+				})}
+			</ol>
+		</>
 	);
-	const loadingBlock = <p style={bodyStyle}>{`Loading...`}</p>;
+	const loadingBlock = <p>{`Loading...`}</p>;
+	const textBlock = (
+		<div className="sample-text">{errors ? errorBlock : loadingBlock}</div>
+	);
 
 	const sampleSidebarLinks: ReactElement[] = [];
 	samplesByQueryParam.forEach((value, key) => {
 		sampleSidebarLinks.push(
-			<li
-				key={key}
-				style={{
-					display: "flex",
-					alignContent: "center",
-					listStyleType: "none",
-				}}
-			>
+			<li key={key}>
 				<a href={`/#/webgpu-samples?sample=${key}`} key={key}>
 					{value.name}
 				</a>
@@ -262,39 +226,18 @@ export const RendererComponent = memo(function RendererComponent() {
 	});
 
 	const sampleSidebar = (
-		<nav
-			aria-label="WebGPU Samples"
-			style={{
-				justifyItems: "center",
-			}}
-		>
-			<h2 style={{ paddingInline: "1em", margin: "0" }}>Samples</h2>
+		<nav aria-label="WebGPU Samples" className="sample-sidebar">
+			<h2>Samples</h2>
 			<hr />
-			<ul
-				style={{
-					padding: 0,
-					margin: 0,
-				}}
-			>
-				{sampleSidebarLinks}
-			</ul>
+			<ul>{sampleSidebarLinks}</ul>
 		</nav>
 	);
 
 	return (
-		<main
-			style={{
-				flex: "1",
-				display: "flex",
-			}}
-		>
+		<main className="sample">
 			<h1 className="visuallyhidden">WebGPU Animated Sample</h1>
 			{sampleSidebar}
-			{initialized ? (
-				<>{app ? <RenderingCanvas app={app} /> : errorBlock}</>
-			) : (
-				<>{loadingBlock}</>
-			)}
+			{initialized && app ? <RenderingCanvas app={app} /> : textBlock}
 		</main>
 	);
 });

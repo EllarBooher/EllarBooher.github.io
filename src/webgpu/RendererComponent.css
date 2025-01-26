@@ -13,3 +13,70 @@
 .lil-gui option {
 	color: black;
 }
+
+.canvas-container {
+	flex: 1;
+
+	/*
+	relative allows absolute children (canvas & GUI pane) to snap to the edge of the rendering area and not some other parent
+	It also allows the canvas to fill the exact visible area and overflow: hidden any extra
+
+	Other techniques seems to always add a scrollbar for the canvas when zooming or even at 100% zoom
+	This arrangement keeps the canvas filling the available area which is what I want.
+	*/
+	position: relative;
+	overflow: hidden;
+}
+
+.sample-canvas {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+}
+
+.gui-pane {
+	position: absolute;
+	top: 0;
+	right: 0;
+}
+
+main.sample {
+	display: flex;
+}
+
+.sample-text {
+	margin: 0;
+	padding: 2rem;
+}
+
+.sample-errors {
+	padding: 2rem;
+	background-color: #91433f;
+}
+
+.sample-sidebar {
+	background-color: rgb(2 48 71);
+	justify-items: center;
+}
+
+.sample-sidebar > h2 {
+	padding-inline: 1rem;
+	margin: 0;
+}
+
+.sample-sidebar > ul {
+	padding: 0;
+	margin: 0;
+}
+
+.sample-sidebar > ul > li {
+	width: 100%;
+	height: 2rem;
+	display: flex;
+	text-align: center;
+	list-style-type: none;
+}
+
+.sample-sidebar > ul > li > a {
+	flex: 1;
+}

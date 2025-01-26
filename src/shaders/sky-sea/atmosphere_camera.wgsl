@@ -95,26 +95,56 @@ fn sampleSkyViewLUT(
 fn sampleSunDisk(
     atmosphere: ptr<function, Atmosphere>,
     light: ptr<function, CelestialLight>,
-    position: vec3<f32>,
+	position: vec3<f32>,
     direction: vec3<f32>
 ) -> vec3<f32>
 {
-	// Note: This is distinct from the usual mu and mu_light.
-    let cos_direction_light = dot(normalize(direction), normalize(-(*light).forward));
+	let light_direction = normalize(-(*light).forward);
 
-    if (cos_direction_light < 0.0)
-    {
-        return vec3(0.0);
-    }
+	// This is distinct from the usual mu and mu_light.
+	let cos_direction_light = dot(normalize(direction), light_direction);
+	let cos_light_radius = cos((*light).angular_radius);
 
-    // Small angle approximation
-    let sin_light_radius = (*light).angular_radius;
+	// theta is the angle subtended on the surface of the sun by our view direction.
+	// theta varies from 0 when looking directly at light_direction, to ~90 degrees when looking at the very edge of the solar disk
+	// This is an approximation, that is accurate since lights are very far away
+	// Other lights like perhaps a moon should use another model
+	let sin_theta = acos(cos_direction_light) / (*light).angular_radius;
 
-    let sin_direction_light = safeSqrt(1.0 - cos_direction_light * cos_direction_light);
+	if (sin_theta > 1.0)
+	{
+		return vec3<f32>(0.0);
+	}
 
-    let transmittance_to_light = sampleTransmittanceLUT_Ray(transmittance_lut, lut_sampler, atmosphere, position, direction);
+	// Limb darkening parameters and formula derived from
+	// https://www.physics.hmc.edu/faculty/esin/a101/limbdarkening.pdf
+	// (equation 1): intensity = 1 - u * (1 - mu^alpha)
+	// Let u = 1
+	// Table 2 gives these values for alpha:
+	// R ~ 570 nm
+	// G ~ 530 nm
+	// B ~ 430 nm
+	let limbal_intensity_exponent = vec3<f32>(0.482, 0.522, 0.643);
 
-    return transmittance_to_light * (1.0 - smoothstep(0.2 * sin_light_radius, sin_light_radius, sin_direction_light));
+	let cos_theta = safeSqrt(1.0 - sin_theta * sin_theta);
+	let limbal_intensity_factor = pow(vec3<f32>(cos_theta), limbal_intensity_exponent);
+
+	let radius = length(position);
+	let mu_light = dot(position, light_direction) / radius;
+	let transmittance_to_light = sampleTransmittanceLUT_RadiusMu(
+		transmittance_lut,
+		lut_sampler,
+		atmosphere,
+		radius,
+		mu_light
+	);
+
+	let solid_angle = 2.0 * PI * (1.0 - cos_light_radius);
+
+	// Light illuminance is 1, we multiply it later. This is just a transfer coefficient.
+	let light_luminance = vec3<f32>(1.0) / solid_angle;
+
+	return limbal_intensity_factor * transmittance_to_light * light_luminance;
 }
 
 fn sampleSkyLuminance(
@@ -124,23 +154,7 @@ fn sampleSkyLuminance(
     direction: vec3<f32>
 ) -> vec3<f32>
 {
-    var luminance = sampleSkyViewLUT(atmosphere, position, direction);
-    if(direction.y >= 0.0)
-    {
-        let light_direction = normalize(-(*light).forward);
-        let radius = length(position);
-        let mu_light = dot(position, light_direction) / radius;
-
-        let transmittance_to_light = sampleTransmittanceLUT_RadiusMu(
-            transmittance_lut,
-            lut_sampler,
-            atmosphere,
-            radius,
-            mu_light
-        );
-
-        luminance += transmittance_to_light * sampleSunDisk(atmosphere, light, position, direction) * (*light).color.rgb * (*light).strength;
-    }
+    var luminance = sampleSkyViewLUT(atmosphere, position, direction) + sampleSunDisk(atmosphere, light, position, direction);
     return luminance;
 }
 

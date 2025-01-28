@@ -13,15 +13,12 @@ struct Atmosphere
     atmosphere_radius_Mm : f32,
 
     ground_albedo : vec3<f32>,
-
     padding0 : f32,
 
     scattering_ozone_per_Mm : vec3<f32>,
-
     padding1 : f32,
 
     absorption_ozone_per_Mm : vec3<f32>,
-
     padding2 : f32,
 
     padding3 : vec4<f32>,
@@ -48,6 +45,7 @@ const ATMOSPHERE_GLOBAL: Atmosphere = Atmosphere(
 
     vec3<f32>(0.650, 1.881, 0.085),
     0.0,
+
     vec4<f32>(0.0),
 );
 

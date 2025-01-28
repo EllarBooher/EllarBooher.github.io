@@ -5,7 +5,16 @@
 @group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
 @group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
 
-@group(1) @binding(0) var<uniform> b_light: CelestialLightUBO;
+struct CameraUBO
+{
+    inv_proj: mat4x4<f32>,
+    inv_view: mat4x4<f32>,
+    proj_view: mat4x4<f32>,
+    position: vec4<f32>,
+}
+
+@group(1) @binding(0) var<uniform> b_camera: CameraUBO;
+@group(1) @binding(1) var<uniform> b_light: CelestialLightUBO;
 
 //// INCLUDE atmosphere_common.inc.wgsl
 //// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE
@@ -82,9 +91,7 @@ fn computeSkyViewLuminance(@builtin(global_invocation_id) global_id : vec3<u32>,
     let offset = vec2<f32>(0.5, 0.5);
     let uv = (vec2<f32>(texel_coord) + offset) / vec2<f32>(size);
 
-	// TODO: load camera position
-    const TEN_METERS_MM = 10.0 / 1000000.0;
-    let origin = vec3<f32>(0.0, atmosphere.planet_radius_Mm + TEN_METERS_MM, 0.0);
+    let origin = vec3<f32>(0.0, atmosphere.planet_radius_Mm, 0.0) + b_camera.position.xyz / METERS_PER_MM;
 
     let azimuth_elevation = uv_to_azimuthElevation(
         &atmosphere,

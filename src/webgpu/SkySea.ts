@@ -453,13 +453,14 @@ class SkyViewLUTPassResources {
 	view: GPUTextureView;
 
 	/*
-		@group(0) @binding(0) var skyview_lut: texture_storage_2d<rgba32float, write>;
-		@group(0) @binding(1) var lut_sampler: sampler;
-		@group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
-		@group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
+	@group(0) @binding(0) var skyview_lut: texture_storage_2d<rgba32float, write>;
+	@group(0) @binding(1) var lut_sampler: sampler;
+	@group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
+	@group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
 
-		@group(1) @binding(0) var<uniform> b_light: CelestialLightUBO;
-		*/
+	@group(1) @binding(0) var<uniform> b_camera: CameraUBO;
+	@group(1) @binding(1) var<uniform> b_light: CelestialLightUBO;
+	*/
 	group0: GPUBindGroup;
 	group1: GPUBindGroup;
 
@@ -470,6 +471,7 @@ class SkyViewLUTPassResources {
 		dimensions: Extent2D,
 		transmittanceLUT: GPUTextureView,
 		multiscatterLUT: GPUTextureView,
+		cameraUBO: CameraUBO,
 		lightUBO: CelestialLightUBO
 	) {
 		this.texture = device.createTexture({
@@ -545,6 +547,11 @@ class SkyViewLUTPassResources {
 					visibility: GPUShaderStage.COMPUTE,
 					buffer: {},
 				},
+				{
+					binding: 1,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: {},
+				},
 			],
 			label: "Skyview LUT Group 1",
 		});
@@ -554,6 +561,10 @@ class SkyViewLUTPassResources {
 			entries: [
 				{
 					binding: 0,
+					resource: { buffer: cameraUBO.buffer },
+				},
+				{
+					binding: 1,
 					resource: { buffer: lightUBO.buffer },
 				},
 			],
@@ -1770,6 +1781,7 @@ class SkySeaApp implements RendererApp {
 			SKYVIEW_LUT_EXTENT,
 			this.transmittanceLUTPassResources.view,
 			this.multiscatterLUTPassResources.view,
+			this.cameraUBO,
 			this.celestialLightUBO
 		);
 
@@ -1928,13 +1940,18 @@ class SkySeaApp implements RendererApp {
 		const perspective = mat4.perspective(fov, aspectRatio, near, far);
 
 		const camera_pos = [0, 10, -20];
-		const view = mat4.lookAt(camera_pos, [0, 0, 200], [0, 1, 0]);
+		const view = mat4.lookAt(camera_pos, [0, 0, 400], [0, 1, 0]);
 
 		Object.assign(this.cameraUBO.data, {
 			inv_proj: mat4.inverse(perspective),
 			inv_view: mat4.inverse(view),
 			proj_view: mat4.mul(perspective, view),
-			position: vec4.create(...camera_pos),
+			position: vec4.create(
+				camera_pos[0],
+				camera_pos[1],
+				camera_pos[2],
+				1.0
+			),
 		});
 		this.cameraUBO.writeToGPU(this.device);
 	}
@@ -2137,8 +2154,7 @@ class SkySeaApp implements RendererApp {
 		);
 		skyviewLUTPassEncoder.dispatchWorkgroups(
 			Math.ceil(SKYVIEW_LUT_EXTENT.width / 16),
-			// divide by 31, since we can skip most of the lower half of the LUT
-			Math.ceil(SKYVIEW_LUT_EXTENT.height / 31)
+			Math.ceil(SKYVIEW_LUT_EXTENT.height / 16)
 		);
 		skyviewLUTPassEncoder.end();
 

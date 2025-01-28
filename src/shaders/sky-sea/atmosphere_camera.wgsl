@@ -107,6 +107,9 @@ fn sampleSunDisk(
     direction: vec3<f32>
 ) -> vec3<f32>
 {
+	// TODO: It's tricky to anti-alias the sun disk, and also keep it physically based due to the massive ratio of luminances between direct sunlight and the light otherwise present in the scene.
+	// Perhaps a more ad-hoc approach is better, where we layer and blend a smoother looking sun disk. We can still capture the limb darkening and atmospheric transmittance.
+
 	let light_direction = normalize(-(*light).forward);
 
 	// This is distinct from the usual mu and mu_light.
@@ -132,10 +135,10 @@ fn sampleSunDisk(
 	// R ~ 570 nm
 	// G ~ 530 nm
 	// B ~ 430 nm
-	let limbal_intensity_exponent = vec3<f32>(0.482, 0.522, 0.643);
+	let limb_darkening_intensity_exponent = vec3<f32>(0.482, 0.522, 0.643);
 
 	let cos_theta = safeSqrt(1.0 - sin_theta * sin_theta);
-	let limbal_intensity_factor = pow(vec3<f32>(cos_theta), limbal_intensity_exponent);
+	let limb_darkening_intensity = pow(vec3<f32>(cos_theta), limb_darkening_intensity_exponent);
 
 	let radius = length(position);
 	let mu_light = dot(position, light_direction) / radius;
@@ -147,12 +150,14 @@ fn sampleSunDisk(
 		mu_light
 	);
 
-	let solid_angle = 2.0 * PI * (1.0 - cos_light_radius);
+	// Assume light is so far away that the apparent solid angle of the light from the camera is the same as at the edge of the atmosphere
+	let solid_angle_from_space = 2.0 * PI * (1.0 - cos_light_radius);
 
-	// Light illuminance is 1, we multiply it later. This is just a transfer coefficient.
-	let light_luminance = vec3<f32>(1.0) / solid_angle;
+	// Keep illuminance 1, and multiply it at the end like we do with scattering
+	// This is a transfer factor with units steradian inverse, that represents the transmittance of illuminance at the edge of the atmosphere with a deflection of 0 degrees
+	let light_luminance_from_space = vec3<f32>(1.0) / solid_angle_from_space;
 
-	return limbal_intensity_factor * transmittance_to_light * light_luminance;
+	return limb_darkening_intensity * transmittance_to_light * light_luminance_from_space;
 }
 
 fn sampleSkyLuminance(

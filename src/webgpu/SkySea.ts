@@ -136,7 +136,7 @@ class CelestialLightUBO extends UBO {
 	data: { light: CelestialLight } = {
 		light: {
 			color: vec3.create(1.0, 1.0, 1.0),
-			strength: 100.0,
+			strength: 60.0,
 			forward: vec3.create(0.0, -1.0, 0.0),
 			angularRadius: (16.0 / 60.0) * (3.141592653589793 / 180.0),
 		},

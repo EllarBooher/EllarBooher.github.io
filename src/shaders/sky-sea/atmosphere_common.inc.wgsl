@@ -7,11 +7,14 @@
 // "Precomputed Atmospheric Scattering: a New Implementation" by Eric Bruneton (2017)
 // https://ebruneton.github.io/precomputed_atmospheric_scattering
 
-const TRANSMITTANCE_LUT_WIDTH: u32 = 2048;
-const TRANSMITTANCE_LUT_HEIGHT: u32 = 1024;
+const TRANSMITTANCE_LUT_WIDTH = 2048u;
+const TRANSMITTANCE_LUT_HEIGHT = 1024u;
 
-const MULTISCATTER_LUT_WIDTH: u32 = 1024;
-const MULTISCATTER_LUT_HEIGHT: u32 = 1024;
+const MULTISCATTER_LUT_WIDTH = 1024u;
+const MULTISCATTER_LUT_HEIGHT = 1024u;
+
+const SKYVIEW_LUT_WIDTH = 1024u;
+const SKYVIEW_LUT_HEIGHT = 512u;
 
 const METERS_PER_MM: f32 = 1000000;
 const PI: f32 = 3.141592653589793;

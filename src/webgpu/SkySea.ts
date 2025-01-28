@@ -11,7 +11,7 @@ import { mat4, Mat4, vec2, Vec2, vec3, Vec3, vec4, Vec4 } from "wgpu-matrix";
 
 const TRANSMITTANCE_LUT_EXTENT = { width: 2048, height: 1024 } as const;
 const MULTISCATTER_LUT_EXTENT = { width: 1024, height: 1024 } as const;
-const SKYVIEW_LUT_EXTENT = { width: 1024, height: 256 } as const;
+const SKYVIEW_LUT_EXTENT = { width: 1024, height: 512 } as const;
 
 const TRANSMITTANCE_LUT_FORMAT: GPUTextureFormat = "rgba32float";
 const TRANSMITTANCE_LUT_SAMPLE_TYPE: GPUTextureSampleType = "float";
@@ -2154,7 +2154,8 @@ class SkySeaApp implements RendererApp {
 		);
 		skyviewLUTPassEncoder.dispatchWorkgroups(
 			Math.ceil(SKYVIEW_LUT_EXTENT.width / 16),
-			Math.ceil(SKYVIEW_LUT_EXTENT.height / 16)
+			// Trim lower half of skyview lut to save roughly half of the work. We render the ocean over the entirety and are at a lower altitude, so our use case is a bit specific
+			Math.ceil(SKYVIEW_LUT_EXTENT.height / (16 * 1.9))
 		);
 		skyviewLUTPassEncoder.end();
 

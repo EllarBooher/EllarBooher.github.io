@@ -89,6 +89,14 @@ fn sampleSkyViewLUT(
         u = (azimuth / (2.0 * PI)) + 0.5;
     }
 
+	// Nudge by a couple texels to avoid artifacts
+	// The artifacts are caused by aliasing in the the ray-sphere intersection with the planet
+	// The horizon will be rounded, and when the edges step it reveals gaps where texels below the horizon can be sampled from the skyview LUT, leading to patches of black.
+	// This offset may require tweaking depending on the various resolutions
+	const V_SAFE_OFFSET = 1.5;
+	let v_safe = (0.5 * f32(SKYVIEW_LUT_HEIGHT) - V_SAFE_OFFSET) / f32(SKYVIEW_LUT_HEIGHT);
+	v = min(v, v_safe);
+
     return textureSampleLevel(skyview_lut, lut_sampler, vec2<f32>(u, v), 0.0).xyz;
 }
 
@@ -268,7 +276,8 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
 
     let sin_horizon: f32 = atmosphere.planet_radius_Mm / length(origin);
     let cos_horizon: f32 = -safeSqrt(1.0 - sin_horizon * sin_horizon);
-    let intersects_ground = dot(normalize(origin), normalize(direction_world)) < cos_horizon;
+	let mu = dot(normalize(origin), normalize(direction_world));
+	let intersects_ground = mu < cos_horizon;
 
     if (depth <= 0.0)
     {

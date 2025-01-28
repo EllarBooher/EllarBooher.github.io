@@ -26,6 +26,9 @@ HIGH_SAMPLE_COUNT
 
 // Make sure to include atmosphere_common first
 
+const T_SUBSTEP_NONLINEAR = 0.4;
+const T_SUBSTEP_LINEAR = 0.2;
+
 struct AtmosphereRaycastResult
 {
 	// Whether or not the raycast resulted in hitting the planet
@@ -113,7 +116,7 @@ fn computeLuminanceScatteringIntegral(
     result.luminance = vec3<f32>(0.0);
     result.multiscattering_transfer = vec3<f32>(0.0);
 
-	if(sample_distance == 0.0)
+	if(sample_distance <= 0.0)
 	{
 		return result;
 	}
@@ -139,24 +142,30 @@ fn computeLuminanceScatteringIntegral(
     const SAMPLE_COUNT = 64.0;
 //// ENDIF
 
-    let d_t: f32 = 1.0 / SAMPLE_COUNT;
-    let d_sample_distance: f32 = sample_distance * d_t;
-    for (var i = 0u; f32(i) < SAMPLE_COUNT; i++)
+	var t: f32 = 0.0;
+	var d_t: f32 = 0.0;
+    for (var s = 0.0; s < SAMPLE_COUNT; s += 1.0)
     {
-        var t_begin: f32 = f32(i) * d_t;
-        var t_end: f32 = f32(i + 1) * d_t;
-
 //// IF SCATTERING_NONLINEAR_SAMPLE
-        t_begin = t_begin * t_begin;
-        t_end = t_end * t_end;
+		{
+			// quadratic distribution
+        	var t_begin = s / SAMPLE_COUNT;
+        	var t_end = (s + 1.0) / SAMPLE_COUNT;
+			t_begin = sample_distance * t_begin * t_begin;
+			t_end = sample_distance * t_end * t_end;
+			d_t = t_end - t_begin;
+			t = mix(t_begin, t_end, T_SUBSTEP_NONLINEAR);
+		}
+//// ELSE
+		{
+			// linear distribution
+			let t_new = sample_distance * (s + T_SUBSTEP_LINEAR) / SAMPLE_COUNT;
+			d_t = t_new - t;
+			t = t_new;
+		}
 //// ENDIF
 
-        t_begin = t_begin * sample_distance;
-        t_end = min(t_end * sample_distance, sample_distance);
-
-        let t: f32 = mix(t_begin, t_end, 0.5);
-
-        let sample_step: RaymarchStep = stepRadiusMu(origin_step, t_begin);
+        let sample_step: RaymarchStep = stepRadiusMu(origin_step, t);
 
         let altitude = sample_step.radius - (*atmosphere).planet_radius_Mm;
         let extinction_sample: ExtinctionSample = sampleExtinction(atmosphere, altitude);
@@ -190,28 +199,21 @@ fn computeLuminanceScatteringIntegral(
         let multiscatter = vec3<f32>(0.0);
 //// ENDIF
 
-        var shadow_count: f32 = 0;
+        var occlusion_planet: f32 = 0.0;
         {
             let horizon_sin = (*atmosphere).planet_radius_Mm / sample_step.radius;
-            let horizon_mu = -safeSqrt(1.0 - horizon_sin * horizon_sin);
+            let horizon_cos = -safeSqrt(1.0 - horizon_sin * horizon_sin);
 
-            shadow_count += f32(sample_step.mu_light < horizon_mu);
-        }
-        {
-        	let midway_step: RaymarchStep = stepRadiusMu(origin_step, t_end);
-            let horizon_sin = (*atmosphere).planet_radius_Mm / midway_step.radius;
-            let horizon_mu = -safeSqrt(1.0 - horizon_sin * horizon_sin);
-
-            shadow_count += f32(midway_step.mu_light < horizon_mu);
+            occlusion_planet = f32(sample_step.mu_light < horizon_cos);
         }
 
         let transmittance_to_sun = sampleTransmittanceLUT_RadiusMu(transmittance_lut, lut_sampler, atmosphere, sample_step.radius, sample_step.mu_light);
-        var shadowing = vec3<f32>(transmittance_to_sun * (1.0 - 0.5 * f32(shadow_count)));
+        var shadowing = vec3<f32>(transmittance_to_sun * (1.0 - f32(occlusion_planet)));
 
         // Integrate transmittance := e^(-extinction(x) * ||x - begin||) from begin to end
         // This is a single interval of the integral in Equation (1) from Hillaire's paper,
         // with all constant terms factored out above
-        let transmittance_along_path = sampleTransmittanceLUT_Segment(transmittance_lut, lut_sampler, atmosphere, sample_step.radius, sample_step.mu, d_sample_distance, intersects_ground);
+        let transmittance_along_path = sampleTransmittanceLUT_Segment(transmittance_lut, lut_sampler, atmosphere, sample_step.radius, sample_step.mu, d_t, intersects_ground);
         let scattering_illuminance_integral = (vec3(1.0) - transmittance_along_path) / extinction_sample.extinction;
 
         result.luminance +=

@@ -1,6 +1,6 @@
 // Contains methods and overloads for raymarching the atmosphere
 
-//// FLAGS MULTISCATTERING ISOTROPIC_PHASE SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE HIGH_SAMPLE_COUNT
+//// FLAGS MULTISCATTERING ISOTROPIC_PHASE SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE HIGH_SAMPLE_COUNT SAMPLE_PATH_TRANSMITTANCE
 
 /*
 Flags explanation:
@@ -22,6 +22,12 @@ LIGHT_ILLUMINANCE_IS_ONE
 
 HIGH_SAMPLE_COUNT
 - Whether to use a much higher sample count. Useful for one time renders, like the multiscattering LUT.
+
+SAMPLE_PATH_TRANSMITTANCE
+- Instead of accumulating transmittance along the raymarched path, sample the transmittance LUT.
+- This adds ~ 6 * N + 2 samples of the transmittance LUT texture, where N is the sample count
+- The results are subtly different, the transmittance LUT has precision issues when trying to sample intervals due to needing to multiply and divide by nearly zero floats when near the horizon
+- By default this should be left off, we're raymarching extinction samples while integrating so sampling the transmittance LUT for the main path ends up being wasteful
 */
 
 // Make sure to include atmosphere_common first
@@ -132,6 +138,11 @@ fn computeLuminanceScatteringIntegral(
 
     let origin_step = RaymarchStep(start_radius, start_mu, start_mu_light, nu);
 
+//// IF SAMPLE_PATH_TRANSMITTANCE
+//// ELSE
+	var transmittance_accumulated = vec3<f32>(1.0);
+//// ENDIF
+
     // We estimate the integral in Equation (1) of Hillaire's paper.
 
     const ISOTROPIC_PHASE: f32 = 1.0 / (4.0 * PI);
@@ -172,15 +183,14 @@ fn computeLuminanceScatteringIntegral(
 
         // Terms of Equation (3) we assume to not vary over the path segment
 
-        // We could accumulate samples across loops like:
-        //
-        // const vec3 sampleTransmittance = exp(-dSampleDistance * extinction_sample.extinction);
-        // ... compute luminance using transmittance ...
-        // transmittance *= sampleTransmittance;
-        //
-        // But at the cost of performance, resampling the transmittance LUT is more accurate for larger step sizes
-
+//// IF SAMPLE_PATH_TRANSMITTANCE
         let transmittance_to_t_begin = sampleTransmittanceLUT_RayMarchStep(transmittance_lut, lut_sampler, atmosphere, origin_step, t);
+        let transmittance_along_path = sampleTransmittanceLUT_Segment(transmittance_lut, lut_sampler, atmosphere, sample_step.radius, sample_step.mu, d_t, intersects_ground);
+//// ELSE
+	    let transmittance_to_t_begin = transmittance_accumulated;
+		let transmittance_along_path = exp(-extinction_sample.extinction * d_t);
+		transmittance_accumulated *= transmittance_along_path;
+//// ENDIF
 
 //// IF ISOTROPIC_PHASE
         let phase_times_scattering = extinction_sample.scattering * ISOTROPIC_PHASE;
@@ -213,7 +223,6 @@ fn computeLuminanceScatteringIntegral(
         // Integrate transmittance := e^(-extinction(x) * ||x - begin||) from begin to end
         // This is a single interval of the integral in Equation (1) from Hillaire's paper,
         // with all constant terms factored out above
-        let transmittance_along_path = sampleTransmittanceLUT_Segment(transmittance_lut, lut_sampler, atmosphere, sample_step.radius, sample_step.mu, d_t, intersects_ground);
         let scattering_illuminance_integral = (vec3(1.0) - transmittance_along_path) / extinction_sample.extinction;
 
         result.luminance +=

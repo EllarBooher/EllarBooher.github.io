@@ -225,6 +225,7 @@ fn sampleGeometryLuminance(
 	/*
     {
         // Aerial perspective, the light scattered by air between viewer and the surface
+		// Has very little effect while we have no geometry in the distance, and the camera is low to the ground.
         // TODO: aerial perspective LUT
         let include_ground = false;
         light_luminance_transfer += computeLuminanceScatteringIntegral(
@@ -235,7 +236,9 @@ fn sampleGeometryLuminance(
             multiscatter_lut,
             position,
             direction,
-            include_ground
+            include_ground,
+			intersects_ground,
+			distance
         ).luminance;
     }
 	*/

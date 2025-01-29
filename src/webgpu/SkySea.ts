@@ -7,7 +7,12 @@ import WaveSurfaceDisplacementPak from "../shaders/sky-sea/wave_surface_displace
 
 import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { RendererApp, RendererAppConstructor } from "./RendererApp";
-import { mat4, Mat4, vec2, Vec2, vec3, Vec3, vec4, Vec4 } from "wgpu-matrix";
+import { mat4, vec2, Vec2, vec3, vec4 } from "wgpu-matrix";
+import {
+	FullscreenQuadUBO,
+	FullscreenQuadUBOData,
+	GlobalUBO,
+} from "./sky-sea/UBO";
 
 const TRANSMITTANCE_LUT_EXTENT = { width: 2048, height: 1024 } as const;
 const MULTISCATTER_LUT_EXTENT = { width: 1024, height: 1024 } as const;
@@ -34,124 +39,6 @@ const ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT: GPUTextureFormat = "rgba32float";
 class Extent2D {
 	width = 1;
 	height = 1;
-}
-
-abstract class UBO {
-	protected readonly stagingBuffer: Float32Array;
-	public readonly buffer: GPUBuffer;
-
-	constructor(device: GPUDevice, lengthFloat32: number) {
-		this.stagingBuffer = new Float32Array(lengthFloat32);
-		this.buffer = device.createBuffer({
-			size: this.stagingBuffer.byteLength,
-			usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
-		});
-	}
-
-	protected abstract stageFloats(): void;
-
-	public writeToGPU(device: GPUDevice) {
-		this.stageFloats();
-
-		device.queue.writeBuffer(
-			this.buffer,
-			0,
-			this.stagingBuffer,
-			0,
-			this.stagingBuffer.length
-		);
-	}
-}
-
-class TimeUBO extends UBO {
-	public readonly data: {
-		time_seconds: number;
-	} = {
-		time_seconds: 0.0,
-	};
-
-	constructor(device: GPUDevice) {
-		super(device, 1);
-	}
-
-	public stageFloats(): void {
-		this.stagingBuffer[0] = this.data.time_seconds;
-	}
-}
-
-class CameraUBO extends UBO {
-	public readonly data: {
-		inv_proj: Mat4;
-		inv_view: Mat4;
-		proj_view: Mat4;
-		position: Vec4;
-	} = {
-		inv_proj: mat4.identity(),
-		inv_view: mat4.identity(),
-		proj_view: mat4.identity(),
-		position: vec4.create(0.0, 0.0, 0.0, 1.0),
-	};
-
-	constructor(device: GPUDevice) {
-		super(device, 16 + 16 + 16 + 4);
-	}
-
-	public stageFloats(): void {
-		this.stagingBuffer.set(this.data.inv_proj, 0);
-		this.stagingBuffer.set(this.data.inv_view, 16);
-		this.stagingBuffer.set(this.data.proj_view, 32);
-		this.stagingBuffer.set(this.data.position, 48);
-	}
-}
-
-class FullscreenQuadUBOData {
-	color_gain: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
-	vertex_scale: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
-}
-
-class FullscreenQuadUBO extends UBO {
-	data: FullscreenQuadUBOData = {
-		color_gain: vec4.create(1.0, 1.0, 1.0, 1.0),
-		vertex_scale: vec4.create(1.0, 1.0, 1.0, 1.0),
-	};
-
-	constructor(device: GPUDevice) {
-		super(device, 4 + 4);
-	}
-
-	public stageFloats(): void {
-		this.stagingBuffer.set(this.data.color_gain, 0);
-		this.stagingBuffer.set(this.data.vertex_scale, 4);
-	}
-}
-
-interface CelestialLight {
-	color: Vec3;
-	strength: number;
-	forward: Vec3;
-	angularRadius: number;
-}
-
-class CelestialLightUBO extends UBO {
-	data: { light: CelestialLight } = {
-		light: {
-			color: vec3.create(1.0, 1.0, 1.0),
-			strength: 60.0,
-			forward: vec3.create(0.0, -1.0, 0.0),
-			angularRadius: (16.0 / 60.0) * (3.141592653589793 / 180.0),
-		},
-	};
-
-	constructor(device: GPUDevice) {
-		super(device, 3 + 1 + 3 + 1);
-	}
-
-	public stageFloats(): void {
-		this.stagingBuffer.set(this.data.light.color, 0);
-		this.stagingBuffer[3] = this.data.light.strength;
-		this.stagingBuffer.set(this.data.light.forward, 4);
-		this.stagingBuffer[7] = this.data.light.angularRadius;
-	}
 }
 
 class GBuffer {
@@ -297,12 +184,16 @@ class TransmittanceLUTPassResources {
 	view: GPUTextureView;
 
 	/*
-		@group(0) @binding(0) var transmittance_LUT: texture_storage_2d<rgba32float, write>;
-		*/
+		@group(0) @binding(0) var transmittance_lut: texture_storage_2d<rgba32float, write>;
+
+		@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+	*/
 	group0: GPUBindGroup;
+	group1: GPUBindGroup;
+
 	pipeline: GPUComputePipeline;
 
-	constructor(device: GPUDevice, dimensions: Extent2D) {
+	constructor(device: GPUDevice, dimensions: Extent2D, globalUBO: GlobalUBO) {
 		this.texture = device.createTexture({
 			size: dimensions,
 			dimension: "2d",
@@ -339,6 +230,28 @@ class TransmittanceLUTPassResources {
 			label: "Transmittance LUT Group 0",
 		});
 
+		const bindGroup1Layout = device.createBindGroupLayout({
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: {},
+				},
+			],
+			label: "Transmittance LUT Group 1",
+		});
+
+		this.group1 = device.createBindGroup({
+			layout: bindGroup1Layout,
+			entries: [
+				{
+					binding: 0,
+					resource: { buffer: globalUBO.buffer },
+				},
+			],
+			label: "Transmittance LUT Group 1",
+		});
+
 		const transmittanceLUTShaderModule = device.createShaderModule({
 			code: TransmittanceLUTPak,
 			label: "Transmittance LUT",
@@ -349,7 +262,7 @@ class TransmittanceLUTPassResources {
 				entryPoint: "computeTransmittance",
 			},
 			layout: device.createPipelineLayout({
-				bindGroupLayouts: [bindGroup0Layout],
+				bindGroupLayouts: [bindGroup0Layout, bindGroup1Layout],
 			}),
 			label: "Transmittance LUT",
 		});
@@ -364,14 +277,19 @@ class MultiscatterLUTPassResources {
 		@group(0) @binding(0) var multiscatter_lut: texture_storage_2d<rgba32float, write>;
 		@group(0) @binding(1) var lut_sampler: sampler;
 		@group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
-		*/
+
+		@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+	*/
 	group0: GPUBindGroup;
+	group1: GPUBindGroup;
+
 	pipeline: GPUComputePipeline;
 
 	constructor(
 		device: GPUDevice,
 		dimensions: Extent2D,
-		transmittanceLUT: GPUTextureView
+		transmittanceLUT: GPUTextureView,
+		globalUBO: GlobalUBO
 	) {
 		const label = "Multiscatter LUT";
 		this.texture = device.createTexture({
@@ -431,6 +349,28 @@ class MultiscatterLUTPassResources {
 			label: "Multiscatter LUT Group 0",
 		});
 
+		const bindGroup1Layout = device.createBindGroupLayout({
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: {},
+				},
+			],
+			label: "Multiscatter LUT Group 1",
+		});
+
+		this.group1 = device.createBindGroup({
+			layout: bindGroup1Layout,
+			entries: [
+				{
+					binding: 0,
+					resource: { buffer: globalUBO.buffer },
+				},
+			],
+			label: "Multiscatter LUT Group 1",
+		});
+
 		const multiscatterLUTShaderModule = device.createShaderModule({
 			code: MultiscatterLUTPak,
 			label: label,
@@ -441,7 +381,7 @@ class MultiscatterLUTPassResources {
 				entryPoint: "computeMultiscattering",
 			},
 			layout: device.createPipelineLayout({
-				bindGroupLayouts: [bindGroup0Layout],
+				bindGroupLayouts: [bindGroup0Layout, bindGroup1Layout],
 			}),
 			label: "Multiscatter LUT",
 		});
@@ -458,8 +398,7 @@ class SkyViewLUTPassResources {
 	@group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
 	@group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
 
-	@group(1) @binding(0) var<uniform> b_camera: CameraUBO;
-	@group(1) @binding(1) var<uniform> b_light: CelestialLightUBO;
+	@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 	*/
 	group0: GPUBindGroup;
 	group1: GPUBindGroup;
@@ -471,8 +410,7 @@ class SkyViewLUTPassResources {
 		dimensions: Extent2D,
 		transmittanceLUT: GPUTextureView,
 		multiscatterLUT: GPUTextureView,
-		cameraUBO: CameraUBO,
-		lightUBO: CelestialLightUBO
+		globalUBO: GlobalUBO
 	) {
 		this.texture = device.createTexture({
 			size: dimensions,
@@ -547,11 +485,6 @@ class SkyViewLUTPassResources {
 					visibility: GPUShaderStage.COMPUTE,
 					buffer: {},
 				},
-				{
-					binding: 1,
-					visibility: GPUShaderStage.COMPUTE,
-					buffer: {},
-				},
 			],
 			label: "Skyview LUT Group 1",
 		});
@@ -561,11 +494,7 @@ class SkyViewLUTPassResources {
 			entries: [
 				{
 					binding: 0,
-					resource: { buffer: cameraUBO.buffer },
-				},
-				{
-					binding: 1,
-					resource: { buffer: lightUBO.buffer },
+					resource: { buffer: globalUBO.buffer },
 				},
 			],
 			label: "Skyview LUT Group 1",
@@ -665,7 +594,7 @@ class WaveSurfaceDisplacementPassResources {
 		@group(0) @binding(1) var<storage, read_write> output_world_normals: array<vec4<f32>, VERTEX_COUNT>;
 		@group(0) @binding(2) var<uniform> waves: array<PlaneWave, WAVE_COUNT>;
 
-		@group(1) @binding(1) var<uniform> b_time: TimeUBO;
+		@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 		*/
 	group0Compute: GPUBindGroup;
 
@@ -673,7 +602,7 @@ class WaveSurfaceDisplacementPassResources {
 		@group(0) @binding(0) var<storage> vertices: array<vec4<f32>, VERTEX_COUNT>;
 		@group(0) @binding(1) var<storage> world_normals: array<vec4<f32>, VERTEX_COUNT>;
 
-		@group(1) @binding(0) var<uniform> b_camera: CameraUBO;
+		@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 		*/
 	group0Graphics: GPUBindGroup;
 
@@ -688,7 +617,7 @@ class WaveSurfaceDisplacementPassResources {
 
 	surfaceRasterizationPipeline: GPURenderPipeline;
 
-	constructor(device: GPUDevice, cameraUBO: CameraUBO, timeUBO: TimeUBO) {
+	constructor(device: GPUDevice, globalUBO: GlobalUBO) {
 		// Grid of vertices + extra quad for ocean horizon
 
 		// vec4<f32>
@@ -891,12 +820,7 @@ class WaveSurfaceDisplacementPassResources {
 			entries: [
 				{
 					binding: 0,
-					visibility: GPUShaderStage.VERTEX,
-					buffer: {},
-				},
-				{
-					binding: 1,
-					visibility: GPUShaderStage.COMPUTE,
+					visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
 					buffer: {},
 				},
 			],
@@ -907,11 +831,7 @@ class WaveSurfaceDisplacementPassResources {
 			entries: [
 				{
 					binding: 0,
-					resource: { buffer: cameraUBO.buffer },
-				},
-				{
-					binding: 1,
-					resource: { buffer: timeUBO.buffer },
+					resource: { buffer: globalUBO.buffer },
 				},
 			],
 			label: "Wave Surface Displacement Group 1",
@@ -988,8 +908,7 @@ class AtmosphereCameraPassResources {
 		@group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
 		@group(0) @binding(4) var skyview_lut: texture_2d<f32>;
 
-		@group(1) @binding(0) var<uniform> b_camera: CameraUBO;
-		@group(1) @binding(1) var<uniform> b_light: CelestialLightUBO;
+		@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
 		@group(2) @binding(0) var gbuffer_color_with_depth_in_alpha: texture_2d<f32>;
 		@group(2) @binding(1) var gbuffer_normal: texture_2d<f32>;
@@ -1011,8 +930,7 @@ class AtmosphereCameraPassResources {
 		transmittanceLUTView: GPUTextureView,
 		multiscatterLUTView: GPUTextureView,
 		skyviewLUTView: GPUTextureView,
-		cameraUBO: CameraUBO,
-		lightUBO: CelestialLightUBO
+		globalUBO: GlobalUBO
 	) {
 		this.group0Layout = device.createBindGroupLayout({
 			entries: [
@@ -1067,11 +985,6 @@ class AtmosphereCameraPassResources {
 					visibility: GPUShaderStage.COMPUTE,
 					buffer: {},
 				},
-				{
-					binding: 1,
-					visibility: GPUShaderStage.COMPUTE,
-					buffer: {},
-				},
 			],
 			label: "Atmosphere Camera Group 1",
 		});
@@ -1121,11 +1034,7 @@ class AtmosphereCameraPassResources {
 			entries: [
 				{
 					binding: 0,
-					resource: { buffer: cameraUBO.buffer },
-				},
-				{
-					binding: 1,
-					resource: { buffer: lightUBO.buffer },
+					resource: { buffer: globalUBO.buffer },
 				},
 			],
 			label: "Atmosphere Camera Group 1",
@@ -1399,9 +1308,7 @@ class SkySeaApp implements RendererApp {
 		frametimeControllers: Map<FrametimeCategory, LilController>;
 	};
 
-	celestialLightUBO: CelestialLightUBO;
-	cameraUBO: CameraUBO;
-	timeUBO: TimeUBO;
+	globalUBO: GlobalUBO;
 
 	fullscreenQuadIndexBuffer: GPUBuffer;
 
@@ -1758,22 +1665,22 @@ class SkySeaApp implements RendererApp {
 		this.dummyFrameCounter = 10.0;
 		this.probationFrameCounter = 100.0;
 
-		this.cameraUBO = new CameraUBO(device);
-		this.timeUBO = new TimeUBO(device);
-
-		this.celestialLightUBO = new CelestialLightUBO(device);
+		this.globalUBO = new GlobalUBO(device);
+		this.globalUBO.writeToGPU(this.device);
 
 		this.gbuffer = new GBuffer(device, { width: 1, height: 1 });
 
 		this.transmittanceLUTPassResources = new TransmittanceLUTPassResources(
 			this.device,
-			TRANSMITTANCE_LUT_EXTENT
+			TRANSMITTANCE_LUT_EXTENT,
+			this.globalUBO
 		);
 
 		this.multiscatterLUTPassResources = new MultiscatterLUTPassResources(
 			this.device,
 			MULTISCATTER_LUT_EXTENT,
-			this.transmittanceLUTPassResources.view
+			this.transmittanceLUTPassResources.view,
+			this.globalUBO
 		);
 
 		this.skyviewLUTPassResources = new SkyViewLUTPassResources(
@@ -1781,8 +1688,7 @@ class SkySeaApp implements RendererApp {
 			SKYVIEW_LUT_EXTENT,
 			this.transmittanceLUTPassResources.view,
 			this.multiscatterLUTPassResources.view,
-			this.cameraUBO,
-			this.celestialLightUBO
+			this.globalUBO
 		);
 
 		this.fftWaveSpectrumResources = new FFTWaveSpectrumResources(
@@ -1792,8 +1698,7 @@ class SkySeaApp implements RendererApp {
 		this.waveSurfaceDisplacementPassResources =
 			new WaveSurfaceDisplacementPassResources(
 				this.device,
-				this.cameraUBO,
-				this.timeUBO
+				this.globalUBO
 			);
 
 		const fullscreenQuadIndices = new Uint32Array([0, 1, 2, 0, 2, 3]);
@@ -1815,8 +1720,7 @@ class SkySeaApp implements RendererApp {
 			this.transmittanceLUTPassResources.view,
 			this.multiscatterLUTPassResources.view,
 			this.skyviewLUTPassResources.view,
-			this.cameraUBO,
-			this.celestialLightUBO
+			this.globalUBO
 		);
 
 		this.fullscreenQuadPassResources = new FullscreenQuadPassResources(
@@ -1853,6 +1757,7 @@ class SkySeaApp implements RendererApp {
 		let passEncoder = commandEncoder.beginComputePass();
 		passEncoder.setPipeline(this.transmittanceLUTPassResources.pipeline);
 		passEncoder.setBindGroup(0, this.transmittanceLUTPassResources.group0);
+		passEncoder.setBindGroup(1, this.transmittanceLUTPassResources.group1);
 		passEncoder.dispatchWorkgroups(
 			Math.ceil(TRANSMITTANCE_LUT_EXTENT.width / 16),
 			Math.ceil(TRANSMITTANCE_LUT_EXTENT.height / 16)
@@ -1862,6 +1767,7 @@ class SkySeaApp implements RendererApp {
 		passEncoder = commandEncoder.beginComputePass();
 		passEncoder.setPipeline(this.multiscatterLUTPassResources.pipeline);
 		passEncoder.setBindGroup(0, this.multiscatterLUTPassResources.group0);
+		passEncoder.setBindGroup(1, this.multiscatterLUTPassResources.group1);
 		passEncoder.dispatchWorkgroups(
 			Math.ceil(MULTISCATTER_LUT_EXTENT.width / 16),
 			Math.ceil(MULTISCATTER_LUT_EXTENT.height / 16)
@@ -1906,13 +1812,7 @@ class SkySeaApp implements RendererApp {
 			vec3.scale(sunsetDirection, Math.sin(SUN_ANOMALY)),
 			vec3.scale(noonDirection, Math.cos(SUN_ANOMALY))
 		);
-		vec3.scale(
-			sunDirection,
-			-1.0,
-			this.celestialLightUBO.data.light.forward
-		);
-
-		this.celestialLightUBO.writeToGPU(this.device);
+		vec3.scale(sunDirection, -1.0, this.globalUBO.data.light.forward);
 	}
 
 	updateFPSValues(deltaTimeMilliseconds: number) {
@@ -1942,10 +1842,10 @@ class SkySeaApp implements RendererApp {
 		const camera_pos = [0, 10, -20];
 		const view = mat4.lookAt(camera_pos, [0, 0, 400], [0, 1, 0]);
 
-		Object.assign(this.cameraUBO.data, {
-			inv_proj: mat4.inverse(perspective),
-			inv_view: mat4.inverse(view),
-			proj_view: mat4.mul(perspective, view),
+		Object.assign(this.globalUBO.data.camera, {
+			invProj: mat4.inverse(perspective),
+			invView: mat4.inverse(view),
+			projView: mat4.mul(perspective, view),
 			position: vec4.create(
 				camera_pos[0],
 				camera_pos[1],
@@ -1953,15 +1853,14 @@ class SkySeaApp implements RendererApp {
 				1.0
 			),
 		});
-		this.cameraUBO.writeToGPU(this.device);
 	}
 
 	updateTime(deltaTimeMilliseconds: number) {
-		this.timeUBO.data.time_seconds += deltaTimeMilliseconds / 1000.0;
-		if (this.timeUBO.data.time_seconds > 60.0) {
-			this.timeUBO.data.time_seconds = 0.0;
+		const timeUBO = this.globalUBO.data.time;
+		timeUBO.timeSeconds += deltaTimeMilliseconds / 1000.0;
+		if (timeUBO.timeSeconds > 60.0) {
+			timeUBO.timeSeconds = 0.0;
 		}
-		this.timeUBO.writeToGPU(this.device);
 	}
 
 	draw(
@@ -2015,6 +1914,8 @@ class SkySeaApp implements RendererApp {
 		this.updateCamera(aspectRatio);
 		this.updateTime(deltaTimeMilliseconds);
 		this.updateOrbit(deltaTimeMilliseconds);
+
+		this.globalUBO.writeToGPU(this.device);
 
 		const clearColor = { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
 

@@ -1,8 +1,10 @@
 // Displace a grid of vertices representing the ocean surface, then rasterize into the gbuffer with a graphics pass
 
+//// INCLUDE types.inc.wgsl
+
 /* --- begin ocean mesh displacement --- */
 
-// Defines the world half-extent (radius of the square) of the patch where the ocean waves are defined  
+// Defines the world half-extent (radius of the square) of the patch where the ocean waves are defined
 const WORLD_HALF_EXTENT_METERS = 300.0;
 
 const WATER_COLOR = vec3<f32>(1.0 / 255.0, 123.0 / 255.0, 146.0 / 255.0);
@@ -29,7 +31,7 @@ fn sampleGerstner(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplace
     let wave_amplitude = (1.0 - smoothstep(0.0, WORLD_HALF_EXTENT_METERS, length(coords))) * wave.amplitude;
     let wave_direction = normalize(wave.direction);
     let wavelength = wave.wavelength;
-    
+
     let wave_number = 2.0 * 3.141592653589793 / wavelength;
 
     let gravity = 9.8;
@@ -38,7 +40,7 @@ fn sampleGerstner(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplace
     // wave_speed = sqrt(gravity / wave_number)
     // angular_frequency = wave_speed * wave_number
     let angular_frequency = sqrt(gravity * wave_number);
-    
+
     let wave_vector = wave_direction * wave_number;
 
     let theta = dot(coords, wave_vector) - angular_frequency * time;
@@ -72,7 +74,7 @@ fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplaceme
     let wave_amplitude = (1.0 - smoothstep(0.0, WORLD_HALF_EXTENT_METERS, length(coords))) * wave.amplitude;
     let wave_direction = normalize(wave.direction);
     let wavelength = wave.wavelength;
-    
+
     let wave_number = 2.0 * 3.141592653589793 / wavelength;
 
     let gravity = 9.8;
@@ -81,7 +83,7 @@ fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplaceme
     // wave_speed = sqrt(gravity / wave_number)
     // angular_frequency = wave_speed * wave_number
     let angular_frequency = sqrt(gravity * wave_number);
-    
+
     let wave_vector = wave_direction * wave_number;
 
     let theta = dot(coords, wave_vector) - angular_frequency * time;
@@ -91,8 +93,8 @@ fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplaceme
     var output: WaveDisplacementResult;
 
     output.displacement = vec3<f32>(
-        0.0, 
-        wave_amplitude * cos_theta, 
+        0.0,
+        wave_amplitude * cos_theta,
         0.0
     );
 
@@ -128,8 +130,7 @@ const WAVE_MODEL_GERSTNER = 1u;
 @group(0) @binding(1) var<storage, read_write> output_world_normals: array<vec4<f32>, VERTEX_COUNT>;
 @group(0) @binding(2) var<uniform> waves: array<PlaneWave, WAVE_COUNT>;
 
-@group(1) @binding(0) var<uniform> b_camera: CameraUBO;
-@group(1) @binding(1) var<uniform> b_time: TimeUBO;
+@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
 @compute @workgroup_size(16, 16, 1)
 fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
@@ -144,7 +145,7 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
     let uv = (vec2<f32>(vertex_coord) + vec2<f32>(0.5,0.5)) / vec2<f32>(size);
 
     let world_position_xz = vec2<f32>(WORLD_HALF_EXTENT_METERS) * 2.0 * (uv - vec2<f32>(0.5));
-    let time = b_time.time_seconds;
+    let time = u_global.time.time_seconds;
 
     var displaced_position = vec3<f32>(world_position_xz.x, WAVE_NEUTRAL_PLANE, world_position_xz.y);
     var tangent = vec3<f32>(1.0, 0.0, 0.0);
@@ -176,21 +177,11 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 
 /* --- begin surface rasterization --- */
 
-struct CameraUBO
-{
-    inv_proj: mat4x4<f32>,
-    inv_view: mat4x4<f32>,
-    proj_view: mat4x4<f32>,
-    position: vec4<f32>,
-}
-
-struct TimeUBO
-{
-    time_seconds: f32,
-}
-
 @group(0) @binding(0) var<storage> vertices: array<vec4<f32>, VERTEX_COUNT>;
 @group(0) @binding(1) var<storage> world_normals: array<vec4<f32>, VERTEX_COUNT>;
+
+// Commented to avoid re-declaration
+// @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
 struct VertexOut {
     @builtin(position) position : vec4<f32>,
@@ -200,18 +191,18 @@ struct VertexOut {
 }
 
 @vertex
-fn rasterizationVertex(@builtin(vertex_index) index : u32) -> VertexOut 
+fn rasterizationVertex(@builtin(vertex_index) index : u32) -> VertexOut
 {
     var output : VertexOut;
 
     let world_position = vertices[index];
 
-    output.position = b_camera.proj_view * world_position;
+    output.position = u_global.camera.proj_view * world_position;
     output.world_normal = world_normals[index].xyz;
     output.color = vec3<f32>(WATER_COLOR);
-    output.camera_distance = distance(b_camera.position, world_position);
+    output.camera_distance = distance(u_global.camera.position, world_position);
 
-    return output; 
+    return output;
 }
 
 struct FragmentOut

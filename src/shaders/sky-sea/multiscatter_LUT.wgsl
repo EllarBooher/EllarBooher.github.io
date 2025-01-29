@@ -1,8 +1,10 @@
-//// INCLUDE atmosphere_types.inc.wgsl
+//// INCLUDE types.inc.wgsl
 
 @group(0) @binding(0) var multiscatter_lut: texture_storage_2d<rgba32float, write>;
 @group(0) @binding(1) var lut_sampler: sampler;
 @group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
+
+@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
 //// INCLUDE atmosphere_common.inc.wgsl
 //// INCLUDE atmosphere_raymarch.inc.wgsl ISOTROPIC_PHASE LIGHT_ILLUMINANCE_IS_ONE HIGH_SAMPLE_COUNT
@@ -52,7 +54,7 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if texel_coord.x >= size.x || texel_coord.y >= size.y {
         return;
     }
-    var atmosphere: Atmosphere = ATMOSPHERE_GLOBAL;
+    var atmosphere: Atmosphere = u_global.atmosphere;
 
     let offset = vec2<f32>(0.5, 0.5);
     let uv = (vec2<f32>(texel_coord) + offset) / vec2<f32>(size);
@@ -70,7 +72,7 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let sun_direction = vec3<f32>(0.0, cos_sun_zenith, sin_sun_zenith);
 
     // TODO: remove this
-    var light: CelestialLight = LIGHT_GLOBAL;
+    var light: CelestialLight = u_global.light;
     light.forward = -sun_direction;
 
     // Unmarked units are in megameters (10^6 meters or 1000 km)

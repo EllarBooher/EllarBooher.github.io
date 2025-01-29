@@ -5,7 +5,7 @@ const shaderRoot = "src/shaders/";
 
 // TODO: Load includes upon every shader compile, but cache them and check if the version on disk is newer. This is needed for hot reloading
 const includeFilenames = [
-	"sky-sea/atmosphere_types.inc.wgsl",
+	"sky-sea/types.inc.wgsl",
 	"sky-sea/atmosphere_common.inc.wgsl",
 	"sky-sea/atmosphere_raymarch.inc.wgsl",
 	"sky-sea/tonemap.inc.wgsl",

@@ -9,7 +9,7 @@ struct FullscreenQuadUBO
     vertex_scale: vec4<f32>,
 }
 
-@group(1) @binding(0) var<uniform> b_ubo: FullscreenQuadUBO;
+@group(1) @binding(0) var<uniform> u_fullscreen_quad: FullscreenQuadUBO;
 
 const QUAD_VERTICES: array<vec4<f32>, 4> = array<vec4<f32>,4>(
     vec4<f32>(-1.0, -1.0, 0.0, 1.0),
@@ -33,14 +33,14 @@ struct VertexOut {
 fn vertex_main(@builtin(vertex_index) index : u32) -> VertexOut
 {
     var output : VertexOut;
-    output.position = b_ubo.vertex_scale * QUAD_VERTICES[index];
+    output.position = u_fullscreen_quad.vertex_scale * QUAD_VERTICES[index];
     output.uv = QUAD_UVS[index];
-    return output; 
+    return output;
 }
 
 @fragment
 fn fragment_main(fragData: VertexOut) -> @location(0) vec4<f32>
 {
-    let color = b_ubo.color_gain * textureSample(b_texture, b_sampler, fragData.uv);
+    let color = u_fullscreen_quad.color_gain * textureSample(b_texture, b_sampler, fragData.uv);
     return vec4<f32>(color.xyz, 1.0);
 }

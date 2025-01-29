@@ -1,4 +1,4 @@
-//// INCLUDE atmosphere_types.inc.wgsl
+//// INCLUDE types.inc.wgsl
 
 @group(0) @binding(0) var output_color: texture_storage_2d<rgba32float, write>;
 @group(0) @binding(1) var lut_sampler: sampler;
@@ -6,16 +6,7 @@
 @group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
 @group(0) @binding(4) var skyview_lut: texture_2d<f32>;
 
-struct CameraUBO
-{
-    inv_proj: mat4x4<f32>,
-    inv_view: mat4x4<f32>,
-    proj_view: mat4x4<f32>,
-    position: vec4<f32>,
-}
-
-@group(1) @binding(0) var<uniform> b_camera: CameraUBO;
-@group(1) @binding(1) var<uniform> b_light: CelestialLightUBO;
+@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
 @group(2) @binding(0) var gbuffer_color_with_depth_in_alpha: texture_2d<f32>;
 @group(2) @binding(1) var gbuffer_normal: texture_2d<f32>;
@@ -261,19 +252,20 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
         return;
     }
 
-    var atmosphere = ATMOSPHERE_GLOBAL;
-    var light = b_light.light;
+    var atmosphere = u_global.atmosphere;
+    var light = u_global.light;
+	var camera = u_global.camera;
 
     let offset = vec2<f32>(0.5, 0.5);
     let uv = (vec2<f32>(texel_coord) + offset) / vec2<f32>(size);
 
     const METERS_PER_MM = 1000000.0;
-    let origin = vec3<f32>(0.0, atmosphere.planet_radius_Mm, 0.0) + b_camera.position.xyz / METERS_PER_MM;
+    let origin = vec3<f32>(0.0, atmosphere.planet_radius_Mm, 0.0) + camera.position.xyz / METERS_PER_MM;
 
     let ndc_space_coord = (uv - vec2<f32>(0.5)) * 2.0 * vec2<f32>(1.0, -1.0);
     let near_plane_depth = 1.0;
-    let direction_view_space = b_camera.inv_proj * vec4(ndc_space_coord, near_plane_depth, 1.0);
-    let direction_world = normalize((b_camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
+    let direction_view_space = camera.inv_proj * vec4(ndc_space_coord, near_plane_depth, 1.0);
+    let direction_world = normalize((camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
 
     let color_with_depth_in_alpha = textureLoad(gbuffer_color_with_depth_in_alpha, texel_coord, 0);
     let normal = textureLoad(gbuffer_normal, texel_coord, 0);

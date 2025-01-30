@@ -148,6 +148,8 @@ class SkySeaApp implements RendererApp {
 				"GBuffer Normal": RenderOutput.GBufferNormal,
 				"Wave Spectrum Gaussian Noise":
 					RenderOutput.FFTWaveSpectrumGaussianNoise,
+				"Wave Spectrum Fourier Amplitude":
+					RenderOutput.FFTWaveFourierAmplitude,
 			})
 			.name("Render Output")
 			.listen();
@@ -376,6 +378,13 @@ class SkySeaApp implements RendererApp {
 						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
 					},
 				],
+				[
+					RenderOutput.FFTWaveFourierAmplitude,
+					{
+						flip: false,
+						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
+					},
+				],
 			]),
 			currentOutputTextureSettings: {
 				flip: false,
@@ -555,6 +564,10 @@ class SkySeaApp implements RendererApp {
 				[
 					RenderOutput.FFTWaveSpectrumGaussianNoise,
 					this.fftWaveSpectrumResources.gaussianNoiseView,
+				],
+				[
+					RenderOutput.FFTWaveFourierAmplitude,
+					this.fftWaveSpectrumResources.fourierAmplitudeView,
 				],
 			]),
 			this.presentFormat

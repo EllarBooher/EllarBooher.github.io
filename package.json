@@ -5,7 +5,7 @@
 	"homepage": "https://EllarBooher.github.io/",
 	"type": "module",
 	"scripts": {
-		"dev": "vite --host",
+		"dev": "vite",
 		"build": "tsc --project tsconfig.json && vite build",
 		"lint": "eslint .",
 		"preview": "vite preview",

@@ -4,7 +4,7 @@ import { Mat4, mat4, vec4, vec3, Vec4, Vec3 } from "wgpu-matrix";
 
 const BYTES_PER_FLOAT32 = 4;
 
-abstract class UBO {
+export abstract class UBO {
 	public readonly buffer: GPUBuffer;
 
 	constructor(device: GPUDevice, lengthFloat32: number, label: string) {
@@ -15,18 +15,18 @@ abstract class UBO {
 		});
 	}
 
-	protected abstract packed(): Float32Array;
+	protected abstract packed(): ArrayBuffer;
 
 	public writeToGPU(device: GPUDevice) {
 		const values = this.packed();
 
 		if (values.byteLength != this.buffer.size) {
 			console.warn(
-				`GPUBuffer label: '${this.buffer.label}' uploaded with improper size. Expected: ${this.buffer.size}, got ${values.byteLength} (from ${values.length} floats).`
+				`GPUBuffer label: '${this.buffer.label}' uploaded with improper size. Expected: ${this.buffer.size} bytes, got ${values.byteLength} bytes.`
 			);
 		}
 
-		device.queue.writeBuffer(this.buffer, 0, values, 0, values.length);
+		device.queue.writeBuffer(this.buffer, 0, values);
 	}
 }
 

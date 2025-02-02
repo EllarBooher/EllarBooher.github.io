@@ -108,6 +108,7 @@ const RenderingCanvas = function RenderingCanvas({
 const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 	const [errors, setErrors] = useState<string[]>();
 	const appRef = useRef<RendererApp>();
+	const appLoadingPromiseRef = useRef<Promise<void>>();
 	const [initialized, setInitialized] = useState(false);
 
 	const quitApp = useCallback(() => {
@@ -154,9 +155,16 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 	);
 
 	useEffect(() => {
+		if (appLoadingPromiseRef.current) {
+			return;
+		}
+
 		setInitialized(false);
 		// Adapter is one-time, and samples can have different feature requirements, so we need to create everything from scratch
-		getDevice(sample.requiredFeatures, sample.optionalFeatures)
+		appLoadingPromiseRef.current = getDevice(
+			sample.requiredFeatures,
+			sample.optionalFeatures
+		)
 			.then(
 				({ adapter, device }) => createApp(adapter, device),
 				(err: Error) => {
@@ -165,7 +173,7 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 				}
 			)
 			.finally(() => {
-				console.log("Set Initialized to True");
+				appLoadingPromiseRef.current = undefined;
 				setInitialized(true);
 			});
 	}, [sample, createApp]);

@@ -132,7 +132,7 @@ fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>) -> Wav
 }
 
 // Extra 1 for tiling
-const VERTEX_DIMENSION = 512u + 1u;
+const VERTEX_DIMENSION = 1024u + 1u;
 const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 // const TRIANGLE_COUNT = 2u * (VERTEX_DIMENSION - 1u) * (VERTEX_DIMENSION - 1u);
 // const INDEX_COUNT = 3u * TRIANGLE_COUNT;
@@ -265,11 +265,13 @@ fn generatePatchOffset(instance: u32) -> vec3<f32>
 {
 	const PATCH_GRID_WIDTH = 10u;
 
-	let row = instance / PATCH_GRID_WIDTH;
-	// Offset instance for case that there is only 1 instance, so patch is at origin
-	let column = (instance + PATCH_GRID_WIDTH / 2u) % PATCH_GRID_WIDTH;
+	// cone extending from view, with a slope of 1
+	// patches per row is 1, 3, 5, 7, ... , (2 * k + 1), ...
+	let row = u32(-1.0 + sqrt(f32(instance)));
+	let column = i32(instance % (2u * row + 1u)) - i32(row);
 
-	return vec3<f32>(f32(column) - f32(PATCH_GRID_WIDTH / 2u), 0.0, f32(row));
+	// offset z slightly so missing patches aren't visible, very view dependent so a more general solution is needed
+	return vec3<f32>(f32(column), 0.0, f32(row));
 }
 
 @vertex

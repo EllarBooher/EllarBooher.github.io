@@ -59,9 +59,14 @@ export class WaveSurfaceDisplacementPassResources {
 
 	group1: GPUBindGroup;
 
+	vertexDimension: number;
+	lodCount: number;
+	baseIndexCount: number;
+
 	vertices: GPUBuffer;
 	worldNormals: GPUBuffer;
 	indices: GPUBuffer;
+	lodIndices: GPUBuffer;
 
 	displacementCosinePipeline: GPUComputePipeline;
 	displacementGerstnerPipeline: GPUComputePipeline;
@@ -83,7 +88,10 @@ export class WaveSurfaceDisplacementPassResources {
 		const VERTEX_SIZE_BYTES = 4 * 4;
 
 		// Extra 1 for tiling
-		const VERTEX_DIMENSION = 512 + 1;
+		const VERTEX_DIMENSION = 1024 + 1;
+
+		this.vertexDimension = VERTEX_DIMENSION;
+
 		const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 
 		// u32
@@ -91,6 +99,27 @@ export class WaveSurfaceDisplacementPassResources {
 		const TRIANGLE_COUNT =
 			2 * (VERTEX_DIMENSION - 1) * (VERTEX_DIMENSION - 1);
 		const INDEX_COUNT = 3 * TRIANGLE_COUNT;
+		this.baseIndexCount = INDEX_COUNT;
+
+		// Each LOD quarters the triangle count (halves the span)
+		const LOD_COUNT = 10;
+		this.lodCount = LOD_COUNT;
+
+		function computeIndexCountWithLOD(
+			baseIndexCount: number,
+			lodCount: number
+		) {
+			let count = 0;
+			for (let lod = 0; lod < lodCount; lod++) {
+				count += baseIndexCount / (1 << (2 * lod));
+			}
+			return count;
+		}
+
+		const indexCountWithLOD = computeIndexCountWithLOD(
+			this.baseIndexCount,
+			this.lodCount
+		);
 
 		this.vertices = device.createBuffer({
 			size: VERTEX_SIZE_BYTES * VERTEX_COUNT,
@@ -105,6 +134,14 @@ export class WaveSurfaceDisplacementPassResources {
 
 		this.indices = device.createBuffer({
 			size: INDEX_COUNT * INDEX_SIZE_BYTES,
+			usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
+			label: "Wave Surface Displacement Indices",
+		});
+		// Have to separate buffer in case original buffer is too large
+		// On the upside, if the original buffer fits in the size limit (webgpu says ~256 MB), ALL lod will fit in this one
+		// Assuming dimension is reduced by 2 each level
+		this.lodIndices = device.createBuffer({
+			size: (indexCountWithLOD - INDEX_COUNT) * INDEX_SIZE_BYTES,
 			usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
 			label: "Wave Surface Displacement Indices",
 		});
@@ -137,6 +174,36 @@ export class WaveSurfaceDisplacementPassResources {
 			}
 		}
 		device.queue.writeBuffer(this.indices, 0, indicesSource);
+
+		const lodIndicesSource = new Uint32Array(
+			indexCountWithLOD - INDEX_COUNT
+		);
+		indicesSourceOffset = 0;
+		for (let lod = 1; lod < LOD_COUNT; lod++) {
+			for (let y = 0; y < VERTEX_DIMENSION - 1; y += 1 << lod) {
+				for (let x = 0; x < VERTEX_DIMENSION - 1; x += 1 << lod) {
+					const index0 = x + y * VERTEX_DIMENSION;
+					const index1 = index0 + (1 << lod);
+					const index2 = index0 + (1 << lod) * VERTEX_DIMENSION;
+					const index3 = index2 + (1 << lod);
+
+					const twoTriangleIndices = new Uint32Array([
+						index0,
+						index2,
+						index1,
+						index1,
+						index2,
+						index3,
+					]);
+					lodIndicesSource.set(
+						twoTriangleIndices,
+						indicesSourceOffset
+					);
+					indicesSourceOffset += twoTriangleIndices.length;
+				}
+			}
+		}
+		device.queue.writeBuffer(this.lodIndices, 0, lodIndicesSource);
 
 		const WAVE_COUNT = 6;
 		const WAVE_SIZE_FLOATS = 4;
@@ -477,7 +544,7 @@ export class WaveSurfaceDisplacementPassResources {
 				displacementPassEncoder.setPipeline(
 					this.displacementMapPipeline
 				);
-				this.patchWorldHalfExtentBuffer.data.patch_world_half_extent = 30.0;
+				this.patchWorldHalfExtentBuffer.data.patch_world_half_extent = 50.0;
 				break;
 		}
 		this.patchWorldHalfExtentBuffer.writeToGPU(device);
@@ -486,8 +553,8 @@ export class WaveSurfaceDisplacementPassResources {
 		displacementPassEncoder.setBindGroup(1, this.group1);
 		displacementPassEncoder.setBindGroup(2, this.group2Compute);
 		displacementPassEncoder.dispatchWorkgroups(
-			Math.ceil(2048 / 16),
-			Math.ceil(2048 / 16)
+			Math.ceil(this.vertexDimension / 16),
+			Math.ceil(this.vertexDimension / 16)
 		);
 		displacementPassEncoder.end();
 
@@ -529,20 +596,68 @@ export class WaveSurfaceDisplacementPassResources {
 		surfaceRasterizationPassEncoder.setBindGroup(1, this.group1);
 		surfaceRasterizationPassEncoder.setIndexBuffer(this.indices, "uint32");
 
-		const OCEAN_PATCH_COUNT = 80;
-
 		switch (waveModel) {
 			default:
 			case (WaveModel.Cosine, WaveModel.Gerstner):
 				surfaceRasterizationPassEncoder.drawIndexed(
-					this.indices.size / 4
+					this.baseIndexCount,
+					1
 				);
 				break;
 			case WaveModel.FFTDisplacement:
-				surfaceRasterizationPassEncoder.drawIndexed(
-					this.indices.size / 4,
-					OCEAN_PATCH_COUNT
-				);
+				let instanceOffset = 0;
+
+				function computeLODIndexOffset(
+					lod: number,
+					baseIndexCount: number
+				) {
+					// A new index buffer is used starting at lod = 1, so indexing resets there
+					if (lod === 0 || lod === 1) {
+						return 0;
+					}
+
+					let offset = 0;
+					for (let i = 1; i < lod; i++) {
+						offset += baseIndexCount / (1 << (2 * i));
+					}
+					return offset;
+				}
+
+				for (let lod = 0; lod < this.lodCount; lod++) {
+					if (lod > 1) {
+						surfaceRasterizationPassEncoder.setIndexBuffer(
+							this.lodIndices,
+							"uint32"
+						);
+						// indexOffset = 0;
+					}
+
+					// Each index is a patch, a copy of the ocean mesh
+					// Patches extend in a cone in front of the camera
+					// patches per row is 1, 3, 5, 7, ... , (2 * k + 1), ...
+
+					const indexCount = this.baseIndexCount / (1 << (2 * lod));
+					const nextInstanceOffset = Math.pow(
+						Math.floor(0.5 * lod * lod) + 2,
+						2
+					);
+					const indexOffset = computeLODIndexOffset(
+						lod,
+						this.baseIndexCount
+					);
+
+					const instanceCount = nextInstanceOffset - instanceOffset;
+
+					surfaceRasterizationPassEncoder.drawIndexed(
+						indexCount,
+						instanceCount,
+						indexOffset,
+						0,
+						instanceOffset
+					);
+
+					instanceOffset = nextInstanceOffset;
+				}
 				break;
 		}
 		surfaceRasterizationPassEncoder.end();

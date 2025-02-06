@@ -1,11 +1,12 @@
 // Textures must have the same dimension
-@group(0) @binding(0) var out_fourier_amplitude: texture_storage_2d<rg32float, write>;
-@group(0) @binding(1) var in_gaussian_random_pairs: texture_storage_2d<rg32float, read>;
+//// INCLUDE types.inc.wgsl
 
 const FOURIER_GRID_DIMENSION = 512u;
 const WAVE_PATCH_EXTENT_METERS = 60.0;
 
 const PI = 3.141592653589793;
+const FUNDAMENTAL_WAVE_NUMBER = 2.0 * PI / WAVE_PATCH_EXTENT_METERS;
+
 const GRAVITY = 9.8;
 
 const WIND_SPEED_METERS_PER_SECOND = 10.0;
@@ -33,19 +34,19 @@ struct WaveParameters
 fn waveParameters(texel_coord: vec2<u32>) -> WaveParameters
 {
 	var result: WaveParameters;
-	const fundamental_wave_number = 2.0 * PI / WAVE_PATCH_EXTENT_METERS;
+
 	const wave_coord_offset = i32(FOURIER_GRID_DIMENSION / 2u);
 	const g = GRAVITY;
 
 	result.wave_coord = vec2<i32>(i32(texel_coord.x), i32(texel_coord.y)) - vec2<i32>(wave_coord_offset);
-	result.wave_vector = fundamental_wave_number * vec2<f32>(result.wave_coord);
-	// Gravity dispersion relationship for deep water
+	result.wave_vector = FUNDAMENTAL_WAVE_NUMBER * vec2<f32>(result.wave_coord);
 
-	result.delta_wave_number = fundamental_wave_number;
+	result.delta_wave_number = FUNDAMENTAL_WAVE_NUMBER;
 
 	result.wave_number = length(result.wave_vector);
-	let k = result.wave_number;
 
+	// Gravity dispersion relationship for deep water
+	let k = result.wave_number;
 	result.frequency = sqrt(g * k);
 	// d/dk (sqrt(gk)) = g / (2 * sqrt(g * k))
 	result.d_frequency_d_wave_number = 0.5 * g * inverseSqrt(g * k);
@@ -114,6 +115,9 @@ fn waveDirectionalSpreading(frequency: f32, peak_frequency: f32, angle: f32) -> 
 	return q * pow(abs(cos(angle / 2.0)), 2.0 * s);
 }
 
+@group(0) @binding(0) var out_fourier_amplitude: texture_storage_2d<rg32float, write>;
+@group(0) @binding(1) var in_gaussian_random_pairs: texture_storage_2d<rg32float, read>;
+
 @compute @workgroup_size(16, 16, 1)
 fn computeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 {
@@ -125,6 +129,14 @@ fn computeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 
 	let gaussian_pair = textureLoad(in_gaussian_random_pairs, texel_coord).xy;
 	let wave_parameters = waveParameters(texel_coord);
+
+	if (abs(wave_parameters.wave_number) < FUNDAMENTAL_WAVE_NUMBER)
+	{
+		let amplitude = vec2<f32>(0.0, 0.0);
+		textureStore(out_fourier_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));
+		return;
+	}
+
 	let peak_frequency = 22.0 * pow(GRAVITY * GRAVITY / (WIND_SPEED_METERS_PER_SECOND * WIND_FETCH_METERS), 1.0 / 3.0);
 
 	let spectrum = waveSpectrumJONSWAP(wave_parameters.frequency, peak_frequency)
@@ -142,4 +154,42 @@ fn computeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 		* magnitude;
 
 	textureStore(out_fourier_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));
+}
+
+@group(0) @binding(0) var out_realized_fourier_amplitude: texture_storage_2d<rg32float, write>;
+@group(0) @binding(1) var in_fourier_amplitude: texture_storage_2d<rg32float, read>;
+
+@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+
+fn complexMult(a: vec2<f32>, b: vec2<f32>) -> vec2<f32>
+{
+	return vec2<f32>(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x);
+}
+
+@compute @workgroup_size(16, 16, 1)
+fn realizeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
+{
+	let texel_coord = vec2<u32>(global_id.xy);
+    let size = textureDimensions(out_realized_fourier_amplitude);
+    if texel_coord.x >= size.x || texel_coord.y >= size.y {
+        return;
+    }
+
+	let wave_parameters = waveParameters(texel_coord);
+	let k_amplitude = textureLoad(in_fourier_amplitude, texel_coord).xy;
+
+	let k_minus_coord = vec2<u32>(
+		(FOURIER_GRID_DIMENSION - texel_coord.x) % FOURIER_GRID_DIMENSION,
+		(FOURIER_GRID_DIMENSION - texel_coord.y) % FOURIER_GRID_DIMENSION
+	);
+	let k_minus_amplitude = textureLoad(in_fourier_amplitude, k_minus_coord).xy;
+	let k_minus_amplitude_conjugate = vec2<f32>(k_minus_amplitude.x, -k_minus_amplitude.y);
+
+	let phase = wave_parameters.frequency * u_global.time.time_seconds;
+	let exponential = vec2<f32>(cos(phase), sin(phase));
+	let exponential_conjugate = vec2<f32>(exponential.x, -exponential.y);
+
+	let time_amplitude = complexMult(exponential, k_amplitude) + complexMult(exponential_conjugate, k_minus_amplitude_conjugate);
+
+	textureStore(out_realized_fourier_amplitude, texel_coord, vec4<f32>(time_amplitude, 0.0, 0.0));
 }

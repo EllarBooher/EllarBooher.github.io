@@ -146,10 +146,13 @@ class SkySeaApp implements RendererApp {
 				"Skyview LUT": RenderOutput.SkyviewLUT,
 				"GBuffer Color": RenderOutput.GBufferColor,
 				"GBuffer Normal": RenderOutput.GBufferNormal,
-				"Wave Spectrum Gaussian Noise":
+				"FFT Wave Gaussian Noise":
 					RenderOutput.FFTWaveSpectrumGaussianNoise,
-				"Wave Spectrum Fourier Amplitude":
+				"FFT Wave Initial Amplitude":
 					RenderOutput.FFTWaveFourierAmplitude,
+				"FFT Wave Time-Dependent Amplitude":
+					RenderOutput.FFTWaveRealizedAmplitude,
+				"FFT Wave Heightmap Result": RenderOutput.FFTWaveHeightmap,
 			})
 			.name("Render Output")
 			.listen();
@@ -385,6 +388,20 @@ class SkySeaApp implements RendererApp {
 						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
 					},
 				],
+				[
+					RenderOutput.FFTWaveRealizedAmplitude,
+					{
+						flip: false,
+						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
+					},
+				],
+				[
+					RenderOutput.FFTWaveHeightmap,
+					{
+						flip: false,
+						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
+					},
+				],
 			]),
 			currentOutputTextureSettings: {
 				flip: false,
@@ -505,7 +522,8 @@ class SkySeaApp implements RendererApp {
 		);
 
 		this.fftWaveSpectrumResources = new FFTWaveSpectrumResources(
-			this.device
+			this.device,
+			this.globalUBO
 		);
 
 		this.waveSurfaceDisplacementPassResources =
@@ -540,6 +558,8 @@ class SkySeaApp implements RendererApp {
 			this.globalUBO
 		);
 
+		const fftWaveViews = this.fftWaveSpectrumResources.views();
+
 		this.fullscreenQuadPassResources = new FullscreenQuadPassResources(
 			this.device,
 			new Map<RenderOutput, GPUTextureView>([
@@ -563,12 +583,17 @@ class SkySeaApp implements RendererApp {
 				[RenderOutput.GBufferNormal, this.gbuffer.normalView],
 				[
 					RenderOutput.FFTWaveSpectrumGaussianNoise,
-					this.fftWaveSpectrumResources.gaussianNoiseView,
+					fftWaveViews.gaussianNoiseView,
 				],
 				[
 					RenderOutput.FFTWaveFourierAmplitude,
-					this.fftWaveSpectrumResources.fourierAmplitudeView,
+					fftWaveViews.fourierAmplitudeView,
 				],
+				[
+					RenderOutput.FFTWaveRealizedAmplitude,
+					fftWaveViews.realizedFourierAmplitudeView,
+				],
+				[RenderOutput.FFTWaveHeightmap, fftWaveViews.heightmapView],
 			]),
 			this.presentFormat
 		);
@@ -743,6 +768,8 @@ class SkySeaApp implements RendererApp {
 		const commandEncoder = this.device.createCommandEncoder({
 			label: "Main",
 		});
+
+		this.fftWaveSpectrumResources.record(this.device, commandEncoder);
 
 		let timestampQueryIndex = 0;
 		const timestampIndexMapping = new Map<FrametimeCategory, number>();

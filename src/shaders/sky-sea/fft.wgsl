@@ -9,6 +9,7 @@ struct DFFTParameters
 {
 	log_2_size: u32,
 	size: u32,
+	b_inverse: f32,
 }
 
 struct TwoPointDFT
@@ -23,7 +24,7 @@ struct TwoPointDFT
 }
 
 /*
-* two_point_dfts_log2n_by_n:
+* out_intermediate_dfts_log2n_by_n:
 *
 * 	2d array of dimension log2(N) by N, where N is the size of the input grid
 * 	Each row represents a step in the 1D DFFT
@@ -34,7 +35,7 @@ struct TwoPointDFT
 */
 
 @group(0) @binding(0) var<uniform> u_parameters: DFFTParameters;
-@group(0) @binding(1) var<storage, read_write> out_two_point_dfts_log2n_by_n: array<TwoPointDFT>;
+@group(0) @binding(1) var<storage, read_write> out_intermediate_dfts_log2n_by_n: array<TwoPointDFT>;
 
 fn twoPointDFTIndex(step: u32, major_index: u32) -> u32
 {
@@ -73,14 +74,14 @@ fn precomputeDFFTInstructions(@builtin(global_invocation_id) global_id: vec3<u32
 
 		let instruction_index = n * dft_count + dft;
 
-		out_two_point_dfts_log2n_by_n[twoPointDFTIndex(step, instruction_index)] = lower_twiddle;
-		out_two_point_dfts_log2n_by_n[twoPointDFTIndex(step, instruction_index + (grid_size / 2u))] = upper_twiddle;
+		out_intermediate_dfts_log2n_by_n[twoPointDFTIndex(step, instruction_index)] = lower_twiddle;
+		out_intermediate_dfts_log2n_by_n[twoPointDFTIndex(step, instruction_index + (grid_size / 2u))] = upper_twiddle;
 	}
 }
 
 // Avoid redeclare
 // @group(0) @binding(0) var<uniform> u_parameters: DFFTParameters;
-@group(0) @binding(1) var<storage, read> two_point_dfts_log2n_by_n: array<TwoPointDFT>;
+@group(0) @binding(1) var<storage, read> intermediate_dfts_log2n_by_n: array<TwoPointDFT>;
 @group(0) @binding(2) var<storage, read_write> buffer_0: array<vec2<f32>>;
 @group(0) @binding(3) var<storage, read_write> buffer_1: array<vec2<f32>>;
 @group(0) @binding(4) var<uniform> step_counter: u32;
@@ -95,13 +96,21 @@ fn bufferIndex(x: u32, y: u32) -> u32
 	return x + y * u_parameters.size;
 }
 
+fn loadTwoPointDFT(major_index: u32) -> TwoPointDFT
+{
+	var result = intermediate_dfts_log2n_by_n[twoPointDFTIndex(step_counter % u_parameters.log_2_size, major_index)];
+	result.twiddle.y *= (1.0 - 2.0 * u_parameters.b_inverse);
+
+	return result;
+}
+
 /*
 * buffer_0 needs to have the initial data
 * buffer_1's state does not matter, it will be overwritten
 * The final output will be in buffer_0 (since vertical + horizontal guarantees an even amount of ping-pongs)
 * Make sure step_counter is updated between steps, incrementing by one until 2 * log2(N)
 */
-@compute @workgroup_size(2, 2, 1)
+@compute @workgroup_size(16, 16, 1)
 fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
 	// We need to bounce between buffers since each cell in each step relies on multiple cells from the previous step
@@ -113,7 +122,7 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 	if (step_counter < u_parameters.log_2_size)
 	{
 		// Horizontal Pass
-		let two_point_dft = two_point_dfts_log2n_by_n[twoPointDFTIndex(step_counter, global_id.x)];
+		let two_point_dft = loadTwoPointDFT(global_id.x);
 		if(ping_pong)
 		{
 			let lower_input = buffer_1[bufferIndex(two_point_dft.lower_index, global_id.y)];
@@ -136,7 +145,7 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 	else
 	{
 		// Vertical Pass
-		let two_point_dft = two_point_dfts_log2n_by_n[twoPointDFTIndex(step_counter % u_parameters.log_2_size, global_id.y)];
+		let two_point_dft = loadTwoPointDFT(global_id.y);
 		if(ping_pong)
 		{
 			let lower_input = buffer_1[bufferIndex(global_id.x, two_point_dft.lower_index)];
@@ -158,6 +167,32 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 	}
 }
 
+/*
+ * Flips the sign of even numbered cells in the fourier grid. A cell is even when (x + y) is even.
+ * step_counter should be left as it was for the last step performed.
+ *
+ * Why you might do this:
+ * When an DFT's input data has its energy clustered around the middle (grid_size / 2), the result will have alternating sign flips from the desired result.
+ * This is since a frequency of (grid_size)/2 will show up as a wave with wavelength 2.
+ *
+ * This sort of clustering occurs with how we process ocean waves, since our wave "origin" with the longest wavelength, highest frequency/energy waves is at (grid_size/2, grid_size/2)
+ */
+@compute @workgroup_size(16, 16, 1)
+fn performSwapEvenSigns(@builtin(global_invocation_id) global_id: vec3<u32>)
+{
+	let ping_pong = (step_counter % 2u) == 1u;
+
+	let factor = 1.0 - 2.0 * f32((global_id.x + global_id.y) % 2);
+
+	if(ping_pong)
+	{
+		buffer_0[bufferIndex(global_id.x, global_id.y)] *= factor;
+	}
+	else
+	{
+		buffer_1[bufferIndex(global_id.x, global_id.y)] *= factor;
+	}
+}
 
 @group(0) @binding(0) var<storage, read_write> out_step_counter: u32;
 
@@ -167,5 +202,13 @@ fn incrementStepCounter(@builtin(global_invocation_id) global_id: vec3<u32>)
 	if(global_id.x == 0 && global_id.y == 0)
 	{
 		out_step_counter = out_step_counter + 1;
+	}
+}
+@compute @workgroup_size(1,1,1)
+fn resetStepCounter(@builtin(global_invocation_id) global_id: vec3<u32>)
+{
+	if(global_id.x == 0 && global_id.y == 0)
+	{
+		out_step_counter = 0;
 	}
 }

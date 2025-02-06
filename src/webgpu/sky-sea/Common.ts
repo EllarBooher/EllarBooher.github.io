@@ -12,4 +12,6 @@ export enum RenderOutput {
 	GBufferNormal,
 	FFTWaveSpectrumGaussianNoise,
 	FFTWaveFourierAmplitude,
+	FFTWaveRealizedAmplitude,
+	FFTWaveHeightmap,
 }

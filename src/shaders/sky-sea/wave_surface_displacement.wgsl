@@ -123,8 +123,8 @@ fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>) -> Wav
 
     var output: WaveDisplacementResult;
 
-	output.tangent = vec3<f32>(1.0, dy_dx, 0.0);
-	output.bitangent = vec3<f32>(0.0, dy_dz, 1.0);
+	output.tangent = vec3<f32>(0.0, dy_dx, 0.0);
+	output.bitangent = vec3<f32>(0.0, dy_dz, 0.0);
 	output.displacement = vec3<f32>(
 		0.0,
 		y,
@@ -161,6 +161,7 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 {
     let vertex_coord = vec2<u32>(global_id.xy);
     let size = vec2<u32>(VERTEX_DIMENSION);
+
     if(vertex_coord.x >= size.x || vertex_coord.y >= size.y)
     {
         return;
@@ -175,31 +176,40 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
     var tangent = vec3<f32>(1.0, 0.0, 0.0);
     var bitangent = vec3<f32>(0.0, 0.0, 1.0);
 
-    for (var i = 0u; i < WAVE_COUNT; i++)
-    {
-        var result: WaveDisplacementResult;
+	switch wave_model {
+		case WAVE_MODEL_COSINE, WAVE_MODEL_GERSTNER: {
+			for (var i = 0u; i < WAVE_COUNT; i++)
+			{
+				var result: WaveDisplacementResult;
 
-        switch wave_model {
-            case WAVE_MODEL_COSINE: {
-                result = sampleCosine(waves[i], time, world_position_xz);
-            }
-            case WAVE_MODEL_GERSTNER: {
-                result = sampleGerstner(waves[i], time, world_position_xz);
-            }
-			case WAVE_MODEL_DISPLACEMENT_MAP: {
-				result = sampleMap(displacement_map, displacement_map_sampler, uv);
-			}
-			default: {
-				result.tangent = vec3<f32>(1.0, 0.0, 0.0);
-				result.bitangent = vec3<f32>(0.0, 0.0, 1.0);
-				result.displacement = vec3<f32>(0.0, WAVE_NEUTRAL_PLANE, 0.0);
-			}
-        }
+				switch wave_model {
+					case WAVE_MODEL_COSINE: {
+						result = sampleCosine(waves[i], time, world_position_xz);
+					}
+					case WAVE_MODEL_GERSTNER: {
+						result = sampleGerstner(waves[i], time, world_position_xz);
+					}
+					default: {
+						result.tangent = vec3<f32>(1.0, 0.0, 0.0);
+						result.bitangent = vec3<f32>(0.0, 0.0, 1.0);
+						result.displacement = vec3<f32>(0.0, 0.0, 0.0);
+					}
+				}
 
-        displaced_position += result.displacement;
-        tangent += result.tangent;
-        bitangent += result.bitangent;
-    }
+				displaced_position += result.displacement;
+				tangent += result.tangent;
+				bitangent += result.bitangent;
+			}
+		}
+		case WAVE_MODEL_DISPLACEMENT_MAP: {
+			let result: WaveDisplacementResult = sampleMap(displacement_map, displacement_map_sampler, uv);
+
+			displaced_position += result.displacement;
+			tangent += result.tangent;
+			bitangent += result.bitangent;
+		}
+		default: {}
+	}
 
     let vertex_index = vertex_coord.x + vertex_coord.y * VERTEX_DIMENSION;
     output_vertices[vertex_index] = vec4<f32>(displaced_position, 1.0);

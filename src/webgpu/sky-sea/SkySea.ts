@@ -146,9 +146,11 @@ class SkySeaApp implements RendererApp {
 					RenderOutput.FFTWaveSpectrumGaussianNoise,
 				"FFT Wave Initial Amplitude":
 					RenderOutput.FFTWaveFourierAmplitude,
-				"FFT Wave Time-Dependent Amplitude":
-					RenderOutput.FFTWaveRealizedAmplitude,
-				"FFT Wave Heightmap Result": RenderOutput.FFTWaveHeightmap,
+				"FFT Wave Time-Dependent Amplitude (Dy)":
+					RenderOutput.FFTWaveAmplitude_Dy,
+				"FFT Wave Time-Dependent Amplitude (Dx + i*Dz)":
+					RenderOutput.FFTWaveAmplitude_Dx_plus_iDz,
+				"FFT Wave Displacement": RenderOutput.FFTWaveDisplacement,
 			})
 			.name("Render Output")
 			.listen();
@@ -382,18 +384,25 @@ class SkySeaApp implements RendererApp {
 					RenderOutput.FFTWaveFourierAmplitude,
 					{
 						flip: false,
-						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
+						color_gain: { r: 100.0, g: 100.0, b: 100.0 },
 					},
 				],
 				[
-					RenderOutput.FFTWaveRealizedAmplitude,
+					RenderOutput.FFTWaveAmplitude_Dy,
 					{
 						flip: false,
-						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
+						color_gain: { r: 100.0, g: 100.0, b: 100.0 },
 					},
 				],
 				[
-					RenderOutput.FFTWaveHeightmap,
+					RenderOutput.FFTWaveAmplitude_Dx_plus_iDz,
+					{
+						flip: false,
+						color_gain: { r: 100.0, g: 100.0, b: 100.0 },
+					},
+				],
+				[
+					RenderOutput.FFTWaveDisplacement,
 					{
 						flip: false,
 						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
@@ -531,7 +540,7 @@ class SkySeaApp implements RendererApp {
 				this.gbuffer.colorWithDepthInAlpha.format,
 				this.gbuffer.normal.format,
 				this.gbuffer.depth.format,
-				fftWaveViews.heightmapView
+				fftWaveViews.displacementView
 			);
 
 		const fullscreenQuadIndices = new Uint32Array([0, 1, 2, 0, 2, 3]);
@@ -587,10 +596,17 @@ class SkySeaApp implements RendererApp {
 					fftWaveViews.fourierAmplitudeView,
 				],
 				[
-					RenderOutput.FFTWaveRealizedAmplitude,
-					fftWaveViews.realizedFourierAmplitudeView,
+					RenderOutput.FFTWaveAmplitude_Dy,
+					fftWaveViews.amplitude_Dy_View,
 				],
-				[RenderOutput.FFTWaveHeightmap, fftWaveViews.heightmapView],
+				[
+					RenderOutput.FFTWaveAmplitude_Dx_plus_iDz,
+					fftWaveViews.amplitude_Dx_plus_iDz_View,
+				],
+				[
+					RenderOutput.FFTWaveDisplacement,
+					fftWaveViews.displacementView,
+				],
 			]),
 			this.presentFormat
 		);

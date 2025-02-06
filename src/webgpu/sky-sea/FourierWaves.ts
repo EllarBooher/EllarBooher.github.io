@@ -11,6 +11,7 @@ const GAUSSIAN_NOISE_FORMAT: GPUTextureFormat = "rg32float";
 
 const FOURIER_AMPLITUDE_FORMAT: GPUTextureFormat = "rg32float";
 const REALIZED_FOURIER_AMPLITUDE_FORMAT: GPUTextureFormat = "rg32float";
+const DISPLACEMENT_FORMAT: GPUTextureFormat = "rgba32float";
 
 /* Box-Muller transform two uniform random numbers to gaussian pair
  * The two values returned are dependent, and should not be used directly as two independent values
@@ -33,8 +34,9 @@ function randGaussian2DBoxMuller() {
 export interface FFTWaveSpectrumResourcesViews {
 	gaussianNoiseView: GPUTextureView;
 	fourierAmplitudeView: GPUTextureView;
-	realizedFourierAmplitudeView: GPUTextureView;
-	heightmapView: GPUTextureView;
+	amplitude_Dy_View: GPUTextureView;
+	amplitude_Dx_plus_iDz_View: GPUTextureView;
+	displacementView: GPUTextureView;
 }
 
 export class FFTWaveSpectrumResources {
@@ -60,12 +62,17 @@ export class FFTWaveSpectrumResources {
 	private fourierAmplitudePipeline: GPUComputePipeline;
 
 	// A fourier grid of realized wave amplitudes that are a function of wave vector (stored in fourierAmplitude) and time
-	private realizedFourierAmplitude: GPUTexture;
-	private realizedFourierAmplitudeView: GPUTextureView;
+	private amplitude_Dy: GPUTexture;
+	private amplitude_Dy_View: GPUTextureView;
+
+	// Since we know the result is a real value, we can pack two fourier transforms into the space of one by multiplying one by i, the imaginary unit
+	private amplitude_Dx_plus_iDz: GPUTexture;
+	private amplitude_Dx_plus_iDz_View: GPUTextureView;
 
 	/*
-	 * @group(0) @binding(0) var out_realized_fourier_amplitude: texture_storage_2d<rg32float, write>;
-	 * @group(0) @binding(1) var in_fourier_amplitude: texture_storage_2d<rg32float, read>;
+	 * @group(0) @binding(0) var out_dy_amplitude: texture_storage_2d<rg32float, write>;
+	 * @group(0) @binding(1) var out_packed_dx_plus_idz_amplitude: texture_storage_2d<rg32float, write>;
+	 * @group(0) @binding(2) var in_fourier_amplitude: texture_storage_2d<rg32float, read>;
 	 *
 	 * @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 	 */
@@ -73,8 +80,27 @@ export class FFTWaveSpectrumResources {
 	private realizedFourierAmplitudeGroup1: GPUBindGroup;
 	private realizedFourierAmplitudePipeline: GPUComputePipeline;
 
-	private heightmap: GPUTexture;
-	private heightmapView: GPUTextureView;
+	/*
+	 * We need these intermediate textures for the FFT.
+	 * There is potential to eventually combine 2 complex pairs into one FFT
+	 */
+
+	private displacement_Dy_0: GPUTexture;
+	private displacement_Dy_0_view: GPUTextureView;
+
+	private displacement_Dx_Dz: GPUTexture;
+	private displacement_Dx_Dz_View: GPUTextureView;
+
+	private displacement: GPUTexture;
+	private displacementView: GPUTextureView;
+
+	/*
+	 * @group(0) @binding(0) var out_displacement: texture_storage_2d<rgba32float, write>;
+	 * @group(0) @binding(1) var in_displacement_dy_0: texture_storage_2d<rg32float, read>;
+	 * @group(0) @binding(2) var in_displacement_dx_dz: texture_storage_2d<rg32float, read>;
+	 */
+	private fillDisplacementGroup0: GPUBindGroup;
+	private fillDisplacementKernel: GPUComputePipeline;
 
 	private dfftResources: DFFTResources;
 
@@ -190,8 +216,8 @@ export class FFTWaveSpectrumResources {
 			},
 		});
 
-		this.realizedFourierAmplitude = device.createTexture({
-			label: "FFT Wave Realized Fourier Amplitude h(k,t)",
+		this.amplitude_Dy = device.createTexture({
+			label: "FFT Wave dy Amplitude",
 			format: REALIZED_FOURIER_AMPLITUDE_FORMAT,
 			size: {
 				width: this.spectrumDimension,
@@ -202,13 +228,29 @@ export class FFTWaveSpectrumResources {
 				GPUTextureUsage.TEXTURE_BINDING |
 				GPUTextureUsage.COPY_SRC,
 		});
-		this.realizedFourierAmplitudeView =
-			this.realizedFourierAmplitude.createView({
-				label: "FFT Wave Realized Fourier Amplitude h(k,t)",
-			});
+		this.amplitude_Dy_View = this.amplitude_Dy.createView({
+			label: "FFT Wave dy Amplitude",
+		});
+		this.amplitude_Dx_plus_iDz = device.createTexture({
+			label: "FFT Wave Packed dx + i * dz Amplitude",
+			format: REALIZED_FOURIER_AMPLITUDE_FORMAT,
+			size: {
+				width: this.spectrumDimension,
+				height: this.spectrumDimension,
+			},
+			usage:
+				GPUTextureUsage.STORAGE_BINDING |
+				GPUTextureUsage.TEXTURE_BINDING |
+				GPUTextureUsage.COPY_SRC,
+		});
+		this.amplitude_Dx_plus_iDz_View = this.amplitude_Dx_plus_iDz.createView(
+			{
+				label: "FFT Wave Packed dx + i * dz Amplitude",
+			}
+		);
 
-		this.heightmap = device.createTexture({
-			label: "FFT Wave Final Heightmap",
+		this.displacement_Dy_0 = device.createTexture({
+			label: "FFT Wave Displacement (Dy,0)",
 			format: REALIZED_FOURIER_AMPLITUDE_FORMAT,
 			size: {
 				width: this.spectrumDimension,
@@ -219,8 +261,40 @@ export class FFTWaveSpectrumResources {
 				GPUTextureUsage.TEXTURE_BINDING |
 				GPUTextureUsage.COPY_DST,
 		});
-		this.heightmapView = this.heightmap.createView({
-			label: "FFT Wave Final Heightmap",
+		this.displacement_Dy_0_view = this.displacement_Dy_0.createView({
+			label: this.displacement_Dy_0.label,
+		});
+
+		this.displacement_Dx_Dz = device.createTexture({
+			label: "FFT Wave Displacement (Dx, Dz)",
+			format: REALIZED_FOURIER_AMPLITUDE_FORMAT,
+			size: {
+				width: this.spectrumDimension,
+				height: this.spectrumDimension,
+			},
+			usage:
+				GPUTextureUsage.STORAGE_BINDING |
+				GPUTextureUsage.TEXTURE_BINDING |
+				GPUTextureUsage.COPY_DST,
+		});
+		this.displacement_Dx_Dz_View = this.displacement_Dx_Dz.createView({
+			label: this.displacement_Dx_Dz.label,
+		});
+
+		this.displacement = device.createTexture({
+			label: "FFT Wave Final Displacement",
+			format: DISPLACEMENT_FORMAT,
+			size: {
+				width: this.spectrumDimension,
+				height: this.spectrumDimension,
+			},
+			usage:
+				GPUTextureUsage.STORAGE_BINDING |
+				GPUTextureUsage.TEXTURE_BINDING |
+				GPUTextureUsage.COPY_DST,
+		});
+		this.displacementView = this.displacement.createView({
+			label: this.displacement.label,
 		});
 
 		const realizedFourierAmplitudeGroup0Layout =
@@ -240,6 +314,14 @@ export class FFTWaveSpectrumResources {
 						visibility: GPUShaderStage.COMPUTE,
 						storageTexture: {
 							format: "rg32float",
+							access: "write-only",
+						},
+					},
+					{
+						binding: 2,
+						visibility: GPUShaderStage.COMPUTE,
+						storageTexture: {
+							format: "rg32float",
 							access: "read-only",
 						},
 					},
@@ -251,10 +333,11 @@ export class FFTWaveSpectrumResources {
 			entries: [
 				{
 					binding: 0,
-					resource: this.realizedFourierAmplitudeView,
+					resource: this.amplitude_Dy_View,
 				},
+				{ binding: 1, resource: this.amplitude_Dx_plus_iDz_View },
 				{
-					binding: 1,
+					binding: 2,
 					resource: this.fourierAmplitudeView,
 				},
 			],
@@ -297,6 +380,65 @@ export class FFTWaveSpectrumResources {
 			},
 		});
 
+		const fillDisplacementGroup0Layout = device.createBindGroupLayout({
+			label: "FFT Wave Fill Displacement Group 0",
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.COMPUTE,
+					storageTexture: {
+						format: DISPLACEMENT_FORMAT,
+						access: "write-only",
+					},
+				},
+				{
+					binding: 1,
+					visibility: GPUShaderStage.COMPUTE,
+					storageTexture: {
+						format: REALIZED_FOURIER_AMPLITUDE_FORMAT,
+						access: "read-only",
+					},
+				},
+				{
+					binding: 2,
+					visibility: GPUShaderStage.COMPUTE,
+					storageTexture: {
+						format: REALIZED_FOURIER_AMPLITUDE_FORMAT,
+						access: "read-only",
+					},
+				},
+			],
+		});
+		this.fillDisplacementGroup0 = device.createBindGroup({
+			label: "FFT Wave Fill Displacement Group 0",
+			layout: fillDisplacementGroup0Layout,
+			entries: [
+				{
+					binding: 0,
+					resource: this.displacementView,
+				},
+				{
+					binding: 1,
+					resource: this.displacement_Dy_0_view,
+				},
+				{
+					binding: 2,
+					resource: this.displacement_Dx_Dz_View,
+				},
+			],
+		});
+		this.fillDisplacementKernel = device.createComputePipeline({
+			label: "FFT Wave Fill Displacement",
+			layout: device.createPipelineLayout({
+				label: "FFT Wave Fill Displacement",
+				bindGroupLayouts: [fillDisplacementGroup0Layout],
+			}),
+			compute: {
+				module: shaderModule,
+				entryPoint: "fillDisplacementTexture",
+			},
+		});
+
 		const commandEncoder = device.createCommandEncoder({
 			label: "FFT Wave Precompute",
 		});
@@ -332,8 +474,9 @@ export class FFTWaveSpectrumResources {
 		return {
 			gaussianNoiseView: this.gaussianNoiseView,
 			fourierAmplitudeView: this.fourierAmplitudeView,
-			realizedFourierAmplitudeView: this.realizedFourierAmplitudeView,
-			heightmapView: this.heightmapView,
+			amplitude_Dy_View: this.amplitude_Dy_View,
+			amplitude_Dx_plus_iDz_View: this.amplitude_Dx_plus_iDz_View,
+			displacementView: this.displacementView,
 		};
 	}
 
@@ -358,8 +501,8 @@ export class FFTWaveSpectrumResources {
 		realizePassEncoder.setBindGroup(1, this.realizedFourierAmplitudeGroup1);
 
 		const workgroupCounts = {
-			width: this.realizedFourierAmplitude.width,
-			height: this.realizedFourierAmplitude.height,
+			width: this.amplitude_Dy.width,
+			height: this.amplitude_Dy.height,
 			depth: 1,
 		};
 
@@ -374,15 +517,43 @@ export class FFTWaveSpectrumResources {
 		this.dfftResources.recordPerform(
 			device,
 			commandEncoder,
-			this.realizedFourierAmplitude,
-			this.heightmap,
+			this.amplitude_Dy,
+			this.displacement_Dy_0,
 			true,
-			timestampInterval !== undefined
-				? {
-						querySet: timestampInterval.querySet,
-						endOfPassWriteIndex: timestampInterval.endWriteIndex,
-				  }
-				: undefined
+			undefined
 		);
+		this.dfftResources.recordPerform(
+			device,
+			commandEncoder,
+			this.amplitude_Dx_plus_iDz,
+			this.displacement_Dx_Dz,
+			true,
+			undefined
+		);
+
+		const fillDisplacementPassEncoder = commandEncoder.beginComputePass({
+			label: "FFT Wave Fill Displacement",
+			timestampWrites:
+				timestampInterval !== undefined
+					? {
+							querySet: timestampInterval.querySet,
+							endOfPassWriteIndex:
+								timestampInterval.endWriteIndex,
+					  }
+					: undefined,
+		});
+
+		fillDisplacementPassEncoder.setPipeline(this.fillDisplacementKernel);
+		fillDisplacementPassEncoder.setBindGroup(
+			0,
+			this.fillDisplacementGroup0
+		);
+		fillDisplacementPassEncoder.dispatchWorkgroups(
+			this.displacement.width / 16,
+			this.displacement.height / 16,
+			1
+		);
+
+		fillDisplacementPassEncoder.end();
 	}
 }

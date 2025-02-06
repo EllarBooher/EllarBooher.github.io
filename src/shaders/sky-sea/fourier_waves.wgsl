@@ -156,8 +156,9 @@ fn computeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 	textureStore(out_fourier_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));
 }
 
-@group(0) @binding(0) var out_realized_fourier_amplitude: texture_storage_2d<rg32float, write>;
-@group(0) @binding(1) var in_fourier_amplitude: texture_storage_2d<rg32float, read>;
+@group(0) @binding(0) var out_dy_amplitude: texture_storage_2d<rg32float, write>;
+@group(0) @binding(1) var out_packed_dx_plus_idz_amplitude: texture_storage_2d<rg32float, write>;
+@group(0) @binding(2) var in_fourier_amplitude: texture_storage_2d<rg32float, read>;
 
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
@@ -170,7 +171,7 @@ fn complexMult(a: vec2<f32>, b: vec2<f32>) -> vec2<f32>
 fn realizeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 {
 	let texel_coord = vec2<u32>(global_id.xy);
-    let size = textureDimensions(out_realized_fourier_amplitude);
+    let size = textureDimensions(out_dy_amplitude);
     if texel_coord.x >= size.x || texel_coord.y >= size.y {
         return;
     }
@@ -189,7 +190,49 @@ fn realizeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 	let exponential = vec2<f32>(cos(phase), sin(phase));
 	let exponential_conjugate = vec2<f32>(exponential.x, -exponential.y);
 
-	let time_amplitude = complexMult(exponential, k_amplitude) + complexMult(exponential_conjugate, k_minus_amplitude_conjugate);
+	let dy_amplitude = complexMult(exponential, k_amplitude) + complexMult(exponential_conjugate, k_minus_amplitude_conjugate);
 
-	textureStore(out_realized_fourier_amplitude, texel_coord, vec4<f32>(time_amplitude, 0.0, 0.0));
+	// For gerstner waves, displacement in x/z directions is based on the gradient
+	// Displacement of h(k,t) * exp(i * dot(k,x))
+	// is i * k(k,t)/k * h(k,t) * exp(i * dot(k,x))
+	// Where i is the imaginary number sqrt(-1)
+	let idy_amplitude = vec2<f32>(-dy_amplitude.y, dy_amplitude.x);
+
+	var one_over_wave_number = 1.0 / wave_parameters.wave_number;
+	if (abs(wave_parameters.wave_number) < FUNDAMENTAL_WAVE_NUMBER)
+	{
+		one_over_wave_number = 1.0;
+		return;
+	}
+
+	let dx_amplitude = idy_amplitude * wave_parameters.wave_vector.x / wave_parameters.wave_number;
+	let dz_amplitude = idy_amplitude * wave_parameters.wave_vector.y / wave_parameters.wave_number;
+
+	let idz_amplitude = vec2<f32>(-dz_amplitude.y, dz_amplitude.x);
+
+	textureStore(out_dy_amplitude, texel_coord, vec4<f32>(dy_amplitude, 0.0, 0.0));
+	textureStore(out_packed_dx_plus_idz_amplitude, texel_coord, vec4<f32>(dx_amplitude + idz_amplitude, 0.0, 0.0));
+}
+
+@group(0) @binding(0) var out_displacement: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(1) var in_displacement_dy_0: texture_storage_2d<rg32float, read>;
+@group(0) @binding(2) var in_displacement_dx_dz: texture_storage_2d<rg32float, read>;
+
+@compute @workgroup_size(16, 16, 1)
+fn fillDisplacementTexture(@builtin(global_invocation_id) global_id: vec3<u32>)
+{
+	let texel_coord = vec2<u32>(global_id.xy);
+    let size = textureDimensions(out_displacement);
+    if texel_coord.x >= size.x || texel_coord.y >= size.y {
+        return;
+    }
+
+	let dy = textureLoad(in_displacement_dy_0, texel_coord).x;
+	let dx_dz = textureLoad(in_displacement_dx_dz, texel_coord).xy;
+	let dx = dx_dz.x;
+	let dz = dx_dz.y;
+
+	let displacement = vec3<f32>(dx, dy, dz);
+
+	textureStore(out_displacement, texel_coord, vec4<f32>(displacement, 0.0));
 }

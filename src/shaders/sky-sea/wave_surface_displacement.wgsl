@@ -114,19 +114,18 @@ fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplaceme
 fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>) -> WaveDisplacementResult
 {
 	let delta = 0.5 / vec2<f32>(textureDimensions(displacement_map));
-	let y = textureSampleLevel(displacement_map, displacement_map_sampler, patch_uv, 0).r;
-	let dy_dx = textureSampleLevel(displacement_map, displacement_map_sampler, patch_uv + vec2<f32>(delta.x, 0.0), 0).r - y;
-	let dy_dz = textureSampleLevel(displacement_map, displacement_map_sampler, patch_uv + vec2<f32>(0.0, delta.y), 0).r - y;
 
     var output: WaveDisplacementResult;
 
+	output.displacement = textureSampleLevel(displacement_map, displacement_map_sampler, patch_uv, 0).xyz;
+
+	// TODO: correct derivatives
+
+	let dy_dx = textureSampleLevel(displacement_map, displacement_map_sampler, patch_uv + vec2<f32>(delta.x, 0.0), 0).y - output.displacement.y;
+	let dy_dz = textureSampleLevel(displacement_map, displacement_map_sampler, patch_uv + vec2<f32>(0.0, delta.y), 0).y - output.displacement.y;
+
 	output.tangent = vec3<f32>(0.0, dy_dx, 0.0);
 	output.bitangent = vec3<f32>(0.0, dy_dz, 0.0);
-	output.displacement = vec3<f32>(
-		0.0,
-		y,
-		0.0
-	);
 
 	return output;
 }

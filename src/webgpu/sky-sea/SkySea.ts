@@ -791,6 +791,7 @@ class SkySeaApp implements RendererApp {
 		);
 
 		this.waveSurfaceDisplacementPassResources.record(
+			this.device,
 			commandEncoder,
 			this.frametimeQuery !== undefined
 				? {

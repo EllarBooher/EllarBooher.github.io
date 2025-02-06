@@ -1,31 +1,61 @@
 import { Vec2, vec2 } from "wgpu-matrix";
-import { GlobalUBO } from "./UBO";
+import { GlobalUBO, UBO } from "./UBO";
 import WaveSurfaceDisplacementPak from "../../shaders/sky-sea/wave_surface_displacement.wgsl";
 import { TimestampQueryInterval, WaveModel } from "./Common";
+
+class PatchWorldHalfExtentUBO extends UBO {
+	public readonly data: {
+		patch_world_half_extent: number;
+	} = {
+		patch_world_half_extent: 300.0,
+	};
+
+	constructor(device: GPUDevice) {
+		const FLOAT_COUNT = 1;
+		super(
+			device,
+			FLOAT_COUNT,
+			"Wave Surface Displacement Patch World Half Extent UBO"
+		);
+	}
+
+	protected override packed(): ArrayBuffer {
+		const buffer = new ArrayBuffer(this.buffer.size);
+		const view = new DataView(buffer);
+
+		view.setFloat32(0, this.data.patch_world_half_extent, true);
+
+		return buffer;
+	}
+}
 
 // Holds a compute pass for computing the displacement of a bunch of vertices,
 // then a graphics pass for rasterizing these vertices
 export class WaveSurfaceDisplacementPassResources {
 	/*
-		@group(0) @binding(0) var<storage, read_write> output_vertices: array<vec4<f32>, VERTEX_COUNT>;
-		@group(0) @binding(1) var<storage, read_write> output_world_normals: array<vec4<f32>, VERTEX_COUNT>;
-		@group(0) @binding(2) var<uniform> waves: array<PlaneWave, WAVE_COUNT>;
-
-		@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
-
-		@group(2) @binding(0) var<uniform> displacement_map_sampler: sampler;
-		@group(2) @binding(1) var<uniform> displacement_map: texture_2d<f32>;
-	*/
+	 * @group(0) @binding(0) var<storage, read_write> output_vertices: array<vec4<f32>, VERTEX_COUNT>;
+	 * @group(0) @binding(1) var<storage, read_write> output_world_normals: array<vec4<f32>, VERTEX_COUNT>;
+	 * @group(0) @binding(2) var<uniform> patch_world_half_extent: f32;
+	 * @group(0) @binding(3) var<uniform> waves: array<PlaneWave, WAVE_COUNT>;
+	 *
+	 * @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+	 *
+	 * @group(2) @binding(0) var displacement_map_sampler: sampler;
+	 * @group(2) @binding(1) var displacement_map: texture_2d<f32>;
+	 */
 	group0Compute: GPUBindGroup;
 	group2Compute: GPUBindGroup;
 
 	/*
-		@group(0) @binding(0) var<storage> vertices: array<vec4<f32>, VERTEX_COUNT>;
-		@group(0) @binding(1) var<storage> world_normals: array<vec4<f32>, VERTEX_COUNT>;
-
-		@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
-	*/
+	 * @group(0) @binding(0) var<storage> vertices: array<vec4<f32>, VERTEX_COUNT>;
+	 * @group(0) @binding(1) var<storage> world_normals: array<vec4<f32>, VERTEX_COUNT>;
+	 * @group(0) @binding(2) var<uniform> patch_world_half_extent: f32;
+	 *
+	 * @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+	 */
 	group0Graphics: GPUBindGroup;
+
+	patchWorldHalfExtentBuffer: PatchWorldHalfExtentUBO;
 
 	group1: GPUBindGroup;
 
@@ -51,7 +81,9 @@ export class WaveSurfaceDisplacementPassResources {
 
 		// vec4<f32>
 		const VERTEX_SIZE_BYTES = 4 * 4;
-		const VERTEX_DIMENSION = 2048;
+
+		// Extra 1 for tiling
+		const VERTEX_DIMENSION = 512 + 1;
 		const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 
 		// u32
@@ -206,16 +238,29 @@ export class WaveSurfaceDisplacementPassResources {
 					visibility: GPUShaderStage.COMPUTE,
 					buffer: { type: "uniform" },
 				},
+				{
+					binding: 3,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: { type: "uniform" },
+				},
 			],
 			label: "Wave Surface Displacement Group 0 Compute",
 		});
+
+		this.patchWorldHalfExtentBuffer = new PatchWorldHalfExtentUBO(device);
 
 		this.group0Compute = device.createBindGroup({
 			layout: group0LayoutCompute,
 			entries: [
 				{ binding: 0, resource: { buffer: this.vertices } },
 				{ binding: 1, resource: { buffer: this.worldNormals } },
-				{ binding: 2, resource: { buffer: waves } },
+				{
+					binding: 2,
+					resource: {
+						buffer: this.patchWorldHalfExtentBuffer.buffer,
+					},
+				},
+				{ binding: 3, resource: { buffer: waves } },
 			],
 			label: "Wave Surface Displacement Group 0 Compute",
 		});
@@ -263,6 +308,11 @@ export class WaveSurfaceDisplacementPassResources {
 					visibility: GPUShaderStage.VERTEX,
 					buffer: { type: "read-only-storage" },
 				},
+				{
+					binding: 2,
+					visibility: GPUShaderStage.VERTEX,
+					buffer: { type: "uniform" },
+				},
 			],
 			label: "Wave Surface Displacement Group 0 Graphics",
 		});
@@ -272,6 +322,12 @@ export class WaveSurfaceDisplacementPassResources {
 			entries: [
 				{ binding: 0, resource: { buffer: this.vertices } },
 				{ binding: 1, resource: { buffer: this.worldNormals } },
+				{
+					binding: 2,
+					resource: {
+						buffer: this.patchWorldHalfExtentBuffer.buffer,
+					},
+				},
 			],
 			label: "Wave Surface Displacement Group 0 Graphics",
 		});
@@ -382,6 +438,7 @@ export class WaveSurfaceDisplacementPassResources {
 	}
 
 	record(
+		device: GPUDevice,
 		commandEncoder: GPUCommandEncoder,
 		timestampInterval: TimestampQueryInterval | undefined,
 		waveModel: WaveModel,
@@ -408,18 +465,22 @@ export class WaveSurfaceDisplacementPassResources {
 				displacementPassEncoder.setPipeline(
 					this.displacementCosinePipeline
 				);
+				this.patchWorldHalfExtentBuffer.data.patch_world_half_extent = 300.0;
 				break;
 			case WaveModel.Gerstner:
 				displacementPassEncoder.setPipeline(
 					this.displacementGerstnerPipeline
 				);
+				this.patchWorldHalfExtentBuffer.data.patch_world_half_extent = 300.0;
 				break;
 			case WaveModel.FFTDisplacement:
 				displacementPassEncoder.setPipeline(
 					this.displacementMapPipeline
 				);
+				this.patchWorldHalfExtentBuffer.data.patch_world_half_extent = 30.0;
 				break;
 		}
+		this.patchWorldHalfExtentBuffer.writeToGPU(device);
 
 		displacementPassEncoder.setBindGroup(0, this.group0Compute);
 		displacementPassEncoder.setBindGroup(1, this.group1);
@@ -467,7 +528,23 @@ export class WaveSurfaceDisplacementPassResources {
 		surfaceRasterizationPassEncoder.setBindGroup(0, this.group0Graphics);
 		surfaceRasterizationPassEncoder.setBindGroup(1, this.group1);
 		surfaceRasterizationPassEncoder.setIndexBuffer(this.indices, "uint32");
-		surfaceRasterizationPassEncoder.drawIndexed(this.indices.size / 4);
+
+		const OCEAN_PATCH_COUNT = 80;
+
+		switch (waveModel) {
+			default:
+			case (WaveModel.Cosine, WaveModel.Gerstner):
+				surfaceRasterizationPassEncoder.drawIndexed(
+					this.indices.size / 4
+				);
+				break;
+			case WaveModel.FFTDisplacement:
+				surfaceRasterizationPassEncoder.drawIndexed(
+					this.indices.size / 4,
+					OCEAN_PATCH_COUNT
+				);
+				break;
+		}
 		surfaceRasterizationPassEncoder.end();
 	}
 }

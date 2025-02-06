@@ -4,9 +4,6 @@
 
 /* --- begin ocean mesh displacement --- */
 
-// Defines the world half-extent (radius of the square) of the patch where the ocean waves are defined
-const WORLD_HALF_EXTENT_METERS = 300.0;
-
 const WATER_COLOR = vec3<f32>(1.0 / 255.0, 123.0 / 255.0, 146.0 / 255.0);
 const WAVE_NEUTRAL_PLANE = 1.0;
 
@@ -28,7 +25,7 @@ struct WaveDisplacementResult
 
 fn sampleGerstner(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplacementResult
 {
-    let wave_amplitude = (1.0 - smoothstep(0.0, WORLD_HALF_EXTENT_METERS, length(coords))) * wave.amplitude;
+    let wave_amplitude = (1.0 - smoothstep(0.0, u_patch_world_half_extent, length(coords))) * wave.amplitude;
     let wave_direction = normalize(wave.direction);
     let wavelength = wave.wavelength;
 
@@ -71,7 +68,7 @@ fn sampleGerstner(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplace
 
 fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplacementResult
 {
-    let wave_amplitude = (1.0 - smoothstep(0.0, WORLD_HALF_EXTENT_METERS, length(coords))) * wave.amplitude;
+    let wave_amplitude = (1.0 - smoothstep(0.0, u_patch_world_half_extent, length(coords))) * wave.amplitude;
     let wave_direction = normalize(wave.direction);
     let wavelength = wave.wavelength;
 
@@ -134,7 +131,8 @@ fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>) -> Wav
 	return output;
 }
 
-const VERTEX_DIMENSION = 2048u;
+// Extra 1 for tiling
+const VERTEX_DIMENSION = 512u + 1u;
 const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 // const TRIANGLE_COUNT = 2u * (VERTEX_DIMENSION - 1u) * (VERTEX_DIMENSION - 1u);
 // const INDEX_COUNT = 3u * TRIANGLE_COUNT;
@@ -149,7 +147,8 @@ const WAVE_MODEL_DISPLACEMENT_MAP = 2u;
 // Vertices are in (x,y,z) world coordinates, so during rasterization you must swizzle y <-> z
 @group(0) @binding(0) var<storage, read_write> output_vertices: array<vec4<f32>, VERTEX_COUNT>;
 @group(0) @binding(1) var<storage, read_write> output_world_normals: array<vec4<f32>, VERTEX_COUNT>;
-@group(0) @binding(2) var<uniform> waves: array<PlaneWave, WAVE_COUNT>;
+@group(0) @binding(2) var<uniform> u_patch_world_half_extent: f32;
+@group(0) @binding(3) var<uniform> u_waves: array<PlaneWave, WAVE_COUNT>;
 
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
@@ -160,7 +159,9 @@ const WAVE_MODEL_DISPLACEMENT_MAP = 2u;
 fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 {
     let vertex_coord = vec2<u32>(global_id.xy);
-    let size = vec2<u32>(VERTEX_DIMENSION);
+
+	// Offset size so uv doesn't extend to duplicated edge
+    let size = vec2<u32>(VERTEX_DIMENSION - 1u);
 
     if(vertex_coord.x >= size.x || vertex_coord.y >= size.y)
     {
@@ -169,7 +170,7 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 
     let uv = (vec2<f32>(vertex_coord) + vec2<f32>(0.5,0.5)) / vec2<f32>(size);
 
-    let world_position_xz = vec2<f32>(WORLD_HALF_EXTENT_METERS) * 2.0 * (uv - vec2<f32>(0.5));
+    let world_position_xz = vec2<f32>(u_patch_world_half_extent) * 2.0 * (uv - vec2<f32>(0.5));
     let time = u_global.time.time_seconds;
 
     var displaced_position = vec3<f32>(world_position_xz.x, WAVE_NEUTRAL_PLANE, world_position_xz.y);
@@ -184,10 +185,10 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 
 				switch wave_model {
 					case WAVE_MODEL_COSINE: {
-						result = sampleCosine(waves[i], time, world_position_xz);
+						result = sampleCosine(u_waves[i], time, world_position_xz);
 					}
 					case WAVE_MODEL_GERSTNER: {
-						result = sampleGerstner(waves[i], time, world_position_xz);
+						result = sampleGerstner(u_waves[i], time, world_position_xz);
 					}
 					default: {
 						result.tangent = vec3<f32>(1.0, 0.0, 0.0);
@@ -216,12 +217,39 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 
     let world_normal = -normalize(cross(tangent, bitangent));
     output_world_normals[vertex_index] = vec4<f32>(world_normal, 0.0);
+
+	// We need to fill in the edge so the mesh tiles properly
+	if(vertex_coord.x == 0u && vertex_coord.y == 0u)
+	{
+		let index = (VERTEX_DIMENSION - 1u) + (VERTEX_DIMENSION - 1u) * VERTEX_DIMENSION;
+		let offset = vec3<f32>(u_patch_world_half_extent * 2.0, 0.0, u_patch_world_half_extent * 2.0);
+    	output_vertices[index] = vec4<f32>(displaced_position + offset, 1.0);
+    	output_world_normals[index] = vec4<f32>(world_normal, 0.0);
+	}
+
+	if (vertex_coord.x == 0u)
+	{
+		let index = (VERTEX_DIMENSION - 1u) + (vertex_coord.y) * VERTEX_DIMENSION;
+		let offset = vec3<f32>(u_patch_world_half_extent * 2.0, 0.0, 0.0);
+    	output_vertices[index] = vec4<f32>(displaced_position + offset, 1.0);
+    	output_world_normals[index] = vec4<f32>(world_normal, 0.0);
+	}
+
+	if (vertex_coord.y == 0u)
+	{
+		let index = vertex_coord.x + (VERTEX_DIMENSION - 1u) * VERTEX_DIMENSION;
+		let offset = vec3<f32>(0.0, 0.0, u_patch_world_half_extent * 2.0);
+    	output_vertices[index] = vec4<f32>(displaced_position + offset, 1.0);
+    	output_world_normals[index] = vec4<f32>(world_normal, 0.0);
+	}
 }
 
 /* --- begin surface rasterization --- */
 
 @group(0) @binding(0) var<storage> vertices: array<vec4<f32>, VERTEX_COUNT>;
 @group(0) @binding(1) var<storage> world_normals: array<vec4<f32>, VERTEX_COUNT>;
+// Commented to avoid re-declaration
+// @group(0) @binding(2) var<uniform> u_patch_world_half_extent: f32;
 
 // Commented to avoid re-declaration
 // @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
@@ -233,12 +261,23 @@ struct VertexOut {
     @location(3) camera_distance : f32,
 }
 
+fn generatePatchOffset(instance: u32) -> vec3<f32>
+{
+	const PATCH_GRID_WIDTH = 10u;
+
+	let row = instance / PATCH_GRID_WIDTH;
+	// Offset instance for case that there is only 1 instance, so patch is at origin
+	let column = (instance + PATCH_GRID_WIDTH / 2u) % PATCH_GRID_WIDTH;
+
+	return vec3<f32>(f32(column) - f32(PATCH_GRID_WIDTH / 2u), 0.0, f32(row));
+}
+
 @vertex
-fn rasterizationVertex(@builtin(vertex_index) index : u32) -> VertexOut
+fn rasterizationVertex(@builtin(vertex_index) index : u32, @builtin(instance_index) instance : u32) -> VertexOut
 {
     var output : VertexOut;
 
-    let world_position = vertices[index];
+    let world_position = vertices[index] + vec4<f32>(2.0 * generatePatchOffset(instance) * u_patch_world_half_extent, 0.0);
 
     output.position = u_global.camera.proj_view * world_position;
     output.world_normal = world_normals[index].xyz;

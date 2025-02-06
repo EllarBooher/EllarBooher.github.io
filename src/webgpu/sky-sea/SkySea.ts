@@ -31,6 +31,7 @@ const RENDER_SCALES = [0.25, 0.3333, 0.5, 0.75, 1.0, 1.5, 2.0, 4.0];
 enum FrametimeCategory {
 	DrawToDraw,
 	SkyviewLUT,
+	FFTWaves,
 	OceanSurface,
 	AtmosphereCamera,
 	FullscreenQuad,
@@ -765,10 +766,25 @@ class SkySeaApp implements RendererApp {
 			label: "Main",
 		});
 
-		this.fftWaveSpectrumResources.record(this.device, commandEncoder);
-
-		let timestampQueryIndex = 0;
 		const timestampIndexMapping = new Map<FrametimeCategory, number>();
+		let timestampQueryIndex = 0;
+
+		timestampIndexMapping.set(
+			FrametimeCategory.FFTWaves,
+			timestampQueryIndex
+		);
+		this.fftWaveSpectrumResources.record(
+			this.device,
+			commandEncoder,
+			this.frametimeQuery !== undefined
+				? {
+						querySet: this.frametimeQuery.querySet,
+						beginWriteIndex: timestampQueryIndex++,
+						endWriteIndex: timestampQueryIndex++,
+				  }
+				: undefined
+		);
+
 		timestampIndexMapping.set(
 			FrametimeCategory.OceanSurface,
 			timestampQueryIndex

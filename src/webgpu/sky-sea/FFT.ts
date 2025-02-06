@@ -315,12 +315,16 @@ export class DFFTResources {
 
 	// static debugCounter: number = 0;
 	debugBuffersCopied = false;
-	private recordPerformOnBuffer0(commandEncoder: GPUCommandEncoder) {
+	private recordPerformOnBuffer0(
+		commandEncoder: GPUCommandEncoder,
+		endTimestampWrites: GPUComputePassTimestampWrites | undefined
+	) {
 		const gridSize = this.parametersUBO.data.size;
 		const log2GridSize = this.parametersUBO.data.log_2_size;
 
 		const passEncoder = commandEncoder.beginComputePass({
 			label: "DFFT Perform",
+			timestampWrites: endTimestampWrites,
 		});
 
 		for (let step = 0; step < 2 * log2GridSize; step++) {
@@ -360,7 +364,8 @@ export class DFFTResources {
 		commandEncoder: GPUCommandEncoder,
 		sourceTexture: GPUTexture,
 		destinationTexture: GPUTexture,
-		inverse: boolean
+		inverse: boolean,
+		endTimestampWrites: GPUComputePassTimestampWrites | undefined
 	) {
 		// TODO: We should be able to pack 2 complex numbers into a source texture
 		// We require this format so it maps perfectly to our buffers of complex numbers (WGSL type: vec2<f32>)
@@ -392,7 +397,7 @@ export class DFFTResources {
 			}
 		);
 
-		this.recordPerformOnBuffer0(commandEncoder);
+		this.recordPerformOnBuffer0(commandEncoder, endTimestampWrites);
 
 		commandEncoder.copyBufferToTexture(
 			{

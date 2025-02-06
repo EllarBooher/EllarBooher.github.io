@@ -2,6 +2,7 @@ import FourierWavesShaderPak from "../../shaders/sky-sea/fourier_waves.wgsl";
 
 import { GlobalUBO } from "./UBO.ts";
 import { DFFTResources } from "./FFT.ts";
+import { TimestampQueryInterval } from "./Common.ts";
 
 // The dimension of the fourier grid, i.e., the sqrt of the number of unique waves for our discrete fourier transform
 const GRID_SIZE = 512;
@@ -336,9 +337,21 @@ export class FFTWaveSpectrumResources {
 		};
 	}
 
-	record(device: GPUDevice, commandEncoder: GPUCommandEncoder) {
+	record(
+		device: GPUDevice,
+		commandEncoder: GPUCommandEncoder,
+		timestampInterval: TimestampQueryInterval | undefined
+	) {
 		const realizePassEncoder = commandEncoder.beginComputePass({
 			label: "FFT Wave Fourier Amplitude Realization",
+			timestampWrites:
+				timestampInterval !== undefined
+					? {
+							querySet: timestampInterval.querySet,
+							beginningOfPassWriteIndex:
+								timestampInterval.beginWriteIndex,
+					  }
+					: undefined,
 		});
 		realizePassEncoder.setPipeline(this.realizedFourierAmplitudePipeline);
 		realizePassEncoder.setBindGroup(0, this.realizedFourierAmplitudeGroup0);
@@ -363,7 +376,13 @@ export class FFTWaveSpectrumResources {
 			commandEncoder,
 			this.realizedFourierAmplitude,
 			this.heightmap,
-			true
+			true,
+			timestampInterval !== undefined
+				? {
+						querySet: timestampInterval.querySet,
+						endOfPassWriteIndex: timestampInterval.endWriteIndex,
+				  }
+				: undefined
 		);
 	}
 }

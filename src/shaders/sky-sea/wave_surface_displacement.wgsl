@@ -114,6 +114,26 @@ fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplaceme
     return output;
 }
 
+fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>) -> WaveDisplacementResult
+{
+	let delta = 0.5 / vec2<f32>(textureDimensions(displacement_map));
+	let y = textureSampleLevel(displacement_map, displacement_map_sampler, patch_uv, 0).r;
+	let dy_dx = textureSampleLevel(displacement_map, displacement_map_sampler, patch_uv + vec2<f32>(delta.x, 0.0), 0).r - y;
+	let dy_dz = textureSampleLevel(displacement_map, displacement_map_sampler, patch_uv + vec2<f32>(0.0, delta.y), 0).r - y;
+
+    var output: WaveDisplacementResult;
+
+	output.tangent = vec3<f32>(1.0, dy_dx, 0.0);
+	output.bitangent = vec3<f32>(0.0, dy_dz, 1.0);
+	output.displacement = vec3<f32>(
+		0.0,
+		y,
+		0.0
+	);
+
+	return output;
+}
+
 const VERTEX_DIMENSION = 2048u;
 const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 // const TRIANGLE_COUNT = 2u * (VERTEX_DIMENSION - 1u) * (VERTEX_DIMENSION - 1u);
@@ -124,6 +144,7 @@ const WAVE_COUNT = 6u;
 @id(0) override wave_model: u32 = 1u;
 const WAVE_MODEL_COSINE = 0u;
 const WAVE_MODEL_GERSTNER = 1u;
+const WAVE_MODEL_DISPLACEMENT_MAP = 2u;
 
 // Vertices are in (x,y,z) world coordinates, so during rasterization you must swizzle y <-> z
 @group(0) @binding(0) var<storage, read_write> output_vertices: array<vec4<f32>, VERTEX_COUNT>;
@@ -131,6 +152,9 @@ const WAVE_MODEL_GERSTNER = 1u;
 @group(0) @binding(2) var<uniform> waves: array<PlaneWave, WAVE_COUNT>;
 
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+
+@group(2) @binding(0) var displacement_map_sampler: sampler;
+@group(2) @binding(1) var displacement_map: texture_2d<f32>;
 
 @compute @workgroup_size(16, 16, 1)
 fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
@@ -154,13 +178,22 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
     for (var i = 0u; i < WAVE_COUNT; i++)
     {
         var result: WaveDisplacementResult;
+
         switch wave_model {
             case WAVE_MODEL_COSINE: {
                 result = sampleCosine(waves[i], time, world_position_xz);
             }
-            default {
+            case WAVE_MODEL_GERSTNER: {
                 result = sampleGerstner(waves[i], time, world_position_xz);
             }
+			case WAVE_MODEL_DISPLACEMENT_MAP: {
+				result = sampleMap(displacement_map, displacement_map_sampler, uv);
+			}
+			default: {
+				result.tangent = vec3<f32>(1.0, 0.0, 0.0);
+				result.bitangent = vec3<f32>(0.0, 0.0, 1.0);
+				result.displacement = vec3<f32>(0.0, WAVE_NEUTRAL_PLANE, 0.0);
+			}
         }
 
         displaced_position += result.displacement;

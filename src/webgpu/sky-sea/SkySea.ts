@@ -2,7 +2,7 @@ import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { RendererApp, RendererAppConstructor } from "../RendererApp.ts";
 import { mat4, vec3, vec4 } from "wgpu-matrix";
 import { GlobalUBO } from "./UBO.ts";
-import { Extent2D, RenderOutput } from "./Common.ts";
+import { Extent2D, RenderOutput, WaveModel } from "./Common.ts";
 
 import { GBuffer } from "./GBuffer.ts";
 import { TransmittanceLUTPassResources } from "./TransmittanceLUT.ts";
@@ -24,11 +24,6 @@ class OutputTexturePostProcessSettings {
 		g: number;
 		b: number;
 	} = { r: 1.0, g: 1.0, b: 1.0 };
-}
-
-enum WaveModel {
-	Cosine,
-	Gerstner,
 }
 
 const RENDER_SCALES = [0.25, 0.3333, 0.5, 0.75, 1.0, 1.5, 2.0, 4.0];
@@ -172,6 +167,7 @@ class SkySeaApp implements RendererApp {
 		gui.add(this.settings, "oceanWaveModel", {
 			Cosine: WaveModel.Cosine,
 			Gerstner: WaveModel.Gerstner,
+			"FFT Waves": WaveModel.FFTDisplacement,
 		}).name("Ocean Wave Model");
 
 		const sunFolder = gui.addFolder("Sun Parameters").open();
@@ -327,7 +323,7 @@ class SkySeaApp implements RendererApp {
 		this.startTime = time;
 		this.settings = {
 			outputTexture: RenderOutput.Scene,
-			oceanWaveModel: WaveModel.Gerstner,
+			oceanWaveModel: WaveModel.FFTDisplacement,
 			outputTextureSettings: new Map<
 				RenderOutput,
 				OutputTexturePostProcessSettings
@@ -526,13 +522,15 @@ class SkySeaApp implements RendererApp {
 			this.globalUBO
 		);
 
+		const fftWaveViews = this.fftWaveSpectrumResources.views();
 		this.waveSurfaceDisplacementPassResources =
 			new WaveSurfaceDisplacementPassResources(
 				this.device,
 				this.globalUBO,
 				this.gbuffer.colorWithDepthInAlpha.format,
 				this.gbuffer.normal.format,
-				this.gbuffer.depth.format
+				this.gbuffer.depth.format,
+				fftWaveViews.heightmapView
 			);
 
 		const fullscreenQuadIndices = new Uint32Array([0, 1, 2, 0, 2, 3]);
@@ -557,8 +555,6 @@ class SkySeaApp implements RendererApp {
 			true,
 			this.globalUBO
 		);
-
-		const fftWaveViews = this.fftWaveSpectrumResources.views();
 
 		this.fullscreenQuadPassResources = new FullscreenQuadPassResources(
 			this.device,
@@ -778,102 +774,22 @@ class SkySeaApp implements RendererApp {
 			timestampQueryIndex
 		);
 
-		switch (this.settings.oceanWaveModel) {
-			case WaveModel.Cosine:
-			case WaveModel.Gerstner: {
-				const displacementPassEncoder = commandEncoder.beginComputePass(
-					{
-						label: "Wave Surface Mesh Displacement",
-						timestampWrites:
-							this.frametimeQuery !== undefined
-								? {
-										querySet: this.frametimeQuery.querySet,
-										beginningOfPassWriteIndex:
-											timestampQueryIndex++,
-								  }
-								: undefined,
-					}
-				);
-				if (this.settings.oceanWaveModel == WaveModel.Cosine) {
-					displacementPassEncoder.setPipeline(
-						this.waveSurfaceDisplacementPassResources
-							.displacementCosinePipeline
-					);
-				} else {
-					displacementPassEncoder.setPipeline(
-						this.waveSurfaceDisplacementPassResources
-							.displacementGerstnerPipeline
-					);
-				}
-				displacementPassEncoder.setBindGroup(
-					0,
-					this.waveSurfaceDisplacementPassResources.group0Compute
-				);
-				displacementPassEncoder.setBindGroup(
-					1,
-					this.waveSurfaceDisplacementPassResources.group1
-				);
-				displacementPassEncoder.dispatchWorkgroups(
-					Math.ceil(2048 / 16),
-					Math.ceil(2048 / 16)
-				);
-				displacementPassEncoder.end();
-
-				const surfaceRasterizationPassEncoder =
-					commandEncoder.beginRenderPass({
-						label: "Wave Surface Rasterization",
-						colorAttachments: [
-							{
-								clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
-								loadOp: "clear",
-								storeOp: "store",
-								view: this.gbuffer.colorWithDepthInAlphaView,
-							},
-							{
-								clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
-								loadOp: "clear",
-								storeOp: "store",
-								view: this.gbuffer.normalView,
-							},
-						],
-						depthStencilAttachment: {
-							view: this.gbuffer.depthView,
-							depthClearValue: 1.0,
-							depthLoadOp: "clear",
-							depthStoreOp: "store",
-						},
-						timestampWrites:
-							this.frametimeQuery !== undefined
-								? {
-										querySet: this.frametimeQuery.querySet,
-										endOfPassWriteIndex:
-											timestampQueryIndex++,
-								  }
-								: undefined,
-					});
-				surfaceRasterizationPassEncoder.setPipeline(
-					this.waveSurfaceDisplacementPassResources
-						.surfaceRasterizationPipeline
-				);
-				surfaceRasterizationPassEncoder.setBindGroup(
-					0,
-					this.waveSurfaceDisplacementPassResources.group0Graphics
-				);
-				surfaceRasterizationPassEncoder.setBindGroup(
-					1,
-					this.waveSurfaceDisplacementPassResources.group1
-				);
-				surfaceRasterizationPassEncoder.setIndexBuffer(
-					this.waveSurfaceDisplacementPassResources.indices,
-					"uint32"
-				);
-				surfaceRasterizationPassEncoder.drawIndexed(
-					this.waveSurfaceDisplacementPassResources.indices.size / 4
-				);
-				surfaceRasterizationPassEncoder.end();
-				break;
+		this.waveSurfaceDisplacementPassResources.record(
+			commandEncoder,
+			this.frametimeQuery !== undefined
+				? {
+						querySet: this.frametimeQuery.querySet,
+						beginWriteIndex: timestampQueryIndex++,
+						endWriteIndex: timestampQueryIndex++,
+				  }
+				: undefined,
+			this.settings.oceanWaveModel,
+			{
+				colorWithDepthInAlpha: this.gbuffer.colorWithDepthInAlphaView,
+				normal: this.gbuffer.normalView,
+				depth: this.gbuffer.depthView,
 			}
-		}
+		);
 
 		timestampIndexMapping.set(
 			FrametimeCategory.SkyviewLUT,

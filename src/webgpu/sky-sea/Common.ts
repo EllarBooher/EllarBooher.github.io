@@ -15,3 +15,15 @@ export enum RenderOutput {
 	FFTWaveRealizedAmplitude,
 	FFTWaveHeightmap,
 }
+
+export interface TimestampQueryInterval {
+	querySet: GPUQuerySet;
+	beginWriteIndex: GPUSize32;
+	endWriteIndex: GPUSize32;
+}
+
+export enum WaveModel {
+	Cosine,
+	Gerstner,
+	FFTDisplacement,
+}

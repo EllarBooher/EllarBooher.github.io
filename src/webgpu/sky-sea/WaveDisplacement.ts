@@ -1,6 +1,7 @@
 import { Vec2, vec2 } from "wgpu-matrix";
 import { GlobalUBO } from "./UBO";
 import WaveSurfaceDisplacementPak from "../../shaders/sky-sea/wave_surface_displacement.wgsl";
+import { TimestampQueryInterval, WaveModel } from "./Common";
 
 // Holds a compute pass for computing the displacement of a bunch of vertices,
 // then a graphics pass for rasterizing these vertices
@@ -11,15 +12,19 @@ export class WaveSurfaceDisplacementPassResources {
 		@group(0) @binding(2) var<uniform> waves: array<PlaneWave, WAVE_COUNT>;
 
 		@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
-		*/
+
+		@group(2) @binding(0) var<uniform> displacement_map_sampler: sampler;
+		@group(2) @binding(1) var<uniform> displacement_map: texture_2d<f32>;
+	*/
 	group0Compute: GPUBindGroup;
+	group2Compute: GPUBindGroup;
 
 	/*
 		@group(0) @binding(0) var<storage> vertices: array<vec4<f32>, VERTEX_COUNT>;
 		@group(0) @binding(1) var<storage> world_normals: array<vec4<f32>, VERTEX_COUNT>;
 
 		@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
-		*/
+	*/
 	group0Graphics: GPUBindGroup;
 
 	group1: GPUBindGroup;
@@ -30,6 +35,7 @@ export class WaveSurfaceDisplacementPassResources {
 
 	displacementCosinePipeline: GPUComputePipeline;
 	displacementGerstnerPipeline: GPUComputePipeline;
+	displacementMapPipeline: GPUComputePipeline;
 
 	surfaceRasterizationPipeline: GPURenderPipeline;
 
@@ -38,7 +44,8 @@ export class WaveSurfaceDisplacementPassResources {
 		globalUBO: GlobalUBO,
 		colorFormat: GPUTextureFormat,
 		normalFormat: GPUTextureFormat,
-		depthFormat: GPUTextureFormat
+		depthFormat: GPUTextureFormat,
+		filterableDisplacementMap: GPUTextureView
 	) {
 		// Grid of vertices + extra quad for ocean horizon
 
@@ -213,6 +220,37 @@ export class WaveSurfaceDisplacementPassResources {
 			label: "Wave Surface Displacement Group 0 Compute",
 		});
 
+		const group2LayoutCompute = device.createBindGroupLayout({
+			label: "Wave Surface Displacement Group 2 Compute (Displacement Map)",
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.COMPUTE,
+					sampler: { type: "filtering" },
+				},
+				{
+					binding: 1,
+					visibility: GPUShaderStage.COMPUTE,
+					texture: { sampleType: "float" },
+				},
+			],
+		});
+		this.group2Compute = device.createBindGroup({
+			label: "Wave Surface Displacement Group 2 Compute (Displacement Map)",
+			layout: group2LayoutCompute,
+			entries: [
+				{
+					binding: 0,
+					resource: device.createSampler({
+						label: "Wave Surface Displacement Group 2 Sampler",
+						minFilter: "linear",
+						magFilter: "linear",
+					}),
+				},
+				{ binding: 1, resource: filterableDisplacementMap },
+			],
+		});
+
 		const group0LayoutGraphics = device.createBindGroupLayout({
 			entries: [
 				{
@@ -266,7 +304,11 @@ export class WaveSurfaceDisplacementPassResources {
 
 		this.displacementCosinePipeline = device.createComputePipeline({
 			layout: device.createPipelineLayout({
-				bindGroupLayouts: [group0LayoutCompute, group1Layout],
+				bindGroupLayouts: [
+					group0LayoutCompute,
+					group1Layout,
+					group2LayoutCompute,
+				],
 			}),
 			compute: {
 				module: shaderModule,
@@ -279,7 +321,11 @@ export class WaveSurfaceDisplacementPassResources {
 		});
 		this.displacementGerstnerPipeline = device.createComputePipeline({
 			layout: device.createPipelineLayout({
-				bindGroupLayouts: [group0LayoutCompute, group1Layout],
+				bindGroupLayouts: [
+					group0LayoutCompute,
+					group1Layout,
+					group2LayoutCompute,
+				],
 			}),
 			compute: {
 				module: shaderModule,
@@ -289,6 +335,23 @@ export class WaveSurfaceDisplacementPassResources {
 				},
 			},
 			label: "Wave Surface Displacement Gerstner Kernel",
+		});
+		this.displacementMapPipeline = device.createComputePipeline({
+			layout: device.createPipelineLayout({
+				bindGroupLayouts: [
+					group0LayoutCompute,
+					group1Layout,
+					group2LayoutCompute,
+				],
+			}),
+			compute: {
+				module: shaderModule,
+				entryPoint: "displaceVertices",
+				constants: {
+					0: 2,
+				},
+			},
+			label: "Wave Surface Displacement Map Kernel",
 		});
 
 		this.surfaceRasterizationPipeline = device.createRenderPipeline({
@@ -316,5 +379,95 @@ export class WaveSurfaceDisplacementPassResources {
 			},
 			label: "Wave Surface Displacement Surface Rasterization",
 		});
+	}
+
+	record(
+		commandEncoder: GPUCommandEncoder,
+		timestampInterval: TimestampQueryInterval | undefined,
+		waveModel: WaveModel,
+		attachments: {
+			colorWithDepthInAlpha: GPUTextureView;
+			normal: GPUTextureView;
+			depth: GPUTextureView;
+		}
+	) {
+		const displacementPassEncoder = commandEncoder.beginComputePass({
+			label: "Wave Surface Mesh Displacement",
+			timestampWrites:
+				timestampInterval !== undefined
+					? {
+							querySet: timestampInterval.querySet,
+							beginningOfPassWriteIndex:
+								timestampInterval.beginWriteIndex,
+					  }
+					: undefined,
+		});
+
+		switch (waveModel) {
+			case WaveModel.Cosine:
+				displacementPassEncoder.setPipeline(
+					this.displacementCosinePipeline
+				);
+				break;
+			case WaveModel.Gerstner:
+				displacementPassEncoder.setPipeline(
+					this.displacementGerstnerPipeline
+				);
+				break;
+			case WaveModel.FFTDisplacement:
+				displacementPassEncoder.setPipeline(
+					this.displacementMapPipeline
+				);
+				break;
+		}
+
+		displacementPassEncoder.setBindGroup(0, this.group0Compute);
+		displacementPassEncoder.setBindGroup(1, this.group1);
+		displacementPassEncoder.setBindGroup(2, this.group2Compute);
+		displacementPassEncoder.dispatchWorkgroups(
+			Math.ceil(2048 / 16),
+			Math.ceil(2048 / 16)
+		);
+		displacementPassEncoder.end();
+
+		const surfaceRasterizationPassEncoder = commandEncoder.beginRenderPass({
+			label: "Wave Surface Rasterization",
+			colorAttachments: [
+				{
+					clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
+					loadOp: "clear",
+					storeOp: "store",
+					view: attachments.colorWithDepthInAlpha,
+				},
+				{
+					clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
+					loadOp: "clear",
+					storeOp: "store",
+					view: attachments.normal,
+				},
+			],
+			depthStencilAttachment: {
+				view: attachments.depth,
+				depthClearValue: 1.0,
+				depthLoadOp: "clear",
+				depthStoreOp: "store",
+			},
+			timestampWrites:
+				timestampInterval !== undefined
+					? {
+							querySet: timestampInterval.querySet,
+							endOfPassWriteIndex:
+								timestampInterval.endWriteIndex,
+					  }
+					: undefined,
+		});
+		surfaceRasterizationPassEncoder.setPipeline(
+			this.surfaceRasterizationPipeline
+		);
+		surfaceRasterizationPassEncoder.setBindGroup(0, this.group0Graphics);
+		surfaceRasterizationPassEncoder.setBindGroup(1, this.group1);
+		surfaceRasterizationPassEncoder.setIndexBuffer(this.indices, "uint32");
+		surfaceRasterizationPassEncoder.drawIndexed(this.indices.size / 4);
+		surfaceRasterizationPassEncoder.end();
 	}
 }

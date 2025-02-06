@@ -160,6 +160,7 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 		}
 
 		setInitialized(false);
+		setErrors(undefined);
 		// Adapter is one-time, and samples can have different feature requirements, so we need to create everything from scratch
 		appLoadingPromiseRef.current = getDevice(
 			sample.requiredFeatures,

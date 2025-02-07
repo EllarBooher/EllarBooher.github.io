@@ -379,7 +379,7 @@ export class WaveSurfaceDisplacementPassResources {
 		}
 		device.queue.writeBuffer(this.lodIndices, 0, lodIndicesSource);
 
-		const WAVE_COUNT = 6;
+		const WAVE_COUNT = 12;
 		const WAVE_SIZE_FLOATS = 4;
 		const WAVE_SIZE_BYTES = 4 * WAVE_SIZE_FLOATS;
 		const waves = device.createBuffer({
@@ -422,34 +422,64 @@ export class WaveSurfaceDisplacementPassResources {
 		// Loops may occur but I did not see any with these parameters
 		const wavesSource = new Array<PlaneWave>(
 			{
-				direction: vec2.create(1.0, 2.0),
-				amplitude: 0.75,
-				wavelength: baseWavelength / (16.0 * 16.0),
+				direction: vec2.create(0.4, 2.0),
+				amplitude: 0.25,
+				wavelength: baseWavelength / (12.0 * 12.0),
 			},
 			{
-				direction: vec2.create(1.2, 2.0),
-				amplitude: 0.75,
+				direction: vec2.create(0.6, 2.0),
+				amplitude: 0.3,
 				wavelength: baseWavelength / (14.0 * 14.0),
 			},
 			{
 				direction: vec2.create(0.8, 2.0),
-				amplitude: 0.75,
+				amplitude: 0.35,
 				wavelength: baseWavelength / (12.0 * 12.0),
 			},
 			{
-				direction: vec2.create(1.25, 2.0),
-				amplitude: 0.75,
+				direction: vec2.create(1.0, 2.0),
+				amplitude: 0.4,
 				wavelength: baseWavelength / (16.0 * 16.0),
 			},
 			{
-				direction: vec2.create(-2.0, 1.0),
-				amplitude: 0.1,
-				wavelength: baseWavelength / (19.0 * 19.0),
+				direction: vec2.create(1.2, 2.0),
+				amplitude: 0.45,
+				wavelength: baseWavelength / (12.0 * 12.0),
 			},
 			{
-				direction: vec2.create(0.0, 1.0),
-				amplitude: 0.1,
-				wavelength: baseWavelength / (19.0 * 19.0),
+				direction: vec2.create(1.4, 2.0),
+				amplitude: 0.4,
+				wavelength: baseWavelength / (14.0 * 14.0),
+			},
+			{
+				direction: vec2.create(1.6, 2.0),
+				amplitude: 0.35,
+				wavelength: baseWavelength / (12.0 * 12.0),
+			},
+			{
+				direction: vec2.create(1.8, 2.0),
+				amplitude: 0.3,
+				wavelength: baseWavelength / (16.0 * 16.0),
+			},
+			{
+				direction: vec2.create(0.8, 1.5),
+				amplitude: 0.02,
+				wavelength: baseWavelength / (30.0 * 30.0),
+			},
+			{
+				direction: vec2.create(1.1, 1.5),
+				amplitude: 0.02,
+				wavelength: baseWavelength / (30.0 * 30.0),
+			},
+			{
+				direction: vec2.create(1.2, 1.5),
+				amplitude: 0.02,
+				wavelength: baseWavelength / (30.0 * 30.0),
+			},
+			{
+				direction: vec2.create(1.3, 1.5),
+				amplitude: 0.02,
+				wavelength: baseWavelength / (30.0 * 30.0),
 			}
 		);
 		const wavesFloats = new Float32Array(WAVE_COUNT * WAVE_SIZE_FLOATS);

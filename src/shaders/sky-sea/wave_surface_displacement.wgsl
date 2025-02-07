@@ -150,7 +150,7 @@ const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 // const TRIANGLE_COUNT = 2u * (VERTEX_DIMENSION - 1u) * (VERTEX_DIMENSION - 1u);
 // const INDEX_COUNT = 3u * TRIANGLE_COUNT;
 
-const WAVE_COUNT = 6u;
+const WAVE_COUNT = 12u;
 
 struct WaveSurfaceDisplacementUBO
 {

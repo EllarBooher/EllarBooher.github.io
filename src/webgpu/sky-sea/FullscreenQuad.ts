@@ -26,12 +26,12 @@ export class FullscreenQuadPassResources {
 				{
 					binding: 0,
 					visibility: GPUShaderStage.FRAGMENT,
-					texture: { sampleType: "float" },
+					texture: { sampleType: "unfilterable-float" },
 				},
 				{
 					binding: 1,
 					visibility: GPUShaderStage.FRAGMENT,
-					sampler: { type: "filtering" },
+					sampler: { type: "non-filtering" },
 				},
 			],
 			label: "Fullscreen Quad Group 0",
@@ -44,8 +44,8 @@ export class FullscreenQuadPassResources {
 		>();
 
 		this.group0Sampler = device.createSampler({
-			magFilter: "linear",
-			minFilter: "linear",
+			magFilter: "nearest",
+			minFilter: "nearest",
 		});
 
 		textures.forEach((view, key) => {

@@ -1,7 +1,11 @@
-import { Vec2, vec2 } from "wgpu-matrix";
+import { mat4, Mat4, Vec2, vec2, vec3, Vec3, Vec4, vec4 } from "wgpu-matrix";
 import { GlobalUBO, UBO } from "./UBO";
 import WaveSurfaceDisplacementPak from "../../shaders/sky-sea/wave_surface_displacement.wgsl";
 import { TimestampQueryInterval, WaveModel } from "./Common";
+
+// vec4<f32>
+const BYTES_PER_PATCH_OFFSET = 16;
+const PATCH_CAPACITY = 1000;
 
 class PatchWorldHalfExtentUBO extends UBO {
 	public readonly data: {
@@ -29,6 +33,169 @@ class PatchWorldHalfExtentUBO extends UBO {
 	}
 }
 
+interface RayPlaneHit {
+	hit: boolean;
+	t: number;
+}
+
+function rayPlaneIntersection(
+	ray_origin: Vec3,
+	ray_direction: Vec3,
+	plane_origin: Vec3,
+	plane_normal: Vec3
+): RayPlaneHit {
+	const perp = vec3.dot(plane_normal, ray_direction);
+	const t = vec3.dot(vec3.sub(plane_origin, ray_origin), plane_normal) / perp;
+
+	return {
+		hit: Math.abs(perp) > 0.00001 && t > 0.0,
+		t: t,
+	};
+}
+
+interface PatchDrawInstancedLOD {
+	instanceOffset: number;
+	count: number;
+}
+
+function queuePatchLODDrawCommands(
+	lodCount: number,
+	camera: {
+		invProj: Mat4;
+		invView: Mat4;
+		position: Vec4;
+	}
+) {
+	const nearPlaneDepth = 1.0;
+
+	const ndcCorners = [
+		vec4.create(-1.0, -1.0, nearPlaneDepth, 1.0),
+		vec4.create(1.0, -1.0, nearPlaneDepth, 1.0),
+		vec4.create(1.0, 1.0, nearPlaneDepth, 1.0),
+		vec4.create(-1.0, 1.0, nearPlaneDepth, 1.0),
+	];
+
+	// Each raycast out from the camera produces a point that 1) hits the ocean or 2) doesn't but can be projected straight down to one
+	// This defines a quadrilateral that we will then convert into patches
+	// Keep as vec3 for easier component swizzling, but y should be 0 for all of these
+	const frustumProjectedPositions = [
+		vec3.create(),
+		vec3.create(),
+		vec3.create(),
+		vec3.create(),
+	];
+	let intersectionCount = 0;
+
+	const DISTANCE_BOUND = 1000.0;
+	const FLT_MAX = 3.402823e38;
+	let min = vec3.create(FLT_MAX, FLT_MAX, FLT_MAX);
+	let max = vec3.create(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+
+	for (let i = 0; i < 4; i++) {
+		const directionViewSpace = mat4.mul(camera.invProj, ndcCorners[i]);
+		directionViewSpace[4] = 0.0;
+		const directionWorld = vec3.normalize(
+			mat4.mul(camera.invView, directionViewSpace)
+		);
+
+		const planeOrigin = vec3.create(0.0, 0.0, 0.0);
+		const planeNormal = vec3.create(0.0, 1.0, 0.0);
+
+		const rayOrigin = vec3.copy(camera.position);
+		const rayDirection = vec3.copy(directionWorld);
+
+		const oceanHit = rayPlaneIntersection(
+			rayOrigin,
+			rayDirection,
+			planeOrigin,
+			planeNormal
+		);
+		if (oceanHit.hit) {
+			intersectionCount += 1.0;
+		}
+
+		const endpoint = vec3.add(
+			vec3.mulScalar(
+				rayDirection,
+				oceanHit.hit ? oceanHit.t : DISTANCE_BOUND
+			),
+			rayOrigin
+		);
+		endpoint[1] = 0.0;
+
+		frustumProjectedPositions[i] = vec3.copy(endpoint);
+
+		min = vec3.min(endpoint, min);
+		max = vec3.max(endpoint, max);
+	}
+
+	min[1] = 0.0;
+	max[1] = 0.0;
+
+	const PATCH_WORLD_HALF_EXTENT = 50.0;
+	const patchMin = vec3.floor(vec3.divScalar(min, PATCH_WORLD_HALF_EXTENT));
+	const patchMax = vec3.ceil(vec3.divScalar(max, PATCH_WORLD_HALF_EXTENT));
+
+	const PatchOffsetsPackedByLOD = new Map<number, number[]>();
+
+	let instanceCount = 0;
+
+	if (intersectionCount > 0.0) {
+		for (let lod = 0; lod < lodCount; lod++) {
+			PatchOffsetsPackedByLOD.set(lod, []);
+		}
+
+		for (let z = patchMin[2]; z <= patchMax[2]; z += 1.0) {
+			for (let x = patchMin[0]; x <= patchMax[0]; x += 1.0) {
+				const patchPosition = vec3.mulScalar(
+					vec3.create(x, 0.0, z),
+					2.0 * PATCH_WORLD_HALF_EXTENT
+				);
+				const deltaCamera = vec3.sub(patchPosition, camera.position);
+
+				const distance = vec3.length(deltaCamera);
+				const t = Math.max(
+					Math.min(distance / DISTANCE_BOUND, 1.0),
+					0.0
+				);
+				const lod = Math.atan(t) * lodCount;
+
+				PatchOffsetsPackedByLOD.get(Math.round(lod))?.push(
+					...patchPosition,
+					0.0
+				);
+			}
+		}
+
+		for (const [_lod, offsetsPacked] of PatchOffsetsPackedByLOD) {
+			instanceCount += offsetsPacked.length / 4;
+		}
+	}
+
+	// For the CPU to dispatch the commands
+	const patchDrawInstanceByLOD = new Map<number, PatchDrawInstancedLOD>();
+	// To be copied to the GPU as per-instance data offsetting each vertex of each patch
+	const patchOffsetsPackedSortedByLOD = new Float32Array(instanceCount * 4);
+
+	let patchInstanceOffset = 0;
+	for (const [lod, offsetsPacked] of PatchOffsetsPackedByLOD) {
+		patchDrawInstanceByLOD.set(lod, {
+			count: offsetsPacked.length / 4,
+			instanceOffset: patchInstanceOffset,
+		});
+		patchOffsetsPackedSortedByLOD.set(
+			offsetsPacked,
+			patchInstanceOffset * 4
+		);
+		patchInstanceOffset += offsetsPacked.length / 4;
+	}
+
+	return {
+		patchDrawInstanceByLOD,
+		patchOffsetsPackedSortedByLOD,
+	};
+}
+
 // Holds a compute pass for computing the displacement of a bunch of vertices,
 // then a graphics pass for rasterizing these vertices
 export class WaveSurfaceDisplacementPassResources {
@@ -50,12 +217,14 @@ export class WaveSurfaceDisplacementPassResources {
 	 * @group(0) @binding(0) var<storage> vertices: array<vec4<f32>, VERTEX_COUNT>;
 	 * @group(0) @binding(1) var<storage> world_normals: array<vec4<f32>, VERTEX_COUNT>;
 	 * @group(0) @binding(2) var<uniform> patch_world_half_extent: f32;
+	 * @group(0) @binding(3) var<storage> patch_offsets: array<vec4<f32>>;
 	 *
 	 * @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 	 */
 	group0Graphics: GPUBindGroup;
 
 	patchWorldHalfExtentBuffer: PatchWorldHalfExtentUBO;
+	patchInstanceOffsetsXYZW: GPUBuffer;
 
 	group1: GPUBindGroup;
 
@@ -380,8 +549,19 @@ export class WaveSurfaceDisplacementPassResources {
 					visibility: GPUShaderStage.VERTEX,
 					buffer: { type: "uniform" },
 				},
+				{
+					binding: 3,
+					visibility: GPUShaderStage.VERTEX,
+					buffer: { type: "read-only-storage" },
+				},
 			],
 			label: "Wave Surface Displacement Group 0 Graphics",
+		});
+
+		this.patchInstanceOffsetsXYZW = device.createBuffer({
+			label: "Wave Surface Displacement Patch Offsets",
+			size: BYTES_PER_PATCH_OFFSET * PATCH_CAPACITY,
+			usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
 		});
 
 		this.group0Graphics = device.createBindGroup({
@@ -393,6 +573,12 @@ export class WaveSurfaceDisplacementPassResources {
 					binding: 2,
 					resource: {
 						buffer: this.patchWorldHalfExtentBuffer.buffer,
+					},
+				},
+				{
+					binding: 3,
+					resource: {
+						buffer: this.patchInstanceOffsetsXYZW,
 					},
 				},
 			],
@@ -507,6 +693,7 @@ export class WaveSurfaceDisplacementPassResources {
 	record(
 		device: GPUDevice,
 		commandEncoder: GPUCommandEncoder,
+		globalUBO: GlobalUBO,
 		timestampInterval: TimestampQueryInterval | undefined,
 		waveModel: WaveModel,
 		attachments: {
@@ -589,6 +776,7 @@ export class WaveSurfaceDisplacementPassResources {
 					  }
 					: undefined,
 		});
+
 		surfaceRasterizationPassEncoder.setPipeline(
 			this.surfaceRasterizationPipeline
 		);
@@ -598,14 +786,33 @@ export class WaveSurfaceDisplacementPassResources {
 
 		switch (waveModel) {
 			default:
-			case (WaveModel.Cosine, WaveModel.Gerstner):
+			case (WaveModel.Cosine, WaveModel.Gerstner): {
 				surfaceRasterizationPassEncoder.drawIndexed(
 					this.baseIndexCount,
 					1
 				);
 				break;
-			case WaveModel.FFTDisplacement:
-				let instanceOffset = 0;
+			}
+			case WaveModel.FFTDisplacement: {
+				const {
+					patchDrawInstanceByLOD,
+					patchOffsetsPackedSortedByLOD,
+				} = queuePatchLODDrawCommands(this.lodCount, {
+					invProj: globalUBO.data.camera.invProj,
+					invView: globalUBO.data.camera.invView,
+					position: globalUBO.data.camera.position,
+				});
+
+				device.queue.writeBuffer(
+					this.patchInstanceOffsetsXYZW,
+					0,
+					patchOffsetsPackedSortedByLOD,
+					0,
+					Math.min(
+						this.patchInstanceOffsetsXYZW.size / 4,
+						patchOffsetsPackedSortedByLOD.length
+					)
+				);
 
 				function computeLODIndexOffset(
 					lod: number,
@@ -624,41 +831,32 @@ export class WaveSurfaceDisplacementPassResources {
 				}
 
 				for (let lod = 0; lod < this.lodCount; lod++) {
-					if (lod > 1) {
+					const lodInstanceData = patchDrawInstanceByLOD.get(lod);
+
+					if (lod == 1) {
 						surfaceRasterizationPassEncoder.setIndexBuffer(
 							this.lodIndices,
 							"uint32"
 						);
-						// indexOffset = 0;
 					}
 
-					// Each index is a patch, a copy of the ocean mesh
-					// Patches extend in a cone in front of the camera
-					// patches per row is 1, 3, 5, 7, ... , (2 * k + 1), ...
-
 					const indexCount = this.baseIndexCount / (1 << (2 * lod));
-					const nextInstanceOffset = Math.pow(
-						Math.floor(0.5 * lod * lod) + 2,
-						2
-					);
 					const indexOffset = computeLODIndexOffset(
 						lod,
 						this.baseIndexCount
 					);
 
-					const instanceCount = nextInstanceOffset - instanceOffset;
-
 					surfaceRasterizationPassEncoder.drawIndexed(
 						indexCount,
-						instanceCount,
+						lodInstanceData?.count,
 						indexOffset,
 						0,
-						instanceOffset
+						lodInstanceData?.instanceOffset
 					);
-
-					instanceOffset = nextInstanceOffset;
 				}
+
 				break;
+			}
 		}
 		surfaceRasterizationPassEncoder.end();
 	}

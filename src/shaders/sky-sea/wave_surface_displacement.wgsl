@@ -249,6 +249,7 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 @group(0) @binding(1) var<storage> world_normals: array<vec4<f32>, VERTEX_COUNT>;
 // Commented to avoid re-declaration
 // @group(0) @binding(2) var<uniform> u_patch_world_half_extent: f32;
+@group(0) @binding(3) var<storage> patch_instance_offsets: array<vec4<f32>>;
 
 // Commented to avoid re-declaration
 // @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
@@ -260,25 +261,12 @@ struct VertexOut {
     @location(3) camera_distance : f32,
 }
 
-fn generatePatchOffset(instance: u32) -> vec3<f32>
-{
-	const PATCH_GRID_WIDTH = 10u;
-
-	// cone extending from view, with a slope of 1
-	// patches per row is 1, 3, 5, 7, ... , (2 * k + 1), ...
-	let row = u32(-1.0 + sqrt(f32(instance)));
-	let column = i32(instance % (2u * row + 1u)) - i32(row);
-
-	// offset z slightly so missing patches aren't visible, very view dependent so a more general solution is needed
-	return vec3<f32>(f32(column), 0.0, f32(row));
-}
-
 @vertex
 fn rasterizationVertex(@builtin(vertex_index) index : u32, @builtin(instance_index) instance : u32) -> VertexOut
 {
     var output : VertexOut;
 
-    let world_position = vertices[index] + vec4<f32>(2.0 * generatePatchOffset(instance) * u_patch_world_half_extent, 0.0);
+	let world_position = vertices[index] + patch_instance_offsets[instance];
 
     output.position = u_global.camera.proj_view * world_position;
     output.world_normal = world_normals[index].xyz;

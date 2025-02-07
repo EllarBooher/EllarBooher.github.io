@@ -12,9 +12,12 @@ export enum RenderOutput {
 	GBufferNormal,
 	FFTWaveSpectrumGaussianNoise,
 	FFTWaveFourierAmplitude,
-	FFTWaveAmplitude_Dy,
-	FFTWaveAmplitude_Dx_plus_iDz,
-	FFTWaveDisplacement,
+	FFTWaveDy_plus_iDxdz_Amplitude,
+	FFTWaveDx_plus_iDz_Amplitude,
+	FFTWaveDydx_plus_iDydz_Amplitude,
+	FFTWaveDxdx_plus_iDzdz_Amplitude,
+	FFTWaveDx_Dy_Dz_Dxdz_Spatial,
+	FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial,
 }
 
 export interface TimestampQueryInterval {

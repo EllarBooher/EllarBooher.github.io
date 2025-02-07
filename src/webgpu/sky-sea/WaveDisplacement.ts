@@ -253,7 +253,8 @@ export class WaveSurfaceDisplacementPassResources {
 		colorFormat: GPUTextureFormat,
 		normalFormat: GPUTextureFormat,
 		depthFormat: GPUTextureFormat,
-		filterableDisplacementMap: GPUTextureView
+		filterable_Dx_Dy_Dz_Dxdz_Map: GPUTextureView,
+		filterable_Dydx_Dydz_Dxdx_Dzdz_Map: GPUTextureView
 	) {
 		// Grid of vertices + extra quad for ocean horizon
 
@@ -518,6 +519,11 @@ export class WaveSurfaceDisplacementPassResources {
 					visibility: GPUShaderStage.COMPUTE,
 					texture: { sampleType: "float" },
 				},
+				{
+					binding: 2,
+					visibility: GPUShaderStage.COMPUTE,
+					texture: { sampleType: "float" },
+				},
 			],
 		});
 		this.group2Compute = device.createBindGroup({
@@ -532,7 +538,8 @@ export class WaveSurfaceDisplacementPassResources {
 						magFilter: "linear",
 					}),
 				},
-				{ binding: 1, resource: filterableDisplacementMap },
+				{ binding: 1, resource: filterable_Dx_Dy_Dz_Dxdz_Map },
+				{ binding: 2, resource: filterable_Dydx_Dydz_Dxdx_Dzdz_Map },
 			],
 		});
 

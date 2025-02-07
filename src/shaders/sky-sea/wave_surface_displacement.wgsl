@@ -113,11 +113,13 @@ fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distance:
 
 fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>, gerstner: bool) -> WaveDisplacementResult
 {
-	let delta = 0.5 / vec2<f32>(textureDimensions(displacement_map));
+	let delta = 0.5 / vec2<f32>(textureDimensions(Dx_Dy_Dz_Dxdz_spatial));
 
     var output: WaveDisplacementResult;
 
-	output.displacement = textureSampleLevel(displacement_map, displacement_map_sampler, patch_uv, 0).xyz;
+	let Dx_Dy_Dz_Dxdz = textureSampleLevel(Dx_Dy_Dz_Dxdz_spatial, displacement_map_sampler, patch_uv, 0);
+
+	output.displacement = Dx_Dy_Dz_Dxdz.xyz;
 
 	if(!gerstner)
 	{
@@ -125,13 +127,19 @@ fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>, gerstn
 		output.displacement.z = 0.0;
 	}
 
-	// TODO: correct derivatives
+	let Dydx_Dydz_Dxdx_Dzdz = textureSampleLevel(Dydx_Dydz_Dxdx_Dzdz_spatial, displacement_map_sampler, patch_uv, 0);
 
-	let dy_dx = textureSampleLevel(displacement_map, displacement_map_sampler, patch_uv + vec2<f32>(delta.x, 0.0), 0).y - output.displacement.y;
-	let dy_dz = textureSampleLevel(displacement_map, displacement_map_sampler, patch_uv + vec2<f32>(0.0, delta.y), 0).y - output.displacement.y;
+	let Dydx = Dydx_Dydz_Dxdx_Dzdz.x;
+	let Dydz = Dydx_Dydz_Dxdx_Dzdz.y;
 
-	output.tangent = vec3<f32>(0.0, dy_dx, 0.0);
-	output.bitangent = vec3<f32>(0.0, dy_dz, 0.0);
+	let Dxdz = Dx_Dy_Dz_Dxdz.w;
+	let Dzdx = Dxdz;
+
+	var Dxdx = Dydx_Dydz_Dxdx_Dzdz.z * f32(gerstner);
+	var Dzdz = Dydx_Dydz_Dxdx_Dzdz.w * f32(gerstner);
+
+	output.tangent = vec3<f32>(Dxdx, Dydx, Dzdx);
+	output.bitangent = vec3<f32>(Dxdz, Dydz, Dzdz);
 
 	return output;
 }
@@ -160,7 +168,9 @@ struct WaveSurfaceDisplacementUBO
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
 @group(2) @binding(0) var displacement_map_sampler: sampler;
-@group(2) @binding(1) var displacement_map: texture_2d<f32>;
+@group(2) @binding(1) var Dx_Dy_Dz_Dxdz_spatial: texture_2d<f32>;
+// First two channels are needed for general slope, last two channels are needed for gerstner wave slopes (when Dx or Dz are nonzero)
+@group(2) @binding(2) var Dydx_Dydz_Dxdx_Dzdz_spatial: texture_2d<f32>;
 
 @compute @workgroup_size(16, 16, 1)
 fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
@@ -187,7 +197,7 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 	if(u_settings.b_displacement_map == 1u)
 	{
 		let gerstner = u_settings.b_gerstner == 1u;
-		let result: WaveDisplacementResult = sampleMap(displacement_map, displacement_map_sampler, uv, gerstner);
+		let result: WaveDisplacementResult = sampleMap(Dx_Dy_Dz_Dxdz_spatial, displacement_map_sampler, uv, gerstner);
 
 		displaced_position += result.displacement;
 		tangent += result.tangent;

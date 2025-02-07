@@ -128,9 +128,9 @@ fn computeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
     }
 
 	let gaussian_pair = textureLoad(in_gaussian_random_pairs, texel_coord).xy;
-	let wave_parameters = waveParameters(texel_coord);
+	let wave = waveParameters(texel_coord);
 
-	if (abs(wave_parameters.wave_number) < FUNDAMENTAL_WAVE_NUMBER)
+	if (abs(wave.wave_number) < FUNDAMENTAL_WAVE_NUMBER)
 	{
 		let amplitude = vec2<f32>(0.0, 0.0);
 		textureStore(out_fourier_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));
@@ -139,14 +139,14 @@ fn computeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 
 	let peak_frequency = 22.0 * pow(GRAVITY * GRAVITY / (WIND_SPEED_METERS_PER_SECOND * WIND_FETCH_METERS), 1.0 / 3.0);
 
-	let spectrum = waveSpectrumJONSWAP(wave_parameters.frequency, peak_frequency)
-		* waveDirectionalSpreading(wave_parameters.frequency, peak_frequency, wave_parameters.wind_angle);
+	let spectrum = waveSpectrumJONSWAP(wave.frequency, peak_frequency)
+		* waveDirectionalSpreading(wave.frequency, peak_frequency, wave.wind_angle);
 
 	let magnitude = sqrt(
 		2.0
 		* spectrum
-		* (wave_parameters.d_frequency_d_wave_number / wave_parameters.wave_number)
-		* wave_parameters.delta_wave_number * wave_parameters.delta_wave_number
+		* (wave.d_frequency_d_wave_number / wave.wave_number)
+		* wave.delta_wave_number * wave.delta_wave_number
 	);
 
 	let amplitude = inverseSqrt(2.0)
@@ -156,9 +156,26 @@ fn computeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 	textureStore(out_fourier_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));
 }
 
-@group(0) @binding(0) var out_dy_amplitude: texture_storage_2d<rg32float, write>;
-@group(0) @binding(1) var out_packed_dx_plus_idz_amplitude: texture_storage_2d<rg32float, write>;
-@group(0) @binding(2) var in_fourier_amplitude: texture_storage_2d<rg32float, read>;
+
+/*
+ * Capital D refers to displacement of the water surface
+ * Lowercase d refers to partial derivative
+ *
+ * In order to halve the total FFT's we have to perform, we can do the following trick
+ * If we have the following results from the FT:
+ * 		complex f(n) -> purely real a
+ * 		complex g(n) -> purely real b
+ *
+ * Then, by the linearity of the FT over linear combinations of the input function, we have that:
+ *		 complex f(n) + i * g(n) -> a + i * b
+ *
+ * Thus, we can pack two sets of inputs for the FFT into the same two input channels, and avoid a wasted output channel.
+ */
+@group(0) @binding(0) var out_packed_Dy_plus_iDxdz_amplitude: texture_storage_2d<rg32float, write>;
+@group(0) @binding(1) var out_packed_Dx_plus_iDz_amplitude: texture_storage_2d<rg32float, write>;
+@group(0) @binding(2) var out_packed_Dydx_plus_iDydz_amplitude: texture_storage_2d<rg32float, write>;
+@group(0) @binding(3) var out_packed_Dxdx_plus_iDzdz_amplitude: texture_storage_2d<rg32float, write>;
+@group(0) @binding(4) var in_fourier_amplitude: texture_storage_2d<rg32float, read>;
 
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
@@ -171,12 +188,12 @@ fn complexMult(a: vec2<f32>, b: vec2<f32>) -> vec2<f32>
 fn realizeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 {
 	let texel_coord = vec2<u32>(global_id.xy);
-    let size = textureDimensions(out_dy_amplitude);
+    let size = textureDimensions(out_packed_Dy_plus_iDxdz_amplitude);
     if texel_coord.x >= size.x || texel_coord.y >= size.y {
         return;
     }
 
-	let wave_parameters = waveParameters(texel_coord);
+	let wave = waveParameters(texel_coord);
 	let k_amplitude = textureLoad(in_fourier_amplitude, texel_coord).xy;
 
 	let k_minus_coord = vec2<u32>(
@@ -186,40 +203,68 @@ fn realizeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 	let k_minus_amplitude = textureLoad(in_fourier_amplitude, k_minus_coord).xy;
 	let k_minus_amplitude_conjugate = vec2<f32>(k_minus_amplitude.x, -k_minus_amplitude.y);
 
-	let phase = wave_parameters.frequency * u_global.time.time_seconds;
+	let phase = wave.frequency * u_global.time.time_seconds;
 	let exponential = vec2<f32>(cos(phase), sin(phase));
 	let exponential_conjugate = vec2<f32>(exponential.x, -exponential.y);
 
-	let dy_amplitude = complexMult(exponential, k_amplitude) + complexMult(exponential_conjugate, k_minus_amplitude_conjugate);
+	let Dy_amplitude = complexMult(exponential, k_amplitude) + complexMult(exponential_conjugate, k_minus_amplitude_conjugate);
 
-	// For gerstner waves, displacement in x/z directions is based on the gradient
-	// Displacement of h(k,t) * exp(i * dot(k,x))
-	// is i * k(k,t)/k * h(k,t) * exp(i * dot(k,x))
-	// Where i is the imaginary number sqrt(-1)
-	let idy_amplitude = vec2<f32>(-dy_amplitude.y, dy_amplitude.x);
+	/*
+	 * For gerstner waves, displacement in x/z directions is based on the gradient
+	 * (x,z)-Displacement of:
+	 *
+	 * h(k,t) * exp(i * dot(k,x))
+	 * 	= i * k(k,t)/k * h(k,t) * exp(i * dot(k,x))
+	 *
+	 * Where i is the imaginary number sqrt(-1)
+	 *
+	 * We're going to be doing a few derivatives. h(k,t) is independent of (x,z),
+	 * so in general taking the derivative brings down a factor of i * k_x or i * k_z from the exponential
+	 */
 
-	var one_over_wave_number = 1.0 / wave_parameters.wave_number;
-	if (abs(wave_parameters.wave_number) < FUNDAMENTAL_WAVE_NUMBER)
+	let iDy_amplitude = vec2<f32>(-Dy_amplitude.y, Dy_amplitude.x);
+
+	var one_over_wave_number = 1.0 / wave.wave_number;
+	if (abs(wave.wave_number) < FUNDAMENTAL_WAVE_NUMBER)
 	{
 		one_over_wave_number = 1.0;
 		return;
 	}
 
-	let dx_amplitude = idy_amplitude * wave_parameters.wave_vector.x / wave_parameters.wave_number;
-	let dz_amplitude = idy_amplitude * wave_parameters.wave_vector.y / wave_parameters.wave_number;
+	// wave.wave_vector.y here actually refers to the wave-vector's z component, since it is two-channel
 
-	let idz_amplitude = vec2<f32>(-dz_amplitude.y, dz_amplitude.x);
+	let Dx_amplitude = iDy_amplitude * wave.wave_vector.x / wave.wave_number;
+	let Dz_amplitude = iDy_amplitude * wave.wave_vector.y / wave.wave_number;
 
-	textureStore(out_dy_amplitude, texel_coord, vec4<f32>(dy_amplitude, 0.0, 0.0));
-	textureStore(out_packed_dx_plus_idz_amplitude, texel_coord, vec4<f32>(dx_amplitude + idz_amplitude, 0.0, 0.0));
+	let Dxdx_amplitude = -Dy_amplitude * wave.wave_vector.x * wave.wave_vector.x / wave.wave_number;
+	let Dydx_amplitude = iDy_amplitude * wave.wave_vector.x;
+	let Dzdx_amplitude = -Dy_amplitude * wave.wave_vector.x * wave.wave_vector.y / wave.wave_number;
+
+	// Mixed derivative is redundant, since Dxdz = Dzdx
+	// let Dxdz_amplitude = -Dy_amplitude * wave.wave_vector.y * wave.wave_vector.x / wave.wave_number;
+	let Dydz_amplitude = iDy_amplitude * wave.wave_vector.y;
+	let Dzdz_amplitude = -Dy_amplitude * wave.wave_vector.y * wave.wave_vector.y / wave.wave_number;
+
+	let iDxdz_amplitude = vec2<f32>(-Dzdx_amplitude.y, Dzdx_amplitude.x);
+	let iDz_amplitude = vec2<f32>(-Dz_amplitude.y, Dz_amplitude.x);
+	let iDydz_amplitude = vec2<f32>(-Dydz_amplitude.y, Dydz_amplitude.x);
+	let iDzdz_amplitude = vec2<f32>(-Dzdz_amplitude.y, Dzdz_amplitude.x);
+
+	textureStore(out_packed_Dy_plus_iDxdz_amplitude, texel_coord, vec4<f32>(Dy_amplitude + iDxdz_amplitude, 0.0, 0.0));
+	textureStore(out_packed_Dx_plus_iDz_amplitude, texel_coord, vec4<f32>(Dx_amplitude + iDz_amplitude, 0.0, 0.0));
+	textureStore(out_packed_Dydx_plus_iDydz_amplitude, texel_coord, vec4<f32>(Dydx_amplitude + iDydz_amplitude, 0.0, 0.0));
+	textureStore(out_packed_Dxdx_plus_iDzdz_amplitude, texel_coord, vec4<f32>(Dxdx_amplitude + iDzdz_amplitude, 0.0, 0.0));
 }
 
 @group(0) @binding(0) var out_displacement: texture_storage_2d<rgba16float, write>;
-@group(0) @binding(1) var in_displacement_dy_0: texture_storage_2d<rg32float, read>;
-@group(0) @binding(2) var in_displacement_dx_dz: texture_storage_2d<rg32float, read>;
+@group(0) @binding(1) var out_Dydx_Dydz_Dxdx_Dzdz_derivatives: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(2) var in_displacement_Dy_Dxdz: texture_storage_2d<rg32float, read>;
+@group(0) @binding(3) var in_displacement_Dx_Dz: texture_storage_2d<rg32float, read>;
+@group(0) @binding(4) var in_displacement_Dydx_Dydz: texture_storage_2d<rg32float, read>;
+@group(0) @binding(5) var in_displacement_Dxdx_Dzdz: texture_storage_2d<rg32float, read>;
 
 @compute @workgroup_size(16, 16, 1)
-fn fillDisplacementTexture(@builtin(global_invocation_id) global_id: vec3<u32>)
+fn fillSpatialTextures(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
 	let texel_coord = vec2<u32>(global_id.xy);
     let size = textureDimensions(out_displacement);
@@ -227,12 +272,18 @@ fn fillDisplacementTexture(@builtin(global_invocation_id) global_id: vec3<u32>)
         return;
     }
 
-	let dy = textureLoad(in_displacement_dy_0, texel_coord).x;
-	let dx_dz = textureLoad(in_displacement_dx_dz, texel_coord).xy;
-	let dx = dx_dz.x;
-	let dz = dx_dz.y;
+	let Dy_Dxdz = textureLoad(in_displacement_Dy_Dxdz, texel_coord).xy;
+	let Dx_Dz = textureLoad(in_displacement_Dx_Dz, texel_coord).xy;
 
-	let displacement = vec3<f32>(dx, dy, dz);
+	let Dx = Dx_Dz.x;
+	let Dy = Dy_Dxdz.x;
+	let Dz = Dx_Dz.y;
 
-	textureStore(out_displacement, texel_coord, vec4<f32>(displacement, 0.0));
+	let Dxdz = Dy_Dxdz.y;
+
+	let Dydx_Dydz = textureLoad(in_displacement_Dydx_Dydz, texel_coord).xy;
+	let Dxdx_Dzdz = textureLoad(in_displacement_Dxdx_Dzdz, texel_coord).xy;
+
+	textureStore(out_displacement, texel_coord, vec4<f32>(Dx, Dy, Dz, Dxdz));
+	textureStore(out_Dydx_Dydz_Dxdx_Dzdz_derivatives, texel_coord, vec4<f32>(Dydx_Dydz, Dxdx_Dzdz));
 }

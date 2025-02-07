@@ -45,7 +45,7 @@ export const samplesByQueryParam = new Map<string, SampleEntry>([
 			name: "Sky and Sea",
 			description:
 				"Real-time rendering of a dynamic sun over the open ocean, with various models for surface waves and raymarched atmospheric scattering.",
-			requiredLimits: new Map([["maxStorageTexturesPerShaderStage", 5]]),
+			requiredLimits: new Map([["maxStorageTexturesPerShaderStage", 8]]),
 			requiredFeatures: new Set(),
 			optionalFeatures: new Set([
 				"timestamp-query",

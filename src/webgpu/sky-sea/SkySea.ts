@@ -150,11 +150,18 @@ class SkySeaApp implements RendererApp {
 					RenderOutput.FFTWaveSpectrumGaussianNoise,
 				"FFT Wave Initial Amplitude":
 					RenderOutput.FFTWaveFourierAmplitude,
-				"FFT Wave Time-Dependent Amplitude (Dy)":
-					RenderOutput.FFTWaveAmplitude_Dy,
-				"FFT Wave Time-Dependent Amplitude (Dx + i*Dz)":
-					RenderOutput.FFTWaveAmplitude_Dx_plus_iDz,
-				"FFT Wave Displacement": RenderOutput.FFTWaveDisplacement,
+				"FFT Wave Frequency Domain (Dy + i*Dxdz)":
+					RenderOutput.FFTWaveDy_plus_iDxdz_Amplitude,
+				"FFT Wave Frequency Domain (Dx + i*Dz)":
+					RenderOutput.FFTWaveDx_plus_iDz_Amplitude,
+				"FFT Wave Frequency Domain (Dydx + i*Dydz)":
+					RenderOutput.FFTWaveDydx_plus_iDydz_Amplitude,
+				"FFT Wave Frequency Domain (Dxdx + i*Dzdz)":
+					RenderOutput.FFTWaveDxdx_plus_iDzdz_Amplitude,
+				"FFT Wave Spatial Domain (Dx, Dy, Dz, Dxdz)":
+					RenderOutput.FFTWaveDx_Dy_Dz_Dxdz_Spatial,
+				"FFT Wave Spatial Domain (Dydx, Dydz, Dxdx, Dzdx)":
+					RenderOutput.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial,
 			})
 			.name("Render Output")
 			.listen();
@@ -399,21 +406,42 @@ class SkySeaApp implements RendererApp {
 					},
 				],
 				[
-					RenderOutput.FFTWaveAmplitude_Dy,
+					RenderOutput.FFTWaveDy_plus_iDxdz_Amplitude,
 					{
 						flip: false,
 						color_gain: { r: 100.0, g: 100.0, b: 100.0 },
 					},
 				],
 				[
-					RenderOutput.FFTWaveAmplitude_Dx_plus_iDz,
+					RenderOutput.FFTWaveDx_plus_iDz_Amplitude,
 					{
 						flip: false,
 						color_gain: { r: 100.0, g: 100.0, b: 100.0 },
 					},
 				],
 				[
-					RenderOutput.FFTWaveDisplacement,
+					RenderOutput.FFTWaveDydx_plus_iDydz_Amplitude,
+					{
+						flip: false,
+						color_gain: { r: 100.0, g: 100.0, b: 100.0 },
+					},
+				],
+				[
+					RenderOutput.FFTWaveDxdx_plus_iDzdz_Amplitude,
+					{
+						flip: false,
+						color_gain: { r: 100.0, g: 100.0, b: 100.0 },
+					},
+				],
+				[
+					RenderOutput.FFTWaveDx_Dy_Dz_Dxdz_Spatial,
+					{
+						flip: false,
+						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
+					},
+				],
+				[
+					RenderOutput.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial,
 					{
 						flip: false,
 						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
@@ -551,7 +579,8 @@ class SkySeaApp implements RendererApp {
 				this.gbuffer.colorWithDepthInAlpha.format,
 				this.gbuffer.normal.format,
 				this.gbuffer.depth.format,
-				fftWaveViews.displacementView
+				fftWaveViews.Dx_Dy_Dz_Dxdz_SpatialView,
+				fftWaveViews.Dydx_Dydz_Dxdx_Dzdz_DerivativesView
 			);
 
 		const fullscreenQuadIndices = new Uint32Array([0, 1, 2, 0, 2, 3]);
@@ -607,16 +636,28 @@ class SkySeaApp implements RendererApp {
 					fftWaveViews.fourierAmplitudeView,
 				],
 				[
-					RenderOutput.FFTWaveAmplitude_Dy,
-					fftWaveViews.amplitude_Dy_View,
+					RenderOutput.FFTWaveDy_plus_iDxdz_Amplitude,
+					fftWaveViews.Dy_AmplitudeView,
 				],
 				[
-					RenderOutput.FFTWaveAmplitude_Dx_plus_iDz,
-					fftWaveViews.amplitude_Dx_plus_iDz_View,
+					RenderOutput.FFTWaveDx_plus_iDz_Amplitude,
+					fftWaveViews.Dx_plus_iDz_AmplitudeView,
 				],
 				[
-					RenderOutput.FFTWaveDisplacement,
-					fftWaveViews.displacementView,
+					RenderOutput.FFTWaveDydx_plus_iDydz_Amplitude,
+					fftWaveViews.packed_Dydx_plus_iDydz_AmplitudeView,
+				],
+				[
+					RenderOutput.FFTWaveDxdx_plus_iDzdz_Amplitude,
+					fftWaveViews.packed_Dxdx_plus_iDzdz_AmplitudeView,
+				],
+				[
+					RenderOutput.FFTWaveDx_Dy_Dz_Dxdz_Spatial,
+					fftWaveViews.Dx_Dy_Dz_Dxdz_SpatialView,
+				],
+				[
+					RenderOutput.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial,
+					fftWaveViews.Dydx_Dydz_Dxdx_Dzdz_DerivativesView,
 				],
 			]),
 			this.presentFormat

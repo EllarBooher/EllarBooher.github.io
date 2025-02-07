@@ -4,6 +4,7 @@ import { RendererAppConstructor } from "./RendererApp";
 
 export interface SampleEntry {
 	name: string;
+	requiredLimits: ReadonlyMap<keyof GPUSupportedLimits, number>;
 	// GPUAdapter requires all desired features, optional or not, to be provided at creation time. So we track both and fail when any features in requiredFeatures are missing.
 	requiredFeatures: ReadonlySet<GPUFeatureName>;
 	optionalFeatures: ReadonlySet<GPUFeatureName>;
@@ -13,6 +14,7 @@ export interface SampleEntry {
 export const defaultSampleQueryParam = "hello-cube";
 export const defaultSample = {
 	name: "Hello Cube",
+	requiredLimits: new Map(),
 	requiredFeatures: new Set(),
 	optionalFeatures: new Set([
 		"depth-clip-control",
@@ -43,6 +45,7 @@ export const samplesByQueryParam = new Map<string, SampleEntry>([
 			name: "Sky and Sea",
 			description:
 				"Real-time rendering of a dynamic sun over the open ocean, with various models for surface waves and raymarched atmospheric scattering.",
+			requiredLimits: new Map([["maxStorageTexturesPerShaderStage", 5]]),
 			requiredFeatures: new Set(),
 			optionalFeatures: new Set([
 				"timestamp-query",

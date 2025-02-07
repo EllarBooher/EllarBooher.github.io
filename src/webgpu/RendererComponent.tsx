@@ -164,7 +164,8 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 		// Adapter is one-time, and samples can have different feature requirements, so we need to create everything from scratch
 		appLoadingPromiseRef.current = getDevice(
 			sample.requiredFeatures,
-			sample.optionalFeatures
+			sample.optionalFeatures,
+			sample.requiredLimits
 		)
 			.then(
 				({ adapter, device }) => createApp(adapter, device),

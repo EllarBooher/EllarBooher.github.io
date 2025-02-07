@@ -22,7 +22,8 @@ export type RendererAppConstructor = (
 
 export async function getDevice(
 	requiredFeatures: ReadonlySet<GPUFeatureName>,
-	optionalFeatures: ReadonlySet<GPUFeatureName>
+	optionalFeatures: ReadonlySet<GPUFeatureName>,
+	requiredLimits: ReadonlyMap<keyof GPUSupportedLimits, number>
 ): Promise<{ adapter: GPUAdapter; device: GPUDevice }> {
 	console.log("Starting WebGPU");
 	if (!("gpu" in navigator)) {
@@ -72,8 +73,51 @@ export async function getDevice(
 			})
 		);
 		console.log(`Enabling features: '${features.join(`', '`)}'`);
+
+		const satisfiedRequiredLimits = new Map<
+			keyof GPUSupportedLimits,
+			number
+		>();
+		const missingLimits = new Array<{
+			name: keyof GPUSupportedLimits;
+			requestedMinimum: number;
+			supported: number;
+		}>();
+		for (const [name, requestedMinimum] of requiredLimits.entries()) {
+			const supported = adapter.limits[name] as number;
+
+			if (supported >= requestedMinimum) {
+				satisfiedRequiredLimits.set(name, requestedMinimum);
+			} else {
+				missingLimits.push({
+					name: name,
+					requestedMinimum: requestedMinimum,
+					supported: supported,
+				});
+			}
+		}
+		if (satisfiedRequiredLimits.size < requiredLimits.size) {
+			const reason = `Required limits unsatisfied: ${missingLimits
+				.map(
+					(limit) =>
+						`( name: '${limit.name}' supported: '${limit.supported}' requested: '${limit.requestedMinimum}' )`
+				)
+				.join(",")}`;
+			return Promise.reject(
+				new Error("Unable to get WebGPU Device", { cause: reason })
+			);
+		}
+
+		const limits: Record<string, number> = {};
+		for (const [name, limit] of satisfiedRequiredLimits) {
+			limits[name] = limit;
+		}
+
 		return adapter
-			.requestDevice({ requiredFeatures: features })
+			.requestDevice({
+				requiredFeatures: features,
+				requiredLimits: limits,
+			})
 			.catch((reason) => {
 				return Promise.reject(
 					new Error("Unable to get WebGPU Device", { cause: reason })

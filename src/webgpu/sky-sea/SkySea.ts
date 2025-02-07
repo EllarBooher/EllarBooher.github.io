@@ -132,6 +132,7 @@ class SkySeaApp implements RendererApp {
 	dummyFrameCounter: number;
 	probationFrameCounter: number;
 	targetFPS = 0.0;
+	float32Filterable: boolean;
 
 	setupUI(gui: LilGUI) {
 		const outputTextureController = gui
@@ -322,6 +323,9 @@ class SkySeaApp implements RendererApp {
 		time: number
 	) {
 		this.device = device;
+
+		this.float32Filterable = device.features.has("float32-filterable");
+
 		this.presentFormat = presentFormat;
 		this.startTime = time;
 		this.settings = {
@@ -514,7 +518,7 @@ class SkySeaApp implements RendererApp {
 			this.device,
 			MULTISCATTER_LUT_EXTENT,
 			this.transmittanceLUTPassResources.view,
-			true,
+			this.float32Filterable,
 			this.globalUBO
 		);
 
@@ -523,7 +527,7 @@ class SkySeaApp implements RendererApp {
 			SKYVIEW_LUT_EXTENT,
 			this.transmittanceLUTPassResources.view,
 			this.multiscatterLUTPassResources.view,
-			true,
+			this.float32Filterable,
 			this.globalUBO
 		);
 
@@ -562,7 +566,7 @@ class SkySeaApp implements RendererApp {
 			this.transmittanceLUTPassResources.view,
 			this.multiscatterLUTPassResources.view,
 			this.skyviewLUTPassResources.view,
-			true,
+			this.float32Filterable,
 			this.globalUBO
 		);
 
@@ -1135,10 +1139,7 @@ class SkySeaApp implements RendererApp {
 					},
 					{
 						binding: 1,
-						resource: this.device.createSampler({
-							magFilter: "linear",
-							minFilter: "linear",
-						}),
+						resource: this.atmosphereCameraPassResources.lutSampler,
 					},
 					{
 						binding: 2,

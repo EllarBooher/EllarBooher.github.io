@@ -214,7 +214,7 @@ fn realizeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 	textureStore(out_packed_dx_plus_idz_amplitude, texel_coord, vec4<f32>(dx_amplitude + idz_amplitude, 0.0, 0.0));
 }
 
-@group(0) @binding(0) var out_displacement: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(0) var out_displacement: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(1) var in_displacement_dy_0: texture_storage_2d<rg32float, read>;
 @group(0) @binding(2) var in_displacement_dx_dz: texture_storage_2d<rg32float, read>;
 

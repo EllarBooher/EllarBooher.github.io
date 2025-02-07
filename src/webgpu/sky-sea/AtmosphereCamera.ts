@@ -1,7 +1,7 @@
 import { GlobalUBO } from "./UBO";
 import AtmosphereCameraPak from "../../shaders/sky-sea/atmosphere_camera.wgsl";
 
-const ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT: GPUTextureFormat = "rgba32float";
+const ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT: GPUTextureFormat = "rgba16float";
 
 export class AtmosphereCameraPassResources {
 	/*
@@ -18,6 +18,8 @@ export class AtmosphereCameraPassResources {
 		*/
 	group0Layout: GPUBindGroupLayout;
 	group1Layout: GPUBindGroupLayout;
+
+	lutSampler: GPUSampler;
 
 	group0: GPUBindGroup;
 	group1: GPUBindGroup;
@@ -111,6 +113,12 @@ export class AtmosphereCameraPassResources {
 		});
 		this.outputColorView = this.outputColor.createView();
 
+		this.lutSampler = device.createSampler({
+			label: "Atmosphere Camera LUT Sampler",
+			magFilter: filterableLUT ? "linear" : "nearest",
+			minFilter: filterableLUT ? "linear" : "nearest",
+		});
+
 		this.group0 = device.createBindGroup({
 			layout: this.group0Layout,
 			entries: [
@@ -120,10 +128,7 @@ export class AtmosphereCameraPassResources {
 				},
 				{
 					binding: 1,
-					resource: device.createSampler({
-						magFilter: "linear",
-						minFilter: "linear",
-					}),
+					resource: this.lutSampler,
 				},
 				{
 					binding: 2,

@@ -43,8 +43,11 @@ export const samplesByQueryParam = new Map<string, SampleEntry>([
 			name: "Sky and Sea",
 			description:
 				"Real-time rendering of a dynamic sun over the open ocean, with various models for surface waves and raymarched atmospheric scattering.",
-			requiredFeatures: new Set(["float32-filterable"]),
-			optionalFeatures: new Set(["timestamp-query"]),
+			requiredFeatures: new Set(),
+			optionalFeatures: new Set([
+				"timestamp-query",
+				"float32-filterable",
+			]),
 			create: SkySea,
 		},
 	],

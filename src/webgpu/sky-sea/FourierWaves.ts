@@ -11,7 +11,7 @@ const GAUSSIAN_NOISE_FORMAT: GPUTextureFormat = "rg32float";
 
 const FOURIER_AMPLITUDE_FORMAT: GPUTextureFormat = "rg32float";
 const REALIZED_FOURIER_AMPLITUDE_FORMAT: GPUTextureFormat = "rg32float";
-const DISPLACEMENT_FORMAT: GPUTextureFormat = "rgba32float";
+const DISPLACEMENT_FORMAT: GPUTextureFormat = "rgba16float";
 
 /* Box-Muller transform two uniform random numbers to gaussian pair
  * The two values returned are dependent, and should not be used directly as two independent values

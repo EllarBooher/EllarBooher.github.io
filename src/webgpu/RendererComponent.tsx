@@ -171,6 +171,9 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 				(err: Error) => {
 					console.error(err);
 					setErrors([err.message, err.cause?.toString?.() ?? "Unknown Cause"]);
+					// TODO: Differentiate between fatal and nonfatal errors
+					appRef.current = undefined;
+					setInitialized(false);
 				}
 			)
 			.finally(() => {

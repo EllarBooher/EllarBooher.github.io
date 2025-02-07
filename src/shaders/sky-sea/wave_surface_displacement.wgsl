@@ -23,9 +23,9 @@ struct WaveDisplacementResult
     bitangent: vec3<f32>,
 }
 
-fn sampleGerstner(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplacementResult
+fn sampleGerstner(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distance: f32) -> WaveDisplacementResult
 {
-    let wave_amplitude = (1.0 - smoothstep(0.0, u_patch_world_half_extent, length(coords))) * wave.amplitude;
+    let wave_amplitude = (1.0 - smoothstep(0.0, falloff_distance, length(coords))) * wave.amplitude;
     let wave_direction = normalize(wave.direction);
     let wavelength = wave.wavelength;
 
@@ -66,9 +66,9 @@ fn sampleGerstner(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplace
     return output;
 }
 
-fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplacementResult
+fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distance: f32) -> WaveDisplacementResult
 {
-    let wave_amplitude = (1.0 - smoothstep(0.0, u_patch_world_half_extent, length(coords))) * wave.amplitude;
+    let wave_amplitude = (1.0 - smoothstep(0.0, falloff_distance, length(coords))) * wave.amplitude;
     let wave_direction = normalize(wave.direction);
     let wavelength = wave.wavelength;
 
@@ -111,13 +111,19 @@ fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>) -> WaveDisplaceme
     return output;
 }
 
-fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>) -> WaveDisplacementResult
+fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>, gerstner: bool) -> WaveDisplacementResult
 {
 	let delta = 0.5 / vec2<f32>(textureDimensions(displacement_map));
 
     var output: WaveDisplacementResult;
 
 	output.displacement = textureSampleLevel(displacement_map, displacement_map_sampler, patch_uv, 0).xyz;
+
+	if(!gerstner)
+	{
+		output.displacement.x = 0.0;
+		output.displacement.z = 0.0;
+	}
 
 	// TODO: correct derivatives
 
@@ -138,15 +144,17 @@ const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 
 const WAVE_COUNT = 6u;
 
-@id(0) override wave_model: u32 = 1u;
-const WAVE_MODEL_COSINE = 0u;
-const WAVE_MODEL_GERSTNER = 1u;
-const WAVE_MODEL_DISPLACEMENT_MAP = 2u;
+struct WaveSurfaceDisplacementUBO
+{
+	patch_world_half_extent: f32,
+	b_gerstner: u32,
+	b_displacement_map: u32,
+}
 
 // Vertices are in (x,y,z) world coordinates, so during rasterization you must swizzle y <-> z
 @group(0) @binding(0) var<storage, read_write> output_vertices: array<vec4<f32>, VERTEX_COUNT>;
 @group(0) @binding(1) var<storage, read_write> output_world_normals: array<vec4<f32>, VERTEX_COUNT>;
-@group(0) @binding(2) var<uniform> u_patch_world_half_extent: f32;
+@group(0) @binding(2) var<uniform> u_settings: WaveSurfaceDisplacementUBO;
 @group(0) @binding(3) var<uniform> u_waves: array<PlaneWave, WAVE_COUNT>;
 
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
@@ -169,46 +177,41 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 
     let uv = (vec2<f32>(vertex_coord) + vec2<f32>(0.5,0.5)) / vec2<f32>(size);
 
-    let world_position_xz = vec2<f32>(u_patch_world_half_extent) * 2.0 * (uv - vec2<f32>(0.5));
+    let world_position_xz = vec2<f32>(u_settings.patch_world_half_extent) * 2.0 * (uv - vec2<f32>(0.5));
     let time = u_global.time.time_seconds;
 
     var displaced_position = vec3<f32>(world_position_xz.x, WAVE_NEUTRAL_PLANE, world_position_xz.y);
     var tangent = vec3<f32>(1.0, 0.0, 0.0);
     var bitangent = vec3<f32>(0.0, 0.0, 1.0);
 
-	switch wave_model {
-		case WAVE_MODEL_COSINE, WAVE_MODEL_GERSTNER: {
-			for (var i = 0u; i < WAVE_COUNT; i++)
+	if(u_settings.b_displacement_map == 1u)
+	{
+		let gerstner = u_settings.b_gerstner == 1u;
+		let result: WaveDisplacementResult = sampleMap(displacement_map, displacement_map_sampler, uv, gerstner);
+
+		displaced_position += result.displacement;
+		tangent += result.tangent;
+		bitangent += result.bitangent;
+	}
+	else
+	{
+		var result: WaveDisplacementResult;
+
+		for (var i = 0u; i < WAVE_COUNT; i++)
+		{
+			if(u_settings.b_gerstner == 1u)
 			{
-				var result: WaveDisplacementResult;
-
-				switch wave_model {
-					case WAVE_MODEL_COSINE: {
-						result = sampleCosine(u_waves[i], time, world_position_xz);
-					}
-					case WAVE_MODEL_GERSTNER: {
-						result = sampleGerstner(u_waves[i], time, world_position_xz);
-					}
-					default: {
-						result.tangent = vec3<f32>(1.0, 0.0, 0.0);
-						result.bitangent = vec3<f32>(0.0, 0.0, 1.0);
-						result.displacement = vec3<f32>(0.0, 0.0, 0.0);
-					}
-				}
-
-				displaced_position += result.displacement;
-				tangent += result.tangent;
-				bitangent += result.bitangent;
+				result = sampleGerstner(u_waves[i], time, world_position_xz, u_settings.patch_world_half_extent);
 			}
-		}
-		case WAVE_MODEL_DISPLACEMENT_MAP: {
-			let result: WaveDisplacementResult = sampleMap(displacement_map, displacement_map_sampler, uv);
+			else
+			{
+				result = sampleCosine(u_waves[i], time, world_position_xz, u_settings.patch_world_half_extent);
+			}
 
 			displaced_position += result.displacement;
 			tangent += result.tangent;
 			bitangent += result.bitangent;
 		}
-		default: {}
 	}
 
     let vertex_index = vertex_coord.x + vertex_coord.y * VERTEX_DIMENSION;
@@ -221,7 +224,7 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 	if(vertex_coord.x == 0u && vertex_coord.y == 0u)
 	{
 		let index = (VERTEX_DIMENSION - 1u) + (VERTEX_DIMENSION - 1u) * VERTEX_DIMENSION;
-		let offset = vec3<f32>(u_patch_world_half_extent * 2.0, 0.0, u_patch_world_half_extent * 2.0);
+		let offset = vec3<f32>(u_settings.patch_world_half_extent * 2.0, 0.0, u_settings.patch_world_half_extent * 2.0);
     	output_vertices[index] = vec4<f32>(displaced_position + offset, 1.0);
     	output_world_normals[index] = vec4<f32>(world_normal, 0.0);
 	}
@@ -229,7 +232,7 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 	if (vertex_coord.x == 0u)
 	{
 		let index = (VERTEX_DIMENSION - 1u) + (vertex_coord.y) * VERTEX_DIMENSION;
-		let offset = vec3<f32>(u_patch_world_half_extent * 2.0, 0.0, 0.0);
+		let offset = vec3<f32>(u_settings.patch_world_half_extent * 2.0, 0.0, 0.0);
     	output_vertices[index] = vec4<f32>(displaced_position + offset, 1.0);
     	output_world_normals[index] = vec4<f32>(world_normal, 0.0);
 	}
@@ -237,7 +240,7 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 	if (vertex_coord.y == 0u)
 	{
 		let index = vertex_coord.x + (VERTEX_DIMENSION - 1u) * VERTEX_DIMENSION;
-		let offset = vec3<f32>(0.0, 0.0, u_patch_world_half_extent * 2.0);
+		let offset = vec3<f32>(0.0, 0.0, u_settings.patch_world_half_extent * 2.0);
     	output_vertices[index] = vec4<f32>(displaced_position + offset, 1.0);
     	output_world_normals[index] = vec4<f32>(world_normal, 0.0);
 	}
@@ -248,7 +251,7 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 @group(0) @binding(0) var<storage> vertices: array<vec4<f32>, VERTEX_COUNT>;
 @group(0) @binding(1) var<storage> world_normals: array<vec4<f32>, VERTEX_COUNT>;
 // Commented to avoid re-declaration
-// @group(0) @binding(2) var<uniform> u_patch_world_half_extent: f32;
+// @group(0) @binding(2) var<uniform> u_settings: WaveSurfaceDisplacementUBO;
 @group(0) @binding(3) var<storage> patch_instance_offsets: array<vec4<f32>>;
 
 // Commented to avoid re-declaration

@@ -22,9 +22,3 @@ export interface TimestampQueryInterval {
 	beginWriteIndex: GPUSize32;
 	endWriteIndex: GPUSize32;
 }
-
-export enum WaveModel {
-	Cosine,
-	Gerstner,
-	FFTDisplacement,
-}

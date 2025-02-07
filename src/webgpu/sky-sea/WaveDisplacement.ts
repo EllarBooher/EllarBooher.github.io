@@ -1,21 +1,25 @@
 import { mat4, Mat4, Vec2, vec2, vec3, Vec3, Vec4, vec4 } from "wgpu-matrix";
 import { GlobalUBO, UBO } from "./UBO";
 import WaveSurfaceDisplacementPak from "../../shaders/sky-sea/wave_surface_displacement.wgsl";
-import { TimestampQueryInterval, WaveModel } from "./Common";
+import { TimestampQueryInterval } from "./Common";
 
 // vec4<f32>
 const BYTES_PER_PATCH_OFFSET = 16;
 const PATCH_CAPACITY = 1000;
 
-class PatchWorldHalfExtentUBO extends UBO {
+class WaveSurfaceDisplacementUBO extends UBO {
 	public readonly data: {
 		patch_world_half_extent: number;
+		b_gerstner: boolean;
+		b_fft: boolean;
 	} = {
-		patch_world_half_extent: 300.0,
+		patch_world_half_extent: 50.0,
+		b_gerstner: true,
+		b_fft: true,
 	};
 
 	constructor(device: GPUDevice) {
-		const FLOAT_COUNT = 1;
+		const FLOAT_COUNT = 3;
 		super(
 			device,
 			FLOAT_COUNT,
@@ -28,6 +32,8 @@ class PatchWorldHalfExtentUBO extends UBO {
 		const view = new DataView(buffer);
 
 		view.setFloat32(0, this.data.patch_world_half_extent, true);
+		view.setUint32(4, this.data.b_gerstner ? 1 : 0, true);
+		view.setUint32(8, this.data.b_fft ? 1 : 0, true);
 
 		return buffer;
 	}
@@ -223,7 +229,7 @@ export class WaveSurfaceDisplacementPassResources {
 	 */
 	group0Graphics: GPUBindGroup;
 
-	patchWorldHalfExtentBuffer: PatchWorldHalfExtentUBO;
+	settingsUBO: WaveSurfaceDisplacementUBO;
 	patchInstanceOffsetsXYZW: GPUBuffer;
 
 	group1: GPUBindGroup;
@@ -237,9 +243,7 @@ export class WaveSurfaceDisplacementPassResources {
 	indices: GPUBuffer;
 	lodIndices: GPUBuffer;
 
-	displacementCosinePipeline: GPUComputePipeline;
-	displacementGerstnerPipeline: GPUComputePipeline;
-	displacementMapPipeline: GPUComputePipeline;
+	displaceVerticesKernel: GPUComputePipeline;
 
 	surfaceRasterizationPipeline: GPURenderPipeline;
 
@@ -483,7 +487,7 @@ export class WaveSurfaceDisplacementPassResources {
 			label: "Wave Surface Displacement Group 0 Compute",
 		});
 
-		this.patchWorldHalfExtentBuffer = new PatchWorldHalfExtentUBO(device);
+		this.settingsUBO = new WaveSurfaceDisplacementUBO(device);
 
 		this.group0Compute = device.createBindGroup({
 			layout: group0LayoutCompute,
@@ -493,7 +497,7 @@ export class WaveSurfaceDisplacementPassResources {
 				{
 					binding: 2,
 					resource: {
-						buffer: this.patchWorldHalfExtentBuffer.buffer,
+						buffer: this.settingsUBO.buffer,
 					},
 				},
 				{ binding: 3, resource: { buffer: waves } },
@@ -572,7 +576,7 @@ export class WaveSurfaceDisplacementPassResources {
 				{
 					binding: 2,
 					resource: {
-						buffer: this.patchWorldHalfExtentBuffer.buffer,
+						buffer: this.settingsUBO.buffer,
 					},
 				},
 				{
@@ -611,7 +615,7 @@ export class WaveSurfaceDisplacementPassResources {
 			label: "Wave Surface Displacement",
 		});
 
-		this.displacementCosinePipeline = device.createComputePipeline({
+		this.displaceVerticesKernel = device.createComputePipeline({
 			layout: device.createPipelineLayout({
 				bindGroupLayouts: [
 					group0LayoutCompute,
@@ -622,45 +626,8 @@ export class WaveSurfaceDisplacementPassResources {
 			compute: {
 				module: shaderModule,
 				entryPoint: "displaceVertices",
-				constants: {
-					0: 0,
-				},
 			},
-			label: "Wave Surface Displacement Cosine Kernel",
-		});
-		this.displacementGerstnerPipeline = device.createComputePipeline({
-			layout: device.createPipelineLayout({
-				bindGroupLayouts: [
-					group0LayoutCompute,
-					group1Layout,
-					group2LayoutCompute,
-				],
-			}),
-			compute: {
-				module: shaderModule,
-				entryPoint: "displaceVertices",
-				constants: {
-					0: 1,
-				},
-			},
-			label: "Wave Surface Displacement Gerstner Kernel",
-		});
-		this.displacementMapPipeline = device.createComputePipeline({
-			layout: device.createPipelineLayout({
-				bindGroupLayouts: [
-					group0LayoutCompute,
-					group1Layout,
-					group2LayoutCompute,
-				],
-			}),
-			compute: {
-				module: shaderModule,
-				entryPoint: "displaceVertices",
-				constants: {
-					0: 2,
-				},
-			},
-			label: "Wave Surface Displacement Map Kernel",
+			label: "Wave Surface Displacement Displace Vertices Kernel",
 		});
 
 		this.surfaceRasterizationPipeline = device.createRenderPipeline({
@@ -695,13 +662,23 @@ export class WaveSurfaceDisplacementPassResources {
 		commandEncoder: GPUCommandEncoder,
 		globalUBO: GlobalUBO,
 		timestampInterval: TimestampQueryInterval | undefined,
-		waveModel: WaveModel,
+		settings: {
+			gerstner: boolean;
+			fft: boolean;
+		},
 		attachments: {
 			colorWithDepthInAlpha: GPUTextureView;
 			normal: GPUTextureView;
 			depth: GPUTextureView;
 		}
 	) {
+		this.settingsUBO.data.patch_world_half_extent = settings.fft
+			? 50.0
+			: 300.0;
+		this.settingsUBO.data.b_gerstner = settings.gerstner;
+		this.settingsUBO.data.b_fft = settings.fft;
+		this.settingsUBO.writeToGPU(device.queue);
+
 		const displacementPassEncoder = commandEncoder.beginComputePass({
 			label: "Wave Surface Mesh Displacement",
 			timestampWrites:
@@ -714,28 +691,7 @@ export class WaveSurfaceDisplacementPassResources {
 					: undefined,
 		});
 
-		switch (waveModel) {
-			case WaveModel.Cosine:
-				displacementPassEncoder.setPipeline(
-					this.displacementCosinePipeline
-				);
-				this.patchWorldHalfExtentBuffer.data.patch_world_half_extent = 300.0;
-				break;
-			case WaveModel.Gerstner:
-				displacementPassEncoder.setPipeline(
-					this.displacementGerstnerPipeline
-				);
-				this.patchWorldHalfExtentBuffer.data.patch_world_half_extent = 300.0;
-				break;
-			case WaveModel.FFTDisplacement:
-				displacementPassEncoder.setPipeline(
-					this.displacementMapPipeline
-				);
-				this.patchWorldHalfExtentBuffer.data.patch_world_half_extent = 50.0;
-				break;
-		}
-		this.patchWorldHalfExtentBuffer.writeToGPU(device);
-
+		displacementPassEncoder.setPipeline(this.displaceVerticesKernel);
 		displacementPassEncoder.setBindGroup(0, this.group0Compute);
 		displacementPassEncoder.setBindGroup(1, this.group1);
 		displacementPassEncoder.setBindGroup(2, this.group2Compute);
@@ -784,80 +740,69 @@ export class WaveSurfaceDisplacementPassResources {
 		surfaceRasterizationPassEncoder.setBindGroup(1, this.group1);
 		surfaceRasterizationPassEncoder.setIndexBuffer(this.indices, "uint32");
 
-		switch (waveModel) {
-			default:
-			case (WaveModel.Cosine, WaveModel.Gerstner): {
-				surfaceRasterizationPassEncoder.drawIndexed(
-					this.baseIndexCount,
-					1
-				);
-				break;
-			}
-			case WaveModel.FFTDisplacement: {
-				const {
-					patchDrawInstanceByLOD,
-					patchOffsetsPackedSortedByLOD,
-				} = queuePatchLODDrawCommands(this.lodCount, {
+		if (this.settingsUBO.data.b_fft) {
+			const { patchDrawInstanceByLOD, patchOffsetsPackedSortedByLOD } =
+				queuePatchLODDrawCommands(this.lodCount, {
 					invProj: globalUBO.data.camera.invProj,
 					invView: globalUBO.data.camera.invView,
 					position: globalUBO.data.camera.position,
 				});
 
-				device.queue.writeBuffer(
-					this.patchInstanceOffsetsXYZW,
-					0,
-					patchOffsetsPackedSortedByLOD,
-					0,
-					Math.min(
-						this.patchInstanceOffsetsXYZW.size / 4,
-						patchOffsetsPackedSortedByLOD.length
-					)
+			device.queue.writeBuffer(
+				this.patchInstanceOffsetsXYZW,
+				0,
+				patchOffsetsPackedSortedByLOD,
+				0,
+				Math.min(
+					this.patchInstanceOffsetsXYZW.size / 4,
+					patchOffsetsPackedSortedByLOD.length
+				)
+			);
+
+			function computeLODIndexOffset(
+				lod: number,
+				baseIndexCount: number
+			) {
+				// A new index buffer is used starting at lod = 1, so indexing resets there
+				if (lod === 0 || lod === 1) {
+					return 0;
+				}
+
+				let offset = 0;
+				for (let i = 1; i < lod; i++) {
+					offset += baseIndexCount / (1 << (2 * i));
+				}
+				return offset;
+			}
+
+			for (let lod = 0; lod < this.lodCount; lod++) {
+				const lodInstanceData = patchDrawInstanceByLOD.get(lod);
+
+				if (lod == 1) {
+					surfaceRasterizationPassEncoder.setIndexBuffer(
+						this.lodIndices,
+						"uint32"
+					);
+				}
+
+				const indexCount = this.baseIndexCount / (1 << (2 * lod));
+				const indexOffset = computeLODIndexOffset(
+					lod,
+					this.baseIndexCount
 				);
 
-				function computeLODIndexOffset(
-					lod: number,
-					baseIndexCount: number
-				) {
-					// A new index buffer is used starting at lod = 1, so indexing resets there
-					if (lod === 0 || lod === 1) {
-						return 0;
-					}
-
-					let offset = 0;
-					for (let i = 1; i < lod; i++) {
-						offset += baseIndexCount / (1 << (2 * i));
-					}
-					return offset;
-				}
-
-				for (let lod = 0; lod < this.lodCount; lod++) {
-					const lodInstanceData = patchDrawInstanceByLOD.get(lod);
-
-					if (lod == 1) {
-						surfaceRasterizationPassEncoder.setIndexBuffer(
-							this.lodIndices,
-							"uint32"
-						);
-					}
-
-					const indexCount = this.baseIndexCount / (1 << (2 * lod));
-					const indexOffset = computeLODIndexOffset(
-						lod,
-						this.baseIndexCount
-					);
-
-					surfaceRasterizationPassEncoder.drawIndexed(
-						indexCount,
-						lodInstanceData?.count,
-						indexOffset,
-						0,
-						lodInstanceData?.instanceOffset
-					);
-				}
-
-				break;
+				surfaceRasterizationPassEncoder.drawIndexed(
+					indexCount,
+					lodInstanceData?.count,
+					indexOffset,
+					0,
+					lodInstanceData?.instanceOffset
+				);
 			}
+		} else {
+			surfaceRasterizationPassEncoder.drawIndexed(this.baseIndexCount, 1);
 		}
+
 		surfaceRasterizationPassEncoder.end();
 	}
 }

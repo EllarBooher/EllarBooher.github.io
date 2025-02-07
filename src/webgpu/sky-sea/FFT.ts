@@ -80,7 +80,7 @@ export class DFFTResources {
 		this.parametersUBO.data.size = gridSize;
 		this.parametersUBO.data.b_inverse = false;
 
-		this.parametersUBO.writeToGPU(device);
+		this.parametersUBO.writeToGPU(device.queue);
 
 		const TWO_POINT_DFT_SIZE_BYTES = 16;
 		this.intermediateDFTs = device.createBuffer({
@@ -297,7 +297,7 @@ export class DFFTResources {
 		});
 
 		this.parametersUBO.data.b_inverse = true;
-		this.parametersUBO.writeToGPU(device);
+		this.parametersUBO.writeToGPU(device.queue);
 
 		const commandEncoder = device.createCommandEncoder({
 			label: "DFFT Precompute",
@@ -380,7 +380,7 @@ export class DFFTResources {
 		}
 
 		this.parametersUBO.data.b_inverse = inverse;
-		this.parametersUBO.writeToGPU(device);
+		this.parametersUBO.writeToGPU(device.queue);
 
 		const gridSize = this.parametersUBO.data.size;
 

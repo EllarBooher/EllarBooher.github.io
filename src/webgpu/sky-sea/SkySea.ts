@@ -2,7 +2,7 @@ import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { RendererApp, RendererAppConstructor } from "../RendererApp.ts";
 import { mat4, vec3, vec4 } from "wgpu-matrix";
 import { GlobalUBO } from "./UBO.ts";
-import { Extent2D, RenderOutput, WaveModel } from "./Common.ts";
+import { Extent2D, RenderOutput } from "./Common.ts";
 
 import { GBuffer } from "./GBuffer.ts";
 import { TransmittanceLUTPassResources } from "./TransmittanceLUT.ts";
@@ -84,7 +84,10 @@ class SkySeaApp implements RendererApp {
 
 	settings: {
 		outputTexture: RenderOutput;
-		oceanWaveModel: WaveModel;
+		oceanWaveSettings: {
+			gerstner: boolean;
+			fft: boolean;
+		};
 		outputTextureSettings: Map<
 			RenderOutput,
 			OutputTexturePostProcessSettings
@@ -168,11 +171,12 @@ class SkySeaApp implements RendererApp {
 			.name("Average FPS")
 			.listen();
 
-		gui.add(this.settings, "oceanWaveModel", {
-			Cosine: WaveModel.Cosine,
-			Gerstner: WaveModel.Gerstner,
-			"FFT Waves": WaveModel.FFTDisplacement,
-		}).name("Ocean Wave Model");
+		gui.add(this.settings.oceanWaveSettings, "gerstner").name(
+			"Gerstner Waves"
+		);
+		gui.add(this.settings.oceanWaveSettings, "fft").name(
+			"FFT Accelerated Waves"
+		);
 
 		const sunFolder = gui.addFolder("Sun Parameters").open();
 
@@ -330,7 +334,10 @@ class SkySeaApp implements RendererApp {
 		this.startTime = time;
 		this.settings = {
 			outputTexture: RenderOutput.Scene,
-			oceanWaveModel: WaveModel.FFTDisplacement,
+			oceanWaveSettings: {
+				gerstner: true,
+				fft: true,
+			},
 			outputTextureSettings: new Map<
 				RenderOutput,
 				OutputTexturePostProcessSettings
@@ -503,8 +510,8 @@ class SkySeaApp implements RendererApp {
 		this.dummyFrameCounter = 10.0;
 		this.probationFrameCounter = 100.0;
 
-		this.globalUBO = new GlobalUBO(device);
-		this.globalUBO.writeToGPU(this.device);
+		this.globalUBO = new GlobalUBO(this.device);
+		this.globalUBO.writeToGPU(this.device.queue);
 
 		this.gbuffer = new GBuffer(device, { width: 1, height: 1 });
 
@@ -778,7 +785,7 @@ class SkySeaApp implements RendererApp {
 		this.updateTime(deltaTimeMilliseconds);
 		this.updateOrbit(deltaTimeMilliseconds);
 
-		this.globalUBO.writeToGPU(this.device);
+		this.globalUBO.writeToGPU(this.device.queue);
 
 		const clearColor = { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
 
@@ -821,7 +828,10 @@ class SkySeaApp implements RendererApp {
 						endWriteIndex: timestampQueryIndex++,
 				  }
 				: undefined,
-			this.settings.oceanWaveModel,
+			{
+				gerstner: this.settings.oceanWaveSettings.gerstner,
+				fft: this.settings.oceanWaveSettings.fft,
+			},
 			{
 				colorWithDepthInAlpha: this.gbuffer.colorWithDepthInAlphaView,
 				normal: this.gbuffer.normalView,
@@ -974,7 +984,7 @@ class SkySeaApp implements RendererApp {
 				vertex_scale: vec4.create(1.0, 1.0, 1.0, 1.0),
 			};
 		}
-		this.fullscreenQuadPassResources.ubo.writeToGPU(this.device);
+		this.fullscreenQuadPassResources.ubo.writeToGPU(this.device.queue);
 		fullscreenPassEncoder.setBindGroup(
 			1,
 			this.fullscreenQuadPassResources.group1

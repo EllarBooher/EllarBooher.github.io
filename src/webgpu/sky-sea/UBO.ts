@@ -17,7 +17,7 @@ export abstract class UBO {
 
 	protected abstract packed(): ArrayBuffer;
 
-	public writeToGPU(device: GPUDevice) {
+	public writeToGPU(queue: GPUQueue) {
 		const values = this.packed();
 
 		if (values.byteLength != this.buffer.size) {
@@ -26,7 +26,7 @@ export abstract class UBO {
 			);
 		}
 
-		device.queue.writeBuffer(this.buffer, 0, values);
+		queue.writeBuffer(this.buffer, 0, values);
 	}
 }
 

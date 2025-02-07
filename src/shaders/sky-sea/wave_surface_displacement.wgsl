@@ -132,7 +132,7 @@ fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>, gerstn
 	let Dydx = Dydx_Dydz_Dxdx_Dzdz.x;
 	let Dydz = Dydx_Dydz_Dxdx_Dzdz.y;
 
-	let Dxdz = Dx_Dy_Dz_Dxdz.w;
+	let Dxdz = Dx_Dy_Dz_Dxdz.w * f32(gerstner);
 	let Dzdx = Dxdz;
 
 	var Dxdx = Dydx_Dydz_Dxdx_Dzdz.z * f32(gerstner);

@@ -119,6 +119,7 @@ interface Camera {
 	invView: Mat4;
 	projView: Mat4;
 	position: Vec4;
+	forward: Vec4;
 }
 
 interface Time {
@@ -169,6 +170,7 @@ export class GlobalUBO extends UBO {
 			invView: mat4.identity(),
 			projView: mat4.identity(),
 			position: vec4.create(0.0, 0.0, 0.0, 1.0),
+			forward: vec4.create(0.0, 0.0, -1.0, 0.0),
 		},
 		time: {
 			timeSeconds: 0.0,
@@ -182,7 +184,7 @@ export class GlobalUBO extends UBO {
 	protected override packed(): Float32Array {
 		const vec3_zeroed = new Float32Array(3).fill(0.0);
 		const vec4_zeroed = new Float32Array(4).fill(0.0);
-		const mat3x4_zeroed = new Float32Array(4 * 3).fill(0.0);
+		const mat2x4_zeroed = new Float32Array(4 * 2).fill(0.0);
 
 		const atmosphere = this.data.atmosphere;
 		const rayleigh = atmosphere.rayleighMm;
@@ -222,7 +224,8 @@ export class GlobalUBO extends UBO {
 			...camera.invView,
 			...camera.projView,
 			...camera.position,
-			...mat3x4_zeroed,
+			...camera.forward,
+			...mat2x4_zeroed,
 		]);
 
 		const time = this.data.time;

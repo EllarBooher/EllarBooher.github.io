@@ -695,7 +695,7 @@ class SkySeaApp implements RendererApp {
 		const perspective = mat4.perspective(fov, aspectRatio, near, far);
 
 		const camera_pos = [0, 10, -20];
-		const view = mat4.lookAt(camera_pos, [0, 0, 400], [0, 1, 0]);
+		const view = mat4.lookAt(camera_pos, [0, 0, 10], [0, 1, 0]);
 
 		Object.assign(this.globalUBO.data.camera, {
 			invProj: mat4.inverse(perspective),
@@ -803,7 +803,6 @@ class SkySeaApp implements RendererApp {
 		this.waveSurfaceDisplacementPassResources.record(
 			this.device,
 			commandEncoder,
-			this.globalUBO,
 			this.frametimeQuery !== undefined
 				? {
 						querySet: this.frametimeQuery.querySet,

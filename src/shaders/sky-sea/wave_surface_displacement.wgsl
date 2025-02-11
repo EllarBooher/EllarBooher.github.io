@@ -2,17 +2,38 @@
 
 //// INCLUDE types.inc.wgsl
 
-/* --- begin ocean mesh displacement --- */
-
-const WATER_COLOR = vec3<f32>(1.0 / 255.0, 123.0 / 255.0, 146.0 / 255.0);
-const WAVE_NEUTRAL_PLANE = 1.0;
-
 struct PlaneWave
 {
     direction: vec2<f32>,
     amplitude: f32,
     wavelength: f32,
 }
+
+struct WaveSurfaceDisplacementUBO
+{
+	patch_world_half_extent: f32,
+	b_gerstner: u32,
+	b_displacement_map: u32,
+}
+
+@group(0) @binding(0) var<uniform> u_settings: WaveSurfaceDisplacementUBO;
+@group(0) @binding(1) var<uniform> u_global: GlobalUBO;
+
+@group(1) @binding(0) var displacement_map_sampler: sampler;
+@group(1) @binding(1) var Dx_Dy_Dz_Dxdz_spatial: texture_2d<f32>;
+@group(1) @binding(2) var Dydx_Dydz_Dxdx_Dzdz_spatial: texture_2d<f32>;
+@group(1) @binding(3) var<uniform> u_waves: array<PlaneWave, WAVE_COUNT>;
+
+// Extra 1 for tiling
+const VERTEX_DIMENSION = 2048u + 1u;
+const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
+// const TRIANGLE_COUNT = 2u * (VERTEX_DIMENSION - 1u) * (VERTEX_DIMENSION - 1u);
+// const INDEX_COUNT = 3u * TRIANGLE_COUNT;
+
+const WAVE_COUNT = 12u;
+
+const WATER_COLOR = vec3<f32>(1.0 / 255.0, 123.0 / 255.0, 146.0 / 255.0);
+const WAVE_NEUTRAL_PLANE = 1.0;
 
 // When sampling multiple waves, these properties should be summed since we assume waves add linearly
 // The gradient distributes linearly, so sum all tangents and bitangent before crossing to produce normal
@@ -111,13 +132,13 @@ fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distance:
     return output;
 }
 
-fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>, gerstner: bool) -> WaveDisplacementResult
+fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>, gerstner: bool, lod: u32) -> WaveDisplacementResult
 {
 	let delta = 0.5 / vec2<f32>(textureDimensions(Dx_Dy_Dz_Dxdz_spatial));
 
     var output: WaveDisplacementResult;
 
-	let Dx_Dy_Dz_Dxdz = textureSampleLevel(Dx_Dy_Dz_Dxdz_spatial, displacement_map_sampler, patch_uv, 0);
+	let Dx_Dy_Dz_Dxdz = textureSampleLevel(Dx_Dy_Dz_Dxdz_spatial, displacement_map_sampler, patch_uv, f32(lod));
 
 	output.displacement = Dx_Dy_Dz_Dxdz.xyz;
 
@@ -127,7 +148,7 @@ fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>, gerstn
 		output.displacement.z = 0.0;
 	}
 
-	let Dydx_Dydz_Dxdx_Dzdz = textureSampleLevel(Dydx_Dydz_Dxdx_Dzdz_spatial, displacement_map_sampler, patch_uv, 0);
+	let Dydx_Dydz_Dxdx_Dzdz = textureSampleLevel(Dydx_Dydz_Dxdx_Dzdz_spatial, displacement_map_sampler, patch_uv, f32(lod));
 
 	let Dydx = Dydx_Dydz_Dxdx_Dzdz.x;
 	let Dydz = Dydx_Dydz_Dxdx_Dzdz.y;
@@ -144,60 +165,24 @@ fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>, gerstn
 	return output;
 }
 
-// Extra 1 for tiling
-const VERTEX_DIMENSION = 1024u + 1u;
-const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
-// const TRIANGLE_COUNT = 2u * (VERTEX_DIMENSION - 1u) * (VERTEX_DIMENSION - 1u);
-// const INDEX_COUNT = 3u * TRIANGLE_COUNT;
-
-const WAVE_COUNT = 12u;
-
-struct WaveSurfaceDisplacementUBO
+struct DisplacementResult
 {
-	patch_world_half_extent: f32,
-	b_gerstner: u32,
-	b_displacement_map: u32,
+	world_position: vec3<f32>,
+	world_normal: vec3<f32>,
 }
 
-// Vertices are in (x,y,z) world coordinates, so during rasterization you must swizzle y <-> z
-@group(0) @binding(0) var<storage, read_write> output_vertices: array<vec4<f32>, VERTEX_COUNT>;
-@group(0) @binding(1) var<storage, read_write> output_world_normals: array<vec4<f32>, VERTEX_COUNT>;
-@group(0) @binding(2) var<uniform> u_settings: WaveSurfaceDisplacementUBO;
-@group(0) @binding(3) var<uniform> u_waves: array<PlaneWave, WAVE_COUNT>;
-
-@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
-
-@group(2) @binding(0) var displacement_map_sampler: sampler;
-@group(2) @binding(1) var Dx_Dy_Dz_Dxdz_spatial: texture_2d<f32>;
-// First two channels are needed for general slope, last two channels are needed for gerstner wave slopes (when Dx or Dz are nonzero)
-@group(2) @binding(2) var Dydx_Dydz_Dxdx_Dzdz_spatial: texture_2d<f32>;
-
-@compute @workgroup_size(16, 16, 1)
-fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
+fn computeDisplacement(in_world_position: vec3<f32>, time: f32, lod: u32) -> DisplacementResult
 {
-    let vertex_coord = vec2<u32>(global_id.xy);
-
-	// Offset size so uv doesn't extend to duplicated edge
-    let size = vec2<u32>(VERTEX_DIMENSION - 1u);
-
-    if(vertex_coord.x >= size.x || vertex_coord.y >= size.y)
-    {
-        return;
-    }
-
-    let uv = (vec2<f32>(vertex_coord) + vec2<f32>(0.5,0.5)) / vec2<f32>(size);
-
-    let world_position_xz = vec2<f32>(u_settings.patch_world_half_extent) * 2.0 * (uv - vec2<f32>(0.5));
-    let time = u_global.time.time_seconds;
-
-    var displaced_position = vec3<f32>(world_position_xz.x, WAVE_NEUTRAL_PLANE, world_position_xz.y);
+	var displaced_position = in_world_position;
     var tangent = vec3<f32>(1.0, 0.0, 0.0);
     var bitangent = vec3<f32>(0.0, 0.0, 1.0);
+
+    let uv = (in_world_position.xz + vec2<f32>(0.5,0.5)) / (2.0 * u_settings.patch_world_half_extent);
 
 	if(u_settings.b_displacement_map == 1u)
 	{
 		let gerstner = u_settings.b_gerstner == 1u;
-		let result: WaveDisplacementResult = sampleMap(Dx_Dy_Dz_Dxdz_spatial, displacement_map_sampler, uv, gerstner);
+		let result: WaveDisplacementResult = sampleMap(Dx_Dy_Dz_Dxdz_spatial, displacement_map_sampler, uv, gerstner, lod);
 
 		displaced_position += result.displacement;
 		tangent += result.tangent;
@@ -211,11 +196,11 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 		{
 			if(u_settings.b_gerstner == 1u)
 			{
-				result = sampleGerstner(u_waves[i], time, world_position_xz, u_settings.patch_world_half_extent);
+				result = sampleGerstner(u_waves[i], time, in_world_position.xz, u_settings.patch_world_half_extent);
 			}
 			else
 			{
-				result = sampleCosine(u_waves[i], time, world_position_xz, u_settings.patch_world_half_extent);
+				result = sampleCosine(u_waves[i], time, in_world_position.xz, u_settings.patch_world_half_extent);
 			}
 
 			displaced_position += result.displacement;
@@ -224,48 +209,33 @@ fn displaceVertices(@builtin(global_invocation_id) global_id : vec3<u32>,)
 		}
 	}
 
-    let vertex_index = vertex_coord.x + vertex_coord.y * VERTEX_DIMENSION;
-    output_vertices[vertex_index] = vec4<f32>(displaced_position, 1.0);
+	var result: DisplacementResult;
+	result.world_position = displaced_position;
+	result.world_normal = -normalize(cross(tangent, bitangent));
 
-    let world_normal = -normalize(cross(tangent, bitangent));
-    output_world_normals[vertex_index] = vec4<f32>(world_normal, 0.0);
-
-	// We need to fill in the edge so the mesh tiles properly
-	if(vertex_coord.x == 0u && vertex_coord.y == 0u)
-	{
-		let index = (VERTEX_DIMENSION - 1u) + (VERTEX_DIMENSION - 1u) * VERTEX_DIMENSION;
-		let offset = vec3<f32>(u_settings.patch_world_half_extent * 2.0, 0.0, u_settings.patch_world_half_extent * 2.0);
-    	output_vertices[index] = vec4<f32>(displaced_position + offset, 1.0);
-    	output_world_normals[index] = vec4<f32>(world_normal, 0.0);
-	}
-
-	if (vertex_coord.x == 0u)
-	{
-		let index = (VERTEX_DIMENSION - 1u) + (vertex_coord.y) * VERTEX_DIMENSION;
-		let offset = vec3<f32>(u_settings.patch_world_half_extent * 2.0, 0.0, 0.0);
-    	output_vertices[index] = vec4<f32>(displaced_position + offset, 1.0);
-    	output_world_normals[index] = vec4<f32>(world_normal, 0.0);
-	}
-
-	if (vertex_coord.y == 0u)
-	{
-		let index = vertex_coord.x + (VERTEX_DIMENSION - 1u) * VERTEX_DIMENSION;
-		let offset = vec3<f32>(0.0, 0.0, u_settings.patch_world_half_extent * 2.0);
-    	output_vertices[index] = vec4<f32>(displaced_position + offset, 1.0);
-    	output_world_normals[index] = vec4<f32>(world_normal, 0.0);
-	}
+	return result;
 }
 
-/* --- begin surface rasterization --- */
+struct RayPlaneHit {
+	hit: bool,
+	t: f32,
+}
 
-@group(0) @binding(0) var<storage> vertices: array<vec4<f32>, VERTEX_COUNT>;
-@group(0) @binding(1) var<storage> world_normals: array<vec4<f32>, VERTEX_COUNT>;
-// Commented to avoid re-declaration
-// @group(0) @binding(2) var<uniform> u_settings: WaveSurfaceDisplacementUBO;
-@group(0) @binding(3) var<storage> patch_instance_offsets: array<vec4<f32>>;
+fn rayPlaneIntersection(
+	ray_origin: vec3<f32>,
+	ray_direction: vec3<f32>,
+	plane_origin: vec3<f32>,
+	plane_normal: vec3<f32>
+) -> RayPlaneHit
+{
+	var result: RayPlaneHit;
 
-// Commented to avoid re-declaration
-// @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+	let perp = dot(plane_normal, ray_direction);
+	result.t = dot(plane_origin - ray_origin, plane_normal) / perp;
+	result.hit = (abs(perp) > 0.00001) && (result.t > 0.0);
+
+	return result;
+}
 
 struct VertexOut {
     @builtin(position) position : vec4<f32>,
@@ -274,17 +244,62 @@ struct VertexOut {
     @location(3) camera_distance : f32,
 }
 
+/*
+ * Projects a grid of vertices with evenly distributed screen space coordinates
+ */
 @vertex
-fn rasterizationVertex(@builtin(vertex_index) index : u32, @builtin(instance_index) instance : u32) -> VertexOut
+fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 {
-    var output : VertexOut;
+	var output : VertexOut;
 
-	let world_position = vertices[index] + patch_instance_offsets[instance];
+	let camera = u_global.camera;
 
-    output.position = u_global.camera.proj_view * world_position;
-    output.world_normal = world_normals[index].xyz;
-    output.color = vec3<f32>(WATER_COLOR);
-    output.camera_distance = distance(u_global.camera.position, world_position);
+	let vert_coord = vec2<f32>(
+		f32(index % VERTEX_DIMENSION),
+		f32(index / VERTEX_DIMENSION)
+	) / f32(VERTEX_DIMENSION - 1u);
+
+	let overlap = vec2<f32>(1.5);
+
+	/*
+	 * This assumes:
+	 *  - the camera has no roll, so the horizon is flat in NDC space and extends to y=-1
+	 *  - the horizon is visible
+	 */
+	let ndc_horizon_forward = (camera.proj_view * vec4<f32>(camera.forward.x, 0.0, camera.forward.z, 0.0));
+
+	let ndc_min = vec2<f32>(-overlap.x, -overlap.y);
+	let ndc_max = vec2<f32>(overlap.x, ndc_horizon_forward.y / ndc_horizon_forward.w);
+
+	let ndc_space_coord = mix(ndc_min, ndc_max, vert_coord);
+
+    let near_plane_depth = 1.0;
+    let direction_view_space = camera.inv_proj * vec4(ndc_space_coord, near_plane_depth, 1.0);
+    let direction_world = normalize((camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
+
+	let ocean_origin = vec3<f32>(0.0, WAVE_NEUTRAL_PLANE, 0.0);
+	let ocean_normal = vec3<f32>(0.0,1.0,0.0);
+	let ocean_plane_hit = rayPlaneIntersection(camera.position.xyz, direction_world, ocean_origin, ocean_normal);
+	// We assume the camera is nice, and that our manipulation of uv above guarantees a hit
+	// assert(ocean_plane_hit.hit)
+
+	var in_world_position = camera.position.xyz + ocean_plane_hit.t * direction_world;
+	// Snap to plane
+	in_world_position.y = WAVE_NEUTRAL_PLANE;
+
+	const LOD = 0u;
+	let displacement_result = computeDisplacement(in_world_position, u_global.time.time_seconds, LOD);
+
+	let world_position = displacement_result.world_position;
+
+    output.position = u_global.camera.proj_view * vec4<f32>(world_position, 1.0);
+	output.world_normal = displacement_result.world_normal;
+	output.color = vec3<f32>(WATER_COLOR);
+
+	// Test screen-space density of vertices
+	// output.color = vec3<f32>(step(fract(50 * ndc_space_coord), vec2<f32>(0.1)),0.0);
+
+    output.camera_distance = distance(u_global.camera.position.xyz, world_position);
 
     return output;
 }

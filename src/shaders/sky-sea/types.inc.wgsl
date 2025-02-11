@@ -48,7 +48,8 @@ struct Camera
 	proj_view: mat4x4<f32>,
 
     position: vec4<f32>,
-	padding0: mat3x4<f32>,
+	forward: vec4<f32>,
+	padding0: mat2x4<f32>,
 }
 
 // Sizeof(Time) = 16

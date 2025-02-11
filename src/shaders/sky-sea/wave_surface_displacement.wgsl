@@ -266,6 +266,17 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	 *  - the camera has no roll, so the horizon is flat in NDC space and extends to y=-1
 	 *  - the horizon is visible
 	 */
+
+	/* Enable this when camera moves too high, and horizon drops more than a pixel or two
+	const METERS_PER_MM = 1000000.0;
+	let atmosphere = u_global.atmosphere;
+
+    let origin = vec3<f32>(0.0, atmosphere.planet_radius_Mm, 0.0) + camera.position.xyz / METERS_PER_MM;
+    let sin_horizon: f32 = atmosphere.planet_radius_Mm / length(origin);
+    let cos_horizon: f32 = -safeSqrt(1.0 - sin_horizon * sin_horizon);
+	let ndc_horizon_forward = (camera.proj_view * vec4<f32>(camera.forward.x, 0.0, camera.forward.z, 0.0));
+	*/
+
 	let ndc_horizon_forward = (camera.proj_view * vec4<f32>(camera.forward.x, 0.0, camera.forward.z, 0.0));
 
 	let ndc_min = vec2<f32>(-overlap.x, -overlap.y);
@@ -282,22 +293,27 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	let ocean_plane_hit = rayPlaneIntersection(camera.position.xyz, direction_world, ocean_origin, ocean_normal);
 	// We assume the camera is nice, and that our manipulation of uv above guarantees a hit
 	// assert(ocean_plane_hit.hit)
+	var t = mix(1000.0, ocean_plane_hit.t, f32(ocean_plane_hit.hit));
 
-	var in_world_position = camera.position.xyz + ocean_plane_hit.t * direction_world;
-	// Snap to plane
+	var in_world_position = camera.position.xyz + t * direction_world;
 	in_world_position.y = WAVE_NEUTRAL_PLANE;
 
-	const LOD = 0u;
-	let displacement_result = computeDisplacement(in_world_position, u_global.time.time_seconds, LOD);
+	const max_lod = 4u;
+	const lod_scale_meters = 350.0;
+	let lod: u32 = min(max_lod, u32(t / lod_scale_meters));
+	let displacement_result = computeDisplacement(in_world_position, u_global.time.time_seconds, lod);
 
 	let world_position = displacement_result.world_position;
 
     output.position = u_global.camera.proj_view * vec4<f32>(world_position, 1.0);
+	// Unclipped depth didn't work (and requires a feature) so this is a workaround
+	output.position.z /= 1.001;
 	output.world_normal = displacement_result.world_normal;
 	output.color = vec3<f32>(WATER_COLOR);
 
 	// Test screen-space density of vertices
 	// output.color = vec3<f32>(step(fract(50 * ndc_space_coord), vec2<f32>(0.1)),0.0);
+ 	// output.color = vec3<f32>(step(fract(1.0 * world_position.x), 0.05),0.0,0.0);
 
     output.camera_distance = distance(u_global.camera.position.xyz, world_position);
 

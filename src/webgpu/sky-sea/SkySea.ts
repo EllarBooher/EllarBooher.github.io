@@ -386,7 +386,7 @@ class SkySeaApp implements RendererApp {
 			>(),
 			currentRenderOutputTransform: new RenderOutputTransform(),
 			orbit: {
-				timeHours: 5.5,
+				timeHours: 5.6,
 				timeSpeedupFactor: 400.0,
 				paused: false,
 				reversed: false,

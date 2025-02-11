@@ -2,7 +2,11 @@ import FourierWavesShaderPak from "../../shaders/sky-sea/fourier_waves.wgsl";
 
 import { GlobalUBO } from "./UBO.ts";
 import { DFFTResources } from "./FFT.ts";
-import { TimestampQueryInterval } from "./Common.ts";
+import { RenderOutputTexture, TimestampQueryInterval } from "./Common.ts";
+import {
+	MipMapGenerationPassResources,
+	MipMapGenerationTextureBindings,
+} from "./MipMap.ts";
 
 // The dimension of the fourier grid, i.e., the sqrt of the number of unique waves for our discrete fourier transform
 const GRID_SIZE = 512;
@@ -33,15 +37,52 @@ function randGaussian2DBoxMuller() {
 	return [z_0, z_1];
 }
 
-export interface FFTWaveSpectrumResourcesViews {
-	gaussianNoiseView: GPUTextureView;
-	fourierAmplitudeView: GPUTextureView;
-	Dy_AmplitudeView: GPUTextureView;
-	Dx_plus_iDz_AmplitudeView: GPUTextureView;
-	packed_Dydx_plus_iDydz_AmplitudeView: GPUTextureView;
-	packed_Dxdx_plus_iDzdz_AmplitudeView: GPUTextureView;
-	Dx_Dy_Dz_Dxdz_SpatialView: GPUTextureView;
-	Dydx_Dydz_Dxdx_Dzdz_DerivativesView: GPUTextureView;
+export interface FFTWaveSpectrumRenderables {
+	gaussianNoise: RenderOutputTexture;
+	fourierAmplitude: RenderOutputTexture;
+	Dy_Amplitude: RenderOutputTexture;
+	Dx_plus_iDz_Amplitude: RenderOutputTexture;
+	packed_Dydx_plus_iDydz_Amplitude: RenderOutputTexture;
+	packed_Dxdx_plus_iDzdz_Amplitude: RenderOutputTexture;
+	Dx_Dy_Dz_Dxdz_Spatial: RenderOutputTexture;
+	Dydx_Dydz_Dxdx_Dzdz_Spatial: RenderOutputTexture;
+}
+
+export class FFTWaveDisplacementMaps {
+	private Dx_Dy_Dz_Dxdz_Spatial: GPUTexture;
+	private Dydx_Dydz_Dxdx_Dzdz_Spatial: GPUTexture;
+
+	get mipLevelCount() {
+		return this.Dx_Dy_Dz_Dxdz_Spatial.mipLevelCount;
+	}
+	readonly Dx_Dy_Dz_Dxdz_SpatialAllMips: GPUTextureView;
+	readonly Dydx_Dydz_Dxdx_Dzdz_SpatialAllMips: GPUTextureView;
+
+	constructor(
+		Dx_Dy_Dz_Dxdz_Spatial: GPUTexture,
+		Dydx_Dydz_Dxdx_Dzdz_Spatial: GPUTexture
+	) {
+		if (
+			Dx_Dy_Dz_Dxdz_Spatial.mipLevelCount !=
+			Dydx_Dydz_Dxdx_Dzdz_Spatial.mipLevelCount
+		) {
+			console.warn(
+				`FFT Displacement maps do not have identical mip levels. ${Dx_Dy_Dz_Dxdz_Spatial.mipLevelCount} vs ${Dydx_Dydz_Dxdx_Dzdz_Spatial.mipLevelCount}`
+			);
+		}
+
+		this.Dx_Dy_Dz_Dxdz_Spatial = Dx_Dy_Dz_Dxdz_Spatial;
+		this.Dydx_Dydz_Dxdx_Dzdz_Spatial = Dydx_Dydz_Dxdx_Dzdz_Spatial;
+
+		this.Dx_Dy_Dz_Dxdz_SpatialAllMips =
+			this.Dx_Dy_Dz_Dxdz_Spatial.createView({
+				label: `FFTWaveDisplacementMaps for ${this.Dx_Dy_Dz_Dxdz_Spatial.label}`,
+			});
+		this.Dydx_Dydz_Dxdx_Dzdz_SpatialAllMips =
+			this.Dydx_Dydz_Dxdx_Dzdz_Spatial.createView({
+				label: `FFTWaveDisplacementMaps for ${this.Dydx_Dydz_Dxdx_Dzdz_Spatial.label}`,
+			});
+	}
 }
 
 export class FFTWaveSpectrumResources {
@@ -53,11 +94,9 @@ export class FFTWaveSpectrumResources {
 
 	// A two-channel texture of pairs of gaussian random variables, used to generate the amplitudes of our waves
 	private gaussianNoise: GPUTexture;
-	private gaussianNoiseView: GPUTextureView;
 
 	// A fourier grid of wave amplitude that are a function of the wave vector
 	private fourierAmplitude: GPUTexture;
-	private fourierAmplitudeView: GPUTextureView;
 
 	/*
 	 * @group(0) @binding(0) var out_fourier_amplitude: texture_storage_2d<rg32float, write>;
@@ -68,15 +107,11 @@ export class FFTWaveSpectrumResources {
 
 	// A fourier grid of realized wave amplitudes that are a function of wave vector (stored in fourierAmplitude) and time
 	private packed_Dy_plus_iDxdz_Amplitude: GPUTexture;
-	private packed_Dy_plus_iDxdz_AmplitudeView: GPUTextureView;
 
 	// Since we know the result is a real value, we can pack two fourier transforms into the space of one by multiplying one by i, the imaginary unit
 	private packed_Dx_plus_iDz_Amplitude: GPUTexture;
-	private packed_Dx_plus_iDz_AmplitudeView: GPUTextureView;
 	private packed_Dydx_plus_iDydz_Amplitude: GPUTexture;
-	private packed_Dydx_plus_iDydz_AmplitudeView: GPUTextureView;
 	private packed_Dxdx_plus_iDzdz_Amplitude: GPUTexture;
-	private packed_Dxdx_plus_iDzdz_AmplitudeView: GPUTextureView;
 
 	/*
 	 * @group(0) @binding(0) var out_dy_amplitude: texture_storage_2d<rg32float, write>;
@@ -93,25 +128,15 @@ export class FFTWaveSpectrumResources {
 	 * Output textures of the FFT
 	 */
 	private Dy_Dxdz_Spatial: GPUTexture;
-	private Dy_Dxdz_SpatialView: GPUTextureView;
-
 	private Dx_Dz_Spatial: GPUTexture;
-	private Dx_Dz_SpatialView: GPUTextureView;
-
 	private Dydx_Dydz_Spatial: GPUTexture;
-	private Dydx_Dydz_SpatialView: GPUTextureView;
-
 	private Dxdx_Dzdz_Spatial: GPUTexture;
-	private Dxdx_Dzdz_SpatialView: GPUTextureView;
 
 	/*
 	 * Final output maps, organized versions of the FFT outputs above
 	 */
 	private Dx_Dy_Dz_Dxdz_Spatial: GPUTexture;
-	private Dx_Dy_Dz_Dxdz_SpatialView: GPUTextureView;
-
 	private Dydx_Dydz_Dxdx_Dzdz_Spatial: GPUTexture;
-	private Dydx_Dydz_Dxdx_Dzdz_SpatialView: GPUTextureView;
 
 	/*
 	 * @group(0) @binding(0) var out_displacement: texture_storage_2d<rgba32float, write>;
@@ -122,6 +147,10 @@ export class FFTWaveSpectrumResources {
 	private fillSpatialTexturesKernel: GPUComputePipeline;
 
 	private dfftResources: DFFTResources;
+
+	private mipMapGenerator: MipMapGenerationPassResources;
+	private mipMapBindings_Dx_Dy_Dz_Dxdz_Spatial: MipMapGenerationTextureBindings;
+	private mipMapBindings_Dydx_Dydz_Dxdx_Dzdz_Spatial: MipMapGenerationTextureBindings;
 
 	constructor(device: GPUDevice, globalUBO: GlobalUBO) {
 		this.spectrumDimension = GRID_SIZE;
@@ -139,9 +168,6 @@ export class FFTWaveSpectrumResources {
 				GPUTextureUsage.COPY_DST |
 				GPUTextureUsage.STORAGE_BINDING |
 				GPUTextureUsage.TEXTURE_BINDING,
-		});
-		this.gaussianNoiseView = this.gaussianNoise.createView({
-			label: "FFT Wave Gaussian Noise",
 		});
 
 		const FLOAT32_PER_GAUSSIAN_NOISE_TEXEL = 2;
@@ -175,9 +201,6 @@ export class FFTWaveSpectrumResources {
 				GPUTextureUsage.STORAGE_BINDING |
 				GPUTextureUsage.TEXTURE_BINDING,
 		});
-		this.fourierAmplitudeView = this.fourierAmplitude.createView({
-			label: "FFT Wave Fourier Amplitude h_0(k)",
-		});
 
 		const fourierAmplitudeGroup0Layout = device.createBindGroupLayout({
 			label: "FFT Wave Fourier Amplitude h_0(k) Group 0",
@@ -207,11 +230,11 @@ export class FFTWaveSpectrumResources {
 			entries: [
 				{
 					binding: 0,
-					resource: this.fourierAmplitudeView,
+					resource: this.fourierAmplitude.createView(),
 				},
 				{
 					binding: 1,
-					resource: this.gaussianNoiseView,
+					resource: this.gaussianNoise.createView(),
 				},
 			],
 		});
@@ -244,20 +267,12 @@ export class FFTWaveSpectrumResources {
 				GPUTextureUsage.TEXTURE_BINDING |
 				GPUTextureUsage.COPY_SRC,
 		});
-		this.packed_Dy_plus_iDxdz_AmplitudeView =
-			this.packed_Dy_plus_iDxdz_Amplitude.createView({
-				label: this.packed_Dy_plus_iDxdz_Amplitude.label,
-			});
 		this.packed_Dx_plus_iDz_Amplitude = device.createTexture({
 			label: "FFT Wave Packed Dx + i * Dz Amplitude",
 			format: this.packed_Dy_plus_iDxdz_Amplitude.format,
 			size: spectrumTextureSize,
 			usage: this.packed_Dy_plus_iDxdz_Amplitude.usage,
 		});
-		this.packed_Dx_plus_iDz_AmplitudeView =
-			this.packed_Dx_plus_iDz_Amplitude.createView({
-				label: this.packed_Dx_plus_iDz_Amplitude.label,
-			});
 
 		this.packed_Dydx_plus_iDydz_Amplitude = device.createTexture({
 			label: "FFT Wave Packed Dydx + i * Dydz Amplitude",
@@ -265,10 +280,6 @@ export class FFTWaveSpectrumResources {
 			size: spectrumTextureSize,
 			usage: this.packed_Dy_plus_iDxdz_Amplitude.usage,
 		});
-		this.packed_Dydx_plus_iDydz_AmplitudeView =
-			this.packed_Dydx_plus_iDydz_Amplitude.createView({
-				label: this.packed_Dydx_plus_iDydz_Amplitude.label,
-			});
 
 		this.packed_Dxdx_plus_iDzdz_Amplitude = device.createTexture({
 			label: "FFT Wave Packed Dxdx + i * Dzdz Amplitude",
@@ -276,10 +287,6 @@ export class FFTWaveSpectrumResources {
 			size: spectrumTextureSize,
 			usage: this.packed_Dy_plus_iDxdz_Amplitude.usage,
 		});
-		this.packed_Dxdx_plus_iDzdz_AmplitudeView =
-			this.packed_Dxdx_plus_iDzdz_Amplitude.createView({
-				label: this.packed_Dxdx_plus_iDzdz_Amplitude.label,
-			});
 
 		this.Dy_Dxdz_Spatial = device.createTexture({
 			label: "FFT Wave Spatial (Dy, 0)",
@@ -290,18 +297,12 @@ export class FFTWaveSpectrumResources {
 				GPUTextureUsage.TEXTURE_BINDING |
 				GPUTextureUsage.COPY_DST,
 		});
-		this.Dy_Dxdz_SpatialView = this.Dy_Dxdz_Spatial.createView({
-			label: this.Dy_Dxdz_Spatial.label,
-		});
 
 		this.Dx_Dz_Spatial = device.createTexture({
 			label: "FFT Wave Spatial (Dx, Dz)",
 			format: this.Dy_Dxdz_Spatial.format,
 			size: spectrumTextureSize,
 			usage: this.Dy_Dxdz_Spatial.usage,
-		});
-		this.Dx_Dz_SpatialView = this.Dx_Dz_Spatial.createView({
-			label: this.Dx_Dz_Spatial.label,
 		});
 
 		this.Dydx_Dydz_Spatial = device.createTexture({
@@ -310,9 +311,6 @@ export class FFTWaveSpectrumResources {
 			size: spectrumTextureSize,
 			usage: this.Dy_Dxdz_Spatial.usage,
 		});
-		this.Dydx_Dydz_SpatialView = this.Dydx_Dydz_Spatial.createView({
-			label: this.Dydx_Dydz_Spatial.label,
-		});
 
 		this.Dxdx_Dzdz_Spatial = device.createTexture({
 			label: "FFT Wave Spatial (Dxdx, Dzdz)",
@@ -320,32 +318,38 @@ export class FFTWaveSpectrumResources {
 			size: spectrumTextureSize,
 			usage: this.Dy_Dxdz_Spatial.usage,
 		});
-		this.Dxdx_Dzdz_SpatialView = this.Dxdx_Dzdz_Spatial.createView({
-			label: this.Dxdx_Dzdz_Spatial.label,
-		});
 
 		this.Dx_Dy_Dz_Dxdz_Spatial = device.createTexture({
 			label: "FFT Wave Final Displacement",
 			format: DISPLACEMENT_FORMAT,
 			size: spectrumTextureSize,
+			mipLevelCount: LOG_2_GRID_SIZE,
 			usage:
 				GPUTextureUsage.STORAGE_BINDING |
 				GPUTextureUsage.TEXTURE_BINDING |
+				GPUTextureUsage.COPY_SRC |
 				GPUTextureUsage.COPY_DST,
 		});
-		this.Dx_Dy_Dz_Dxdz_SpatialView = this.Dx_Dy_Dz_Dxdz_Spatial.createView({
-			label: this.Dx_Dy_Dz_Dxdz_Spatial.label,
-		});
+
 		this.Dydx_Dydz_Dxdx_Dzdz_Spatial = device.createTexture({
 			label: "FFT Wave Final Derivatives",
 			format: DERIVATIVES_FORMAT,
 			size: spectrumTextureSize,
+			mipLevelCount: this.Dx_Dy_Dz_Dxdz_Spatial.mipLevelCount,
 			usage: this.Dx_Dy_Dz_Dxdz_Spatial.usage,
 		});
-		this.Dydx_Dydz_Dxdx_Dzdz_SpatialView =
-			this.Dydx_Dydz_Dxdx_Dzdz_Spatial.createView({
-				label: this.Dydx_Dydz_Dxdx_Dzdz_Spatial.label,
-			});
+
+		this.mipMapGenerator = new MipMapGenerationPassResources(device);
+		this.mipMapBindings_Dx_Dy_Dz_Dxdz_Spatial =
+			this.mipMapGenerator.createBindGroups(
+				device,
+				this.Dx_Dy_Dz_Dxdz_Spatial
+			);
+		this.mipMapBindings_Dydx_Dydz_Dxdx_Dzdz_Spatial =
+			this.mipMapGenerator.createBindGroups(
+				device,
+				this.Dydx_Dydz_Dxdx_Dzdz_Spatial
+			);
 
 		const realizedFourierAmplitudeGroup0Layout =
 			device.createBindGroupLayout({
@@ -399,20 +403,25 @@ export class FFTWaveSpectrumResources {
 			entries: [
 				{
 					binding: 0,
-					resource: this.packed_Dy_plus_iDxdz_AmplitudeView,
+					resource: this.packed_Dy_plus_iDxdz_Amplitude.createView(),
 				},
-				{ binding: 1, resource: this.packed_Dx_plus_iDz_AmplitudeView },
+				{
+					binding: 1,
+					resource: this.packed_Dx_plus_iDz_Amplitude.createView(),
+				},
 				{
 					binding: 2,
-					resource: this.packed_Dydx_plus_iDydz_AmplitudeView,
+					resource:
+						this.packed_Dydx_plus_iDydz_Amplitude.createView(),
 				},
 				{
 					binding: 3,
-					resource: this.packed_Dxdx_plus_iDzdz_AmplitudeView,
+					resource:
+						this.packed_Dxdx_plus_iDzdz_Amplitude.createView(),
 				},
 				{
 					binding: 4,
-					resource: this.fourierAmplitudeView,
+					resource: this.fourierAmplitude.createView(),
 				},
 			],
 		});
@@ -513,27 +522,31 @@ export class FFTWaveSpectrumResources {
 			entries: [
 				{
 					binding: 0,
-					resource: this.Dx_Dy_Dz_Dxdz_SpatialView,
+					resource: this.Dx_Dy_Dz_Dxdz_Spatial.createView({
+						mipLevelCount: 1,
+					}),
 				},
 				{
 					binding: 1,
-					resource: this.Dydx_Dydz_Dxdx_Dzdz_SpatialView,
+					resource: this.Dydx_Dydz_Dxdx_Dzdz_Spatial.createView({
+						mipLevelCount: 1,
+					}),
 				},
 				{
 					binding: 2,
-					resource: this.Dy_Dxdz_SpatialView,
+					resource: this.Dy_Dxdz_Spatial.createView(),
 				},
 				{
 					binding: 3,
-					resource: this.Dx_Dz_SpatialView,
+					resource: this.Dx_Dz_Spatial.createView(),
 				},
 				{
 					binding: 4,
-					resource: this.Dydx_Dydz_SpatialView,
+					resource: this.Dydx_Dydz_Spatial.createView(),
 				},
 				{
 					binding: 5,
-					resource: this.Dxdx_Dzdz_SpatialView,
+					resource: this.Dxdx_Dzdz_Spatial.createView(),
 				},
 			],
 		});
@@ -580,20 +593,36 @@ export class FFTWaveSpectrumResources {
 	 * @return {*}  {FFTWaveSpectrumResourcesViews}
 	 * @memberof FFTWaveSpectrumResources
 	 */
-	views(): FFTWaveSpectrumResourcesViews {
+	views(): FFTWaveSpectrumRenderables {
 		return {
-			gaussianNoiseView: this.gaussianNoiseView,
-			fourierAmplitudeView: this.fourierAmplitudeView,
-			Dy_AmplitudeView: this.packed_Dy_plus_iDxdz_AmplitudeView,
-			Dx_plus_iDz_AmplitudeView: this.packed_Dx_plus_iDz_AmplitudeView,
-			Dx_Dy_Dz_Dxdz_SpatialView: this.Dx_Dy_Dz_Dxdz_SpatialView,
-			packed_Dxdx_plus_iDzdz_AmplitudeView:
-				this.packed_Dxdx_plus_iDzdz_AmplitudeView,
-			packed_Dydx_plus_iDydz_AmplitudeView:
-				this.packed_Dydx_plus_iDydz_AmplitudeView,
-			Dydx_Dydz_Dxdx_Dzdz_DerivativesView:
-				this.Dydx_Dydz_Dxdx_Dzdz_SpatialView,
+			gaussianNoise: new RenderOutputTexture(this.gaussianNoise),
+			fourierAmplitude: new RenderOutputTexture(this.fourierAmplitude),
+			Dy_Amplitude: new RenderOutputTexture(
+				this.packed_Dy_plus_iDxdz_Amplitude
+			),
+			Dx_plus_iDz_Amplitude: new RenderOutputTexture(
+				this.packed_Dx_plus_iDz_Amplitude
+			),
+			Dx_Dy_Dz_Dxdz_Spatial: new RenderOutputTexture(
+				this.Dx_Dy_Dz_Dxdz_Spatial
+			),
+			packed_Dxdx_plus_iDzdz_Amplitude: new RenderOutputTexture(
+				this.packed_Dxdx_plus_iDzdz_Amplitude
+			),
+			packed_Dydx_plus_iDydz_Amplitude: new RenderOutputTexture(
+				this.packed_Dydx_plus_iDydz_Amplitude
+			),
+			Dydx_Dydz_Dxdx_Dzdz_Spatial: new RenderOutputTexture(
+				this.Dydx_Dydz_Dxdx_Dzdz_Spatial
+			),
 		};
+	}
+
+	displacementMaps(): FFTWaveDisplacementMaps {
+		return new FFTWaveDisplacementMaps(
+			this.Dx_Dy_Dz_Dxdz_Spatial,
+			this.Dydx_Dydz_Dxdx_Dzdz_Spatial
+		);
 	}
 
 	record(
@@ -687,5 +716,14 @@ export class FFTWaveSpectrumResources {
 		);
 
 		fillDisplacementPassEncoder.end();
+
+		this.mipMapGenerator.updateMipMaps(
+			commandEncoder,
+			this.mipMapBindings_Dx_Dy_Dz_Dxdz_Spatial
+		);
+		this.mipMapGenerator.updateMipMaps(
+			commandEncoder,
+			this.mipMapBindings_Dydx_Dydz_Dxdx_Dzdz_Spatial
+		);
 	}
 }

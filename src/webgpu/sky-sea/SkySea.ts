@@ -2,7 +2,7 @@ import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { RendererApp, RendererAppConstructor } from "../RendererApp.ts";
 import { mat4, vec3, vec4 } from "wgpu-matrix";
 import { GlobalUBO } from "./UBO.ts";
-import { Extent2D, RenderOutput } from "./Common.ts";
+import { Extent2D, RenderOutput, RenderOutputTexture } from "./Common.ts";
 
 import { GBuffer } from "./GBuffer.ts";
 import { TransmittanceLUTPassResources } from "./TransmittanceLUT.ts";
@@ -11,20 +11,64 @@ import { SkyViewLUTPassResources } from "./SkyViewLUT.ts";
 import { FFTWaveSpectrumResources } from "./FourierWaves.ts";
 import { WaveSurfaceDisplacementPassResources } from "./WaveDisplacement.ts";
 import { AtmosphereCameraPassResources } from "./AtmosphereCamera.ts";
-import { FullscreenQuadPassResources } from "./FullscreenQuad.ts";
+import {
+	FullscreenQuadUBOData,
+	FullscreenQuadPassResources,
+} from "./FullscreenQuad.ts";
 
 const TRANSMITTANCE_LUT_EXTENT = { width: 2048, height: 1024 } as const;
 const MULTISCATTER_LUT_EXTENT = { width: 1024, height: 1024 } as const;
 const SKYVIEW_LUT_EXTENT = { width: 1024, height: 512 } as const;
 
-class OutputTexturePostProcessSettings {
+class RenderOutputTransform {
 	flip = false;
-	color_gain: {
+	colorGain: {
 		r: number;
 		g: number;
 		b: number;
 	} = { r: 1.0, g: 1.0, b: 1.0 };
+	mipLevel = 0;
 }
+
+const RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES: ({
+	[K in keyof RenderOutputTransform]?: RenderOutputTransform[K];
+} & {
+	id: RenderOutput;
+})[] = [
+	{ id: RenderOutput.Scene },
+	{ id: RenderOutput.TransmittanceLUT, flip: true },
+	{ id: RenderOutput.MultiscatterLUT, flip: true },
+	{ id: RenderOutput.SkyviewLUT, colorGain: { r: 8.0, g: 8.0, b: 8.0 } },
+	{ id: RenderOutput.GBufferColor },
+	{ id: RenderOutput.GBufferNormal },
+	{ id: RenderOutput.FFTWaveSpectrumGaussianNoise },
+	{
+		id: RenderOutput.FFTWaveFourierAmplitude,
+		colorGain: { r: 100.0, g: 100.0, b: 100.0 },
+	},
+	{
+		id: RenderOutput.FFTWaveDy_plus_iDxdz_Amplitude,
+		colorGain: { r: 100.0, g: 100.0, b: 100.0 },
+	},
+	{
+		id: RenderOutput.FFTWaveDx_plus_iDz_Amplitude,
+		colorGain: { r: 100.0, g: 100.0, b: 100.0 },
+	},
+	{
+		id: RenderOutput.FFTWaveDydx_plus_iDydz_Amplitude,
+		colorGain: { r: 100.0, g: 100.0, b: 100.0 },
+	},
+	{
+		id: RenderOutput.FFTWaveDxdx_plus_iDzdz_Amplitude,
+		colorGain: { r: 100.0, g: 100.0, b: 100.0 },
+	},
+	{
+		id: RenderOutput.FFTWaveDx_Dy_Dz_Dxdz_Spatial,
+	},
+	{
+		id: RenderOutput.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial,
+	},
+];
 
 const RENDER_SCALES = [0.25, 0.3333, 0.5, 0.75, 1.0, 1.5, 2.0, 4.0];
 
@@ -82,17 +126,16 @@ class SkySeaApp implements RendererApp {
 	scaledSize: Extent2D;
 	rawSize: Extent2D;
 
+	renderOutputs: Map<RenderOutput, RenderOutputTexture>;
+
 	settings: {
 		outputTexture: RenderOutput;
 		oceanWaveSettings: {
 			gerstner: boolean;
 			fft: boolean;
 		};
-		outputTextureSettings: Map<
-			RenderOutput,
-			OutputTexturePostProcessSettings
-		>;
-		currentOutputTextureSettings: OutputTexturePostProcessSettings;
+		renderOutputTransforms: Map<RenderOutput, RenderOutputTransform>;
+		currentRenderOutputTransform: RenderOutputTransform;
 		orbit: {
 			timeHours: number;
 			timeSpeedupFactor: number;
@@ -110,8 +153,6 @@ class SkySeaApp implements RendererApp {
 	};
 
 	globalUBO: GlobalUBO;
-
-	fullscreenQuadIndexBuffer: GPUBuffer;
 
 	device: GPUDevice;
 	presentFormat: GPUTextureFormat;
@@ -241,16 +282,16 @@ class SkySeaApp implements RendererApp {
 			.max(Math.PI);
 
 		const outputTextureFolder = gui.addFolder("Output Transform").close();
-		if (
-			!this.fullscreenQuadPassResources.uboDataByOutputTexture.has(
-				this.settings.outputTexture
-			)
-		) {
-			outputTextureFolder.hide();
-		}
 		outputTextureFolder
-			.add(this.settings.currentOutputTextureSettings, "flip")
+			.add(this.settings.currentRenderOutputTransform, "flip")
 			.name("Flip Image")
+			.listen();
+		const mipLevelController = outputTextureFolder
+			.add(this.settings.currentRenderOutputTransform, "mipLevel")
+			.min(0)
+			.max(0)
+			.step(1)
+			.name("Mip Level")
 			.listen();
 		outputTextureFolder
 			.add({ gain: 0.0 }, "gain")
@@ -258,24 +299,24 @@ class SkySeaApp implements RendererApp {
 			.min(0.0)
 			.max(100.0)
 			.onChange((v: number) => {
-				this.settings.currentOutputTextureSettings.color_gain.r = v;
-				this.settings.currentOutputTextureSettings.color_gain.g = v;
-				this.settings.currentOutputTextureSettings.color_gain.b = v;
+				this.settings.currentRenderOutputTransform.colorGain.r = v;
+				this.settings.currentRenderOutputTransform.colorGain.g = v;
+				this.settings.currentRenderOutputTransform.colorGain.b = v;
 			});
-		outputTextureFolder
-			.add(this.settings.currentOutputTextureSettings.color_gain, "r")
+		const rController = outputTextureFolder
+			.add(this.settings.currentRenderOutputTransform.colorGain, "r")
 			.name("R")
 			.min(0.0)
 			.max(100.0)
 			.listen();
-		outputTextureFolder
-			.add(this.settings.currentOutputTextureSettings.color_gain, "g")
+		const gController = outputTextureFolder
+			.add(this.settings.currentRenderOutputTransform.colorGain, "g")
 			.name("G")
 			.min(0.0)
 			.max(100.0)
 			.listen();
-		outputTextureFolder
-			.add(this.settings.currentOutputTextureSettings.color_gain, "b")
+		const bController = outputTextureFolder
+			.add(this.settings.currentRenderOutputTransform.colorGain, "b")
 			.name("B")
 			.min(0.0)
 			.max(100.0)
@@ -284,35 +325,29 @@ class SkySeaApp implements RendererApp {
 			const previousValue =
 				outputTextureController._listenPrevValue as RenderOutput;
 
-			if (!this.settings.outputTextureSettings.has(previousValue)) {
-				this.settings.outputTextureSettings.set(
-					previousValue,
-					new OutputTexturePostProcessSettings()
-				);
-			}
-
-			const oldSettings =
-				this.settings.outputTextureSettings.get(previousValue)!;
-			oldSettings.flip = this.settings.currentOutputTextureSettings.flip;
-			Object.assign(
-				oldSettings.color_gain,
-				this.settings.currentOutputTextureSettings.color_gain
+			this.settings.renderOutputTransforms.set(
+				previousValue,
+				structuredClone(this.settings.currentRenderOutputTransform)
 			);
 
-			if (!this.settings.outputTextureSettings.has(newValue)) {
-				this.settings.outputTextureSettings.set(
-					newValue,
-					new OutputTexturePostProcessSettings()
-				);
-			}
-
-			const newSettings =
-				this.settings.outputTextureSettings.get(newValue)!;
-			this.settings.currentOutputTextureSettings.flip = newSettings.flip;
 			Object.assign(
-				this.settings.currentOutputTextureSettings.color_gain,
-				newSettings.color_gain
+				this.settings.currentRenderOutputTransform,
+				structuredClone(
+					this.settings.renderOutputTransforms.get(newValue) ??
+						new RenderOutputTransform()
+				)
 			);
+
+			const renderOutput = this.renderOutputs.get(newValue);
+			mipLevelController.max(renderOutput?.mipLevelCount ?? 0);
+			mipLevelController.updateDisplay();
+
+			rController.object =
+				this.settings.currentRenderOutputTransform.colorGain;
+			gController.object =
+				this.settings.currentRenderOutputTransform.colorGain;
+			bController.object =
+				this.settings.currentRenderOutputTransform.colorGain;
 		});
 
 		const performanceFolder = gui.addFolder("Performance").close();
@@ -345,117 +380,11 @@ class SkySeaApp implements RendererApp {
 				gerstner: true,
 				fft: true,
 			},
-			outputTextureSettings: new Map<
+			renderOutputTransforms: new Map<
 				RenderOutput,
-				OutputTexturePostProcessSettings
-			>([
-				[
-					RenderOutput.Scene,
-					{
-						flip: false,
-						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
-					},
-				],
-				[
-					RenderOutput.TransmittanceLUT,
-					{
-						flip: true,
-						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
-					},
-				],
-				[
-					RenderOutput.MultiscatterLUT,
-					{
-						flip: true,
-						color_gain: { r: 15.0, g: 15.0, b: 15.0 },
-					},
-				],
-				[
-					RenderOutput.SkyviewLUT,
-					{
-						flip: false,
-						color_gain: { r: 8.0, g: 8.0, b: 8.0 },
-					},
-				],
-				[
-					RenderOutput.GBufferColor,
-					{
-						flip: false,
-						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
-					},
-				],
-				[
-					RenderOutput.GBufferNormal,
-					{
-						flip: false,
-						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
-					},
-				],
-				[
-					RenderOutput.FFTWaveSpectrumGaussianNoise,
-					{
-						flip: false,
-						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
-					},
-				],
-				[
-					RenderOutput.FFTWaveFourierAmplitude,
-					{
-						flip: false,
-						color_gain: { r: 100.0, g: 100.0, b: 100.0 },
-					},
-				],
-				[
-					RenderOutput.FFTWaveDy_plus_iDxdz_Amplitude,
-					{
-						flip: false,
-						color_gain: { r: 100.0, g: 100.0, b: 100.0 },
-					},
-				],
-				[
-					RenderOutput.FFTWaveDx_plus_iDz_Amplitude,
-					{
-						flip: false,
-						color_gain: { r: 100.0, g: 100.0, b: 100.0 },
-					},
-				],
-				[
-					RenderOutput.FFTWaveDydx_plus_iDydz_Amplitude,
-					{
-						flip: false,
-						color_gain: { r: 100.0, g: 100.0, b: 100.0 },
-					},
-				],
-				[
-					RenderOutput.FFTWaveDxdx_plus_iDzdz_Amplitude,
-					{
-						flip: false,
-						color_gain: { r: 100.0, g: 100.0, b: 100.0 },
-					},
-				],
-				[
-					RenderOutput.FFTWaveDx_Dy_Dz_Dxdz_Spatial,
-					{
-						flip: false,
-						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
-					},
-				],
-				[
-					RenderOutput.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial,
-					{
-						flip: false,
-						color_gain: { r: 1.0, g: 1.0, b: 1.0 },
-					},
-				],
-			]),
-			currentOutputTextureSettings: {
-				flip: false,
-				color_gain: {
-					r: 1.0,
-					g: 1.0,
-					b: 1.0,
-				},
-			},
+				RenderOutputTransform
+			>(),
+			currentRenderOutputTransform: new RenderOutputTransform(),
 			orbit: {
 				timeHours: 5.5,
 				timeSpeedupFactor: 400.0,
@@ -473,19 +402,32 @@ class SkySeaApp implements RendererApp {
 		this.scaledSize = { width: 1.0, height: 1.0 };
 		this.rawSize = { width: 1.0, height: 1.0 };
 
+		RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES.reduce(
+			(acc, { id, ...overrides }) => {
+				acc.set(id, {
+					...new RenderOutputTransform(),
+					...overrides,
+				});
+				return acc;
+			},
+			this.settings.renderOutputTransforms
+		);
+
 		if (
-			this.settings.outputTextureSettings.has(this.settings.outputTexture)
+			this.settings.renderOutputTransforms.has(
+				this.settings.outputTexture
+			)
 		) {
-			const newSettings = this.settings.outputTextureSettings.get(
+			const newSettings = this.settings.renderOutputTransforms.get(
 				this.settings.outputTexture
 			)!;
-			this.settings.currentOutputTextureSettings.flip = newSettings.flip;
-			this.settings.currentOutputTextureSettings.color_gain.r =
-				newSettings.color_gain.r;
-			this.settings.currentOutputTextureSettings.color_gain.g =
-				newSettings.color_gain.g;
-			this.settings.currentOutputTextureSettings.color_gain.b =
-				newSettings.color_gain.b;
+			this.settings.currentRenderOutputTransform.flip = newSettings.flip;
+			this.settings.currentRenderOutputTransform.colorGain.r =
+				newSettings.colorGain.r;
+			this.settings.currentRenderOutputTransform.colorGain.g =
+				newSettings.colorGain.g;
+			this.settings.currentRenderOutputTransform.colorGain.b =
+				newSettings.colorGain.b;
 		}
 
 		this.frametimeAverages = new Map();
@@ -579,22 +521,8 @@ class SkySeaApp implements RendererApp {
 				this.gbuffer.colorWithDepthInAlpha.format,
 				this.gbuffer.normal.format,
 				this.gbuffer.depth.format,
-				fftWaveViews.Dx_Dy_Dz_Dxdz_SpatialView,
-				fftWaveViews.Dydx_Dydz_Dxdx_Dzdz_DerivativesView
+				this.fftWaveSpectrumResources.displacementMaps()
 			);
-
-		const fullscreenQuadIndices = new Uint32Array([0, 1, 2, 0, 2, 3]);
-		this.fullscreenQuadIndexBuffer = device.createBuffer({
-			size: fullscreenQuadIndices.byteLength,
-			usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-		});
-		device.queue.writeBuffer(
-			this.fullscreenQuadIndexBuffer,
-			0,
-			fullscreenQuadIndices,
-			0,
-			fullscreenQuadIndices.length
-		);
 
 		this.atmosphereCameraPassResources = new AtmosphereCameraPassResources(
 			this.device,
@@ -608,60 +536,76 @@ class SkySeaApp implements RendererApp {
 
 		this.fullscreenQuadPassResources = new FullscreenQuadPassResources(
 			this.device,
-			new Map<RenderOutput, GPUTextureView>([
-				[
-					RenderOutput.Scene,
-					this.atmosphereCameraPassResources.outputColorView,
-				],
-				[
-					RenderOutput.TransmittanceLUT,
-					this.transmittanceLUTPassResources.view,
-				],
-				[
-					RenderOutput.MultiscatterLUT,
-					this.multiscatterLUTPassResources.view,
-				],
-				[RenderOutput.SkyviewLUT, this.skyviewLUTPassResources.view],
-				[
-					RenderOutput.GBufferColor,
-					this.gbuffer.colorWithDepthInAlphaView,
-				],
-				[RenderOutput.GBufferNormal, this.gbuffer.normalView],
-				[
-					RenderOutput.FFTWaveSpectrumGaussianNoise,
-					fftWaveViews.gaussianNoiseView,
-				],
-				[
-					RenderOutput.FFTWaveFourierAmplitude,
-					fftWaveViews.fourierAmplitudeView,
-				],
-				[
-					RenderOutput.FFTWaveDy_plus_iDxdz_Amplitude,
-					fftWaveViews.Dy_AmplitudeView,
-				],
-				[
-					RenderOutput.FFTWaveDx_plus_iDz_Amplitude,
-					fftWaveViews.Dx_plus_iDz_AmplitudeView,
-				],
-				[
-					RenderOutput.FFTWaveDydx_plus_iDydz_Amplitude,
-					fftWaveViews.packed_Dydx_plus_iDydz_AmplitudeView,
-				],
-				[
-					RenderOutput.FFTWaveDxdx_plus_iDzdz_Amplitude,
-					fftWaveViews.packed_Dxdx_plus_iDzdz_AmplitudeView,
-				],
-				[
-					RenderOutput.FFTWaveDx_Dy_Dz_Dxdz_Spatial,
-					fftWaveViews.Dx_Dy_Dz_Dxdz_SpatialView,
-				],
-				[
-					RenderOutput.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial,
-					fftWaveViews.Dydx_Dydz_Dxdx_Dzdz_DerivativesView,
-				],
-			]),
 			this.presentFormat
 		);
+
+		this.renderOutputs = new Map<RenderOutput, RenderOutputTexture>([
+			[
+				RenderOutput.Scene,
+				new RenderOutputTexture(
+					this.atmosphereCameraPassResources.outputColor
+				),
+			],
+			[
+				RenderOutput.TransmittanceLUT,
+				new RenderOutputTexture(
+					this.transmittanceLUTPassResources.texture
+				),
+			],
+			[
+				RenderOutput.MultiscatterLUT,
+				new RenderOutputTexture(
+					this.multiscatterLUTPassResources.texture
+				),
+			],
+			[
+				RenderOutput.SkyviewLUT,
+				new RenderOutputTexture(this.skyviewLUTPassResources.texture),
+			],
+			[
+				RenderOutput.GBufferColor,
+				new RenderOutputTexture(this.gbuffer.colorWithDepthInAlpha),
+			],
+			[
+				RenderOutput.GBufferNormal,
+				new RenderOutputTexture(this.gbuffer.normal),
+			],
+			[
+				RenderOutput.FFTWaveSpectrumGaussianNoise,
+				fftWaveViews.gaussianNoise,
+			],
+			[
+				RenderOutput.FFTWaveFourierAmplitude,
+				fftWaveViews.fourierAmplitude,
+			],
+			[
+				RenderOutput.FFTWaveDy_plus_iDxdz_Amplitude,
+				fftWaveViews.Dy_Amplitude,
+			],
+			[
+				RenderOutput.FFTWaveDx_plus_iDz_Amplitude,
+				fftWaveViews.Dx_plus_iDz_Amplitude,
+			],
+			[
+				RenderOutput.FFTWaveDydx_plus_iDydz_Amplitude,
+				fftWaveViews.packed_Dydx_plus_iDydz_Amplitude,
+			],
+			[
+				RenderOutput.FFTWaveDxdx_plus_iDzdz_Amplitude,
+				fftWaveViews.packed_Dxdx_plus_iDzdz_Amplitude,
+			],
+			[
+				RenderOutput.FFTWaveDx_Dy_Dz_Dxdz_Spatial,
+				fftWaveViews.Dx_Dy_Dz_Dxdz_Spatial,
+			],
+			[
+				RenderOutput.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial,
+				fftWaveViews.Dydx_Dydz_Dxdx_Dzdz_Spatial,
+			],
+		]);
+		for (const [id, resource] of this.renderOutputs) {
+			this.fullscreenQuadPassResources.setView(device, id, resource.view);
+		}
 
 		const commandEncoder = device.createCommandEncoder();
 
@@ -828,8 +772,6 @@ class SkySeaApp implements RendererApp {
 
 		this.globalUBO.writeToGPU(this.device.queue);
 
-		const clearColor = { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
-
 		const commandEncoder = this.device.createCommandEncoder({
 			label: "Main",
 		});
@@ -950,92 +892,43 @@ class SkySeaApp implements RendererApp {
 		);
 		atmosphereCameraPassEncoder.end();
 
-		timestampIndexMapping.set(
-			FrametimeCategory.FullscreenQuad,
-			timestampQueryIndex
-		);
-		const fullscreenPassEncoder = commandEncoder.beginRenderPass({
-			colorAttachments: [
-				{
-					clearValue: clearColor,
-					loadOp: "clear",
-					storeOp: "store",
-					view: presentView,
-				},
-			],
-			timestampWrites:
-				this.frametimeQuery !== undefined
-					? {
-							querySet: this.frametimeQuery.querySet,
-							beginningOfPassWriteIndex: timestampQueryIndex++,
-							endOfPassWriteIndex: timestampQueryIndex++,
-					  }
-					: undefined,
-			label: "Fullscreen Pass",
-		});
-
-		if (
-			this.fullscreenQuadPassResources.uboDataByOutputTexture.has(
-				this.settings.outputTexture
-			)
-		) {
-			const settings = this.settings.currentOutputTextureSettings;
-			const uboData =
-				this.fullscreenQuadPassResources.uboDataByOutputTexture.get(
-					this.settings.outputTexture
-				)!;
+		{
+			const renderOutputTransform =
+				this.settings.currentRenderOutputTransform;
+			const uboData = new FullscreenQuadUBOData();
 			uboData.color_gain = vec4.create(
-				settings.color_gain.r,
-				settings.color_gain.g,
-				settings.color_gain.b,
+				renderOutputTransform.colorGain.r,
+				renderOutputTransform.colorGain.g,
+				renderOutputTransform.colorGain.b,
 				1.0
 			);
 			uboData.vertex_scale = vec4.create(
 				1.0,
-				settings.flip ? -1.0 : 1.0,
+				renderOutputTransform.flip ? -1.0 : 1.0,
 				1.0,
 				1.0
 			);
-		}
+			uboData.mip_level_u32 = Math.round(renderOutputTransform.mipLevel);
 
-		fullscreenPassEncoder.setPipeline(
-			this.fullscreenQuadPassResources.pipeline
-		);
-		fullscreenPassEncoder.setIndexBuffer(
-			this.fullscreenQuadIndexBuffer,
-			"uint32",
-			0,
-			this.fullscreenQuadIndexBuffer.size
-		);
-		fullscreenPassEncoder.setBindGroup(
-			0,
-			this.fullscreenQuadPassResources.group0ByOutputTexture.get(
-				this.settings.outputTexture
-			)
-		);
-		const uboData =
-			this.fullscreenQuadPassResources.uboDataByOutputTexture.get(
-				this.settings.outputTexture
+			timestampIndexMapping.set(
+				FrametimeCategory.FullscreenQuad,
+				timestampQueryIndex
 			);
-		if (uboData) {
-			this.fullscreenQuadPassResources.ubo.data = uboData;
-		} else {
-			this.fullscreenQuadPassResources.ubo.data = {
-				color_gain: vec4.create(1.0, 1.0, 1.0, 1.0),
-				vertex_scale: vec4.create(1.0, 1.0, 1.0, 1.0),
-			};
+			this.fullscreenQuadPassResources.recordPresent(
+				this.device,
+				commandEncoder,
+				presentView,
+				this.settings.outputTexture,
+				uboData,
+				this.frametimeQuery !== undefined
+					? {
+							querySet: this.frametimeQuery.querySet,
+							beginWriteIndex: timestampQueryIndex++,
+							endWriteIndex: timestampQueryIndex++,
+					  }
+					: undefined
+			);
 		}
-		this.fullscreenQuadPassResources.ubo.writeToGPU(this.device.queue);
-		fullscreenPassEncoder.setBindGroup(
-			1,
-			this.fullscreenQuadPassResources.group1
-		);
-
-		if (this.probationFrameCounter < 1.0) {
-			fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
-		}
-
-		fullscreenPassEncoder.end();
 
 		if (
 			this.frametimeQuery != undefined &&
@@ -1151,15 +1044,13 @@ class SkySeaApp implements RendererApp {
 		this.rawSize = { width: newWidth, height: newHeight };
 		this.gbuffer = new GBuffer(this.device, this.scaledSize, this.gbuffer);
 
-		this.fullscreenQuadPassResources.rebuildOutputTextureBinding(
-			this.device,
+		this.renderOutputs.set(
 			RenderOutput.GBufferColor,
-			this.gbuffer.colorWithDepthInAlphaView
+			new RenderOutputTexture(this.gbuffer.colorWithDepthInAlpha)
 		);
-		this.fullscreenQuadPassResources.rebuildOutputTextureBinding(
-			this.device,
+		this.renderOutputs.set(
 			RenderOutput.GBufferNormal,
-			this.gbuffer.normalView
+			new RenderOutputTexture(this.gbuffer.normal)
 		);
 
 		this.atmosphereCameraPassResources.outputColor =
@@ -1173,10 +1064,11 @@ class SkySeaApp implements RendererApp {
 		this.atmosphereCameraPassResources.outputColorView =
 			this.atmosphereCameraPassResources.outputColor.createView();
 
-		this.fullscreenQuadPassResources.rebuildOutputTextureBinding(
-			this.device,
+		this.renderOutputs.set(
 			RenderOutput.Scene,
-			this.atmosphereCameraPassResources.outputColorView
+			new RenderOutputTexture(
+				this.atmosphereCameraPassResources.outputColor
+			)
 		);
 
 		this.atmosphereCameraPassResources.group0 = this.device.createBindGroup(
@@ -1208,6 +1100,14 @@ class SkySeaApp implements RendererApp {
 				label: "Atmosphere Camera Group 0",
 			}
 		);
+
+		this.renderOutputs.forEach((value, key) => {
+			this.fullscreenQuadPassResources.setView(
+				this.device,
+				key,
+				value.view
+			);
+		});
 	}
 }
 

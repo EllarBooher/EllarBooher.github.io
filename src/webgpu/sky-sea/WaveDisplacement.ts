@@ -2,6 +2,7 @@ import { mat4, Mat4, Vec2, vec2, vec3, Vec3, Vec4, vec4 } from "wgpu-matrix";
 import { GlobalUBO, UBO } from "./UBO";
 import WaveSurfaceDisplacementPak from "../../shaders/sky-sea/wave_surface_displacement.wgsl";
 import { TimestampQueryInterval } from "./Common";
+import { FFTWaveDisplacementMaps } from "./FourierWaves";
 
 // vec4<f32>
 const BYTES_PER_PATCH_OFFSET = 16;
@@ -164,7 +165,7 @@ function queuePatchLODDrawCommands(
 					Math.min(distance / DISTANCE_BOUND, 1.0),
 					0.0
 				);
-				const lod = Math.atan(t) * lodCount;
+				const lod = Math.pow(Math.atan(t) / Math.PI, 1 / 2) * lodCount;
 
 				PatchOffsetsPackedByLOD.get(Math.round(lod))?.push(
 					...patchPosition,
@@ -237,6 +238,7 @@ export class WaveSurfaceDisplacementPassResources {
 	vertexDimension: number;
 	lodCount: number;
 	baseIndexCount: number;
+	mipLevelCount: number;
 
 	vertices: GPUBuffer;
 	worldNormals: GPUBuffer;
@@ -247,14 +249,23 @@ export class WaveSurfaceDisplacementPassResources {
 
 	surfaceRasterizationPipeline: GPURenderPipeline;
 
+	/**
+	 * Creates an instance of WaveSurfaceDisplacementPassResources.
+	 * @param {GPUDevice} device
+	 * @param {GlobalUBO} globalUBO
+	 * @param {GPUTextureFormat} colorFormat
+	 * @param {GPUTextureFormat} normalFormat
+	 * @param {GPUTextureFormat} depthFormat
+	 * @param {FFTWaveDisplacementMaps} displacementMaps
+	 * @memberof WaveSurfaceDisplacementPassResources
+	 */
 	constructor(
 		device: GPUDevice,
 		globalUBO: GlobalUBO,
 		colorFormat: GPUTextureFormat,
 		normalFormat: GPUTextureFormat,
 		depthFormat: GPUTextureFormat,
-		filterable_Dx_Dy_Dz_Dxdz_Map: GPUTextureView,
-		filterable_Dydx_Dydz_Dxdx_Dzdz_Map: GPUTextureView
+		displacementMaps: FFTWaveDisplacementMaps
 	) {
 		// Grid of vertices + extra quad for ocean horizon
 
@@ -568,10 +579,18 @@ export class WaveSurfaceDisplacementPassResources {
 						magFilter: "linear",
 					}),
 				},
-				{ binding: 1, resource: filterable_Dx_Dy_Dz_Dxdz_Map },
-				{ binding: 2, resource: filterable_Dydx_Dydz_Dxdx_Dzdz_Map },
+				{
+					binding: 1,
+					resource: displacementMaps.Dx_Dy_Dz_Dxdz_SpatialAllMips,
+				},
+				{
+					binding: 2,
+					resource:
+						displacementMaps.Dydx_Dydz_Dxdx_Dzdz_SpatialAllMips,
+				},
 			],
 		});
+		this.mipLevelCount = displacementMaps.mipLevelCount;
 
 		const group0LayoutGraphics = device.createBindGroupLayout({
 			entries: [

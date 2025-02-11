@@ -236,26 +236,3 @@ export class GlobalUBO extends UBO {
 		]);
 	}
 }
-
-export class FullscreenQuadUBOData {
-	color_gain: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
-	vertex_scale: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
-}
-
-export class FullscreenQuadUBO extends UBO {
-	data: FullscreenQuadUBOData = {
-		color_gain: vec4.create(1.0, 1.0, 1.0, 1.0),
-		vertex_scale: vec4.create(1.0, 1.0, 1.0, 1.0),
-	};
-
-	constructor(device: GPUDevice) {
-		super(device, 4 + 4, "Fullscreen Quad UBO");
-	}
-
-	protected override packed(): Float32Array {
-		return new Float32Array([
-			...this.data.color_gain,
-			...this.data.vertex_scale,
-		]);
-	}
-}

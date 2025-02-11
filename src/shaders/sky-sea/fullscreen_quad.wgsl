@@ -7,6 +7,8 @@ struct FullscreenQuadUBO
 {
     color_gain: vec4<f32>,
     vertex_scale: vec4<f32>,
+	padding0: vec3<f32>,
+	mip_level: u32,
 }
 
 @group(1) @binding(0) var<uniform> u_fullscreen_quad: FullscreenQuadUBO;
@@ -41,6 +43,6 @@ fn vertex_main(@builtin(vertex_index) index : u32) -> VertexOut
 @fragment
 fn fragment_main(fragData: VertexOut) -> @location(0) vec4<f32>
 {
-    let color = u_fullscreen_quad.color_gain * textureSample(b_texture, b_sampler, fragData.uv);
+    let color = u_fullscreen_quad.color_gain * textureSampleLevel(b_texture, b_sampler, fragData.uv, f32(u_fullscreen_quad.mip_level));
     return vec4<f32>(color.xyz, 1.0);
 }

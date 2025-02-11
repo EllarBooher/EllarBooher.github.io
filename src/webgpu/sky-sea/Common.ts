@@ -20,6 +20,19 @@ export enum RenderOutput {
 	FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial,
 }
 
+export class RenderOutputTexture {
+	private texture: GPUTexture;
+	readonly view: GPUTextureView;
+	get mipLevelCount() {
+		return this.texture.mipLevelCount;
+	}
+
+	constructor(texture: GPUTexture) {
+		this.texture = texture;
+		this.view = texture.createView();
+	}
+}
+
 export interface TimestampQueryInterval {
 	querySet: GPUQuerySet;
 	beginWriteIndex: GPUSize32;

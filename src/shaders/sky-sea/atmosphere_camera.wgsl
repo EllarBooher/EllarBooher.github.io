@@ -91,6 +91,45 @@ fn sampleSkyViewLUT(
     return textureSampleLevel(skyview_lut, lut_sampler, vec2<f32>(u, v), 0.0).xyz;
 }
 
+/*
+ * Wavelength independent factor of how much of the sun's radiance is visible in a given direction.
+ * This varies between 0.0 and 1.0 as the sun moves above the horizon.
+ */
+fn sunFractionOfRadianceVisible(
+    atmosphere: ptr<function, Atmosphere>,
+	light: ptr<function, CelestialLight>,
+	position: vec3<f32>,
+    direction: vec3<f32>
+) -> f32
+{
+    let sin_horizon: f32 = atmosphere.planet_radius_Mm / length(position);
+    let cos_horizon: f32 = -safeSqrt(1.0 - sin_horizon * sin_horizon);
+	let mu = dot(normalize(position), normalize(direction));
+	let intersects_ground = mu < cos_horizon;
+
+	let light_direction = normalize(-(*light).forward);
+
+	let mu_light = dot(normalize(position), normalize(light_direction));
+
+	let cos_light_radius = cos((*light).angular_radius);
+	let sin_light_radius = safeSqrt(1.0 - cos_light_radius * cos_light_radius);
+
+	let horizon_factor = smoothstep(-sin_light_radius, sin_light_radius, mu_light - cos_horizon);
+
+	// theta is the angle subtended on the surface of the sun by our view direction.
+	// theta varies from 0 when looking directly at light_direction, to ~90 degrees when looking at the very edge of the solar disk
+	// This is an approximation, that is accurate since lights are very far away
+	// Other lights like perhaps a moon should use another model
+	let cos_direction_light = dot(normalize(direction), light_direction);
+	let direction_factor = f32(cos_direction_light > cos_light_radius);
+
+	return direction_factor * horizon_factor;
+}
+
+/*
+ * Returns the luminance of a sun disk.
+ * Due to dynamic range issues, this is not tied well to actual luminance and is meant to be composited on unobstructed views of the sky, or reflections from perfectly smooth surfaces.
+ */
 fn sampleSunDisk(
     atmosphere: ptr<function, Atmosphere>,
     light: ptr<function, CelestialLight>,
@@ -203,14 +242,30 @@ fn sampleGeometryLuminance(
 	//
     // shift reflection vector up to make up for the lack of secondary bounces
     // Otherwise, the environmental luminance will be 0 and we get random black patches
-    var reflection_direction = reflect(normalize(direction), normalize(material.normal));
-    reflection_direction.y = max(reflection_direction.y, 0.001);
-    reflection_direction = normalize(reflection_direction);
+    let reflection_direction = reflect(normalize(direction), normalize(material.normal));
+
+	let surface_transmittance_to_sun = sampleTransmittanceLUT_Ray(
+		transmittance_lut,
+        lut_sampler,
+		atmosphere,
+		surface_position,
+		light_direction
+	);
 
 	light_luminance_transfer +=
-        transmittance_to_surface
-        * sampleSkyLuminance(atmosphere, light, surface_position, reflection_direction)
-        * computeFresnelPerfectReflection(material, reflection_direction);
+		transmittance_to_surface
+		* sampleSkyViewLUT(atmosphere, surface_position, reflection_direction)
+		* computeFresnelPerfectReflection(material, reflection_direction);
+
+	light_luminance_transfer +=
+		transmittance_to_surface
+		* surface_transmittance_to_sun
+		* sunFractionOfRadianceVisible(atmosphere, light, surface_position, light_direction)
+		* mix(
+			specularBRDF(material, light_direction, -direction),
+			diffuseBRDF(material),
+			computeFresnelMicrofacet(material, light_direction, -direction)
+		);
 
 	let diffuse = diffuseBRDF(material);
     light_luminance_transfer +=
@@ -296,7 +351,7 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     {
         // View of geometry in gbuffer
         let material: PBRTexel = convertPBRProperties(color_with_depth_in_alpha.xyz, normal.xyz);
-        luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, intersects_ground);
+        luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, true);
     }
 
     let luminance = light.strength * light.color * luminance_transfer;

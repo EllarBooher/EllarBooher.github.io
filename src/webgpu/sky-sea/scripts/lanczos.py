@@ -89,7 +89,11 @@ for n in range(2, term_count+1):
 		coefficients[0] += term
 		coefficients[k] += -k * term
 
-print('Fitted polynomial: c_0 + c_1 * (z+1)^(-1) + ... + c_k * (z+k)^(-1) + ... ')
+print('')
+
+print('Fitted polynomial: P(z) = c_0 + c_1 * (z+1)^(-1) + ... + c_k * (z+k)^(-1) + ... ')
+print('Full equation gamma function approximation: gamma(z) = sqrt(2.0 * PI) * pow(z + r + 0.5, z + 0.5) * exp(-(z + r + 0.5)) * P(z)')
+print(f'r = {r:0.18f}')
 print('Coefficients c_i starting at c_0 (tail is all 0):')
 print(["{0:0.18f}".format(c) for c in coefficients])
 print('')

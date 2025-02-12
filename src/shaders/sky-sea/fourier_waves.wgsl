@@ -20,7 +20,7 @@ const SWELL = 0.3;
 // Deterministic wave parameters derived from texture coordinate
 struct WaveParameters
 {
-	// Ranges from -WAVE_PATCH_EXTENT_METERS / 2 to WAVE_PATCH_EXTENT_METERS / 2
+	// Ranges from -FOURIER_GRID_DIMENSION / 2 to FOURIER_GRID_DIMENSION / 2
 	wave_coord: vec2<i32>,
 
 	wave_vector: vec2<f32>,
@@ -47,9 +47,25 @@ fn waveParameters(texel_coord: vec2<u32>) -> WaveParameters
 
 	// Gravity dispersion relationship for deep water
 	let k = result.wave_number;
-	result.frequency = sqrt(g * k);
-	// d/dk (sqrt(gk)) = g / (2 * sqrt(g * k))
-	result.d_frequency_d_wave_number = 0.5 * g * inverseSqrt(g * k);
+	const QUANTIZED_FREQUENCIES = true;
+	if (QUANTIZED_FREQUENCIES)
+	{
+		result.frequency = sqrt(g * k);
+
+		let fundamental_frequency = sqrt(g * FUNDAMENTAL_WAVE_NUMBER);
+
+		let multiple = result.frequency / fundamental_frequency;
+		result.frequency = (multiple - fract(multiple)) * fundamental_frequency;
+		// d/dk (sqrt(gk)) = g / (2 * sqrt(g * k))
+		result.d_frequency_d_wave_number = 0.5 * g / result.frequency;
+	}
+	else
+	{
+		result.frequency = sqrt(g * k);
+		// d/dk (sqrt(gk)) = g / (2 * sqrt(g * k))
+		result.d_frequency_d_wave_number = 0.5 * g * inverseSqrt(g * k);
+	}
+
 	result.wind_angle = atan2(result.wave_vector.y, result.wave_vector.x);
 
 	return result;

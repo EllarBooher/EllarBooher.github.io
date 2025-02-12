@@ -153,6 +153,7 @@ class SkySeaApp implements RendererApp {
 	};
 
 	globalUBO: GlobalUBO;
+	fftWavesPeriodSeconds: number;
 
 	device: GPUDevice;
 	presentFormat: GPUTextureFormat;
@@ -524,6 +525,12 @@ class SkySeaApp implements RendererApp {
 				this.fftWaveSpectrumResources.displacementMaps()
 			);
 
+		const WAVE_PATCH_EXTENT_METERS = 50.0;
+		this.fftWavesPeriodSeconds =
+			(2.0 * Math.PI) /
+			Math.sqrt((9.8 * 2.0 * Math.PI) / WAVE_PATCH_EXTENT_METERS);
+		console.log(this.fftWavesPeriodSeconds);
+
 		this.atmosphereCameraPassResources = new AtmosphereCameraPassResources(
 			this.device,
 			this.gbuffer.readGroupLayout,
@@ -713,7 +720,13 @@ class SkySeaApp implements RendererApp {
 	updateTime(deltaTimeMilliseconds: number) {
 		const timeUBO = this.globalUBO.data.time;
 		timeUBO.timeSeconds += deltaTimeMilliseconds / 1000.0;
-		if (timeUBO.timeSeconds > 60.0) {
+
+		const NON_FFT_WAVE_PERIOD_SECONDS = 60.0;
+		const periodSeconds = this.settings.oceanWaveSettings.fft
+			? this.fftWavesPeriodSeconds
+			: NON_FFT_WAVE_PERIOD_SECONDS;
+		if (timeUBO.timeSeconds > periodSeconds) {
+			console.log("loop");
 			timeUBO.timeSeconds = 0.0;
 		}
 	}

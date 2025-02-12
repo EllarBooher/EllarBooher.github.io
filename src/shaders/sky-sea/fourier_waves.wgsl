@@ -1,7 +1,7 @@
 // Textures must have the same dimension
 //// INCLUDE types.inc.wgsl
 
-const FOURIER_GRID_DIMENSION = 512u;
+const FOURIER_GRID_DIMENSION = 1024u;
 const WAVE_PATCH_EXTENT_METERS = 50.0;
 
 const PI = 3.141592653589793;
@@ -9,7 +9,7 @@ const FUNDAMENTAL_WAVE_NUMBER = 2.0 * PI / WAVE_PATCH_EXTENT_METERS;
 
 const GRAVITY = 9.8;
 
-const WIND_SPEED_METERS_PER_SECOND = 10.0;
+const WIND_SPEED_METERS_PER_SECOND = 5.0;
 // 10 km fetch
 const WIND_FETCH_METERS = 10.0 * 1000.0;
 const SWELL = 0.3;

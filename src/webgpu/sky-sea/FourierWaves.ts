@@ -9,8 +9,8 @@ import {
 } from "./MipMap.ts";
 
 // The dimension of the fourier grid, i.e., the sqrt of the number of unique waves for our discrete fourier transform
-const GRID_SIZE = 512;
-const LOG_2_GRID_SIZE = 9;
+const GRID_SIZE = 1024;
+const LOG_2_GRID_SIZE = 10;
 const GAUSSIAN_NOISE_FORMAT: GPUTextureFormat = "rg32float";
 
 const FOURIER_AMPLITUDE_FORMAT: GPUTextureFormat = "rg32float";

@@ -83,7 +83,7 @@ export class WaveSurfaceDisplacementPassResources {
 		displacementMaps: FFTWaveDisplacementMaps
 	) {
 		// Extra 1 for tiling
-		const VERTEX_DIMENSION = 2048 + 1;
+		const VERTEX_DIMENSION = 3000;
 
 		this.vertexDimension = VERTEX_DIMENSION;
 

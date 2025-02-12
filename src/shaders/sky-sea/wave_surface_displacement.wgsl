@@ -24,8 +24,10 @@ struct WaveSurfaceDisplacementUBO
 @group(1) @binding(2) var Dydx_Dydz_Dxdx_Dzdz_spatial: texture_2d<f32>;
 @group(1) @binding(3) var<uniform> u_waves: array<PlaneWave, WAVE_COUNT>;
 
+const PI = 3.141592653589793;
+
 // Extra 1 for tiling
-const VERTEX_DIMENSION = 2048u + 1u;
+const VERTEX_DIMENSION = 3000u;
 const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 // const TRIANGLE_COUNT = 2u * (VERTEX_DIMENSION - 1u) * (VERTEX_DIMENSION - 1u);
 // const INDEX_COUNT = 3u * TRIANGLE_COUNT;
@@ -132,7 +134,7 @@ fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distance:
     return output;
 }
 
-fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>, gerstner: bool, lod: u32) -> WaveDisplacementResult
+fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>, gerstner: bool, lod: f32) -> WaveDisplacementResult
 {
 	let delta = 0.5 / vec2<f32>(textureDimensions(Dx_Dy_Dz_Dxdz_spatial));
 
@@ -171,9 +173,9 @@ struct DisplacementResult
 	world_normal: vec3<f32>,
 }
 
-fn computeDisplacement(in_world_position: vec3<f32>, time: f32, lod: u32) -> DisplacementResult
+fn computeDisplacement(in_world_position: vec3<f32>, time: f32, lod: f32, max_lod: f32) -> DisplacementResult
 {
-	var displaced_position = in_world_position;
+	var displacement = vec3<f32>(0.0);
     var tangent = vec3<f32>(1.0, 0.0, 0.0);
     var bitangent = vec3<f32>(0.0, 0.0, 1.0);
 
@@ -184,7 +186,7 @@ fn computeDisplacement(in_world_position: vec3<f32>, time: f32, lod: u32) -> Dis
 		let gerstner = u_settings.b_gerstner == 1u;
 		let result: WaveDisplacementResult = sampleMap(Dx_Dy_Dz_Dxdz_spatial, displacement_map_sampler, uv, gerstner, lod);
 
-		displaced_position += result.displacement;
+		displacement += result.displacement;
 		tangent += result.tangent;
 		bitangent += result.bitangent;
 	}
@@ -203,15 +205,20 @@ fn computeDisplacement(in_world_position: vec3<f32>, time: f32, lod: u32) -> Dis
 				result = sampleCosine(u_waves[i], time, in_world_position.xz, u_settings.patch_world_half_extent);
 			}
 
-			displaced_position += result.displacement;
+			displacement += result.displacement;
 			tangent += result.tangent;
 			bitangent += result.bitangent;
 		}
 	}
 
 	var result: DisplacementResult;
-	result.world_position = displaced_position;
-	result.world_normal = -normalize(cross(tangent, bitangent));
+	/*
+	 * To minimize aliasing, we smooth the distance ocean.
+	 * TODO: Phase in a distance BRDF that models the current choppiness of the ocean surface
+	 */
+	let lod_factor = 1.0 - lod / max_lod;
+	result.world_position = in_world_position + lod_factor * displacement;
+	result.world_normal = mix(vec3<f32>(0.0, 1.0, 0.0) ,-normalize(cross(tangent, bitangent)), lod_factor);
 
 	return result;
 }
@@ -298,10 +305,10 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	var in_world_position = camera.position.xyz + t * direction_world;
 	in_world_position.y = WAVE_NEUTRAL_PLANE;
 
-	const max_lod = 4u;
-	const lod_scale_meters = 350.0;
-	let lod: u32 = min(max_lod, u32(t / lod_scale_meters));
-	let displacement_result = computeDisplacement(in_world_position, u_global.time.time_seconds, lod);
+	const max_lod = 9.0;
+	const lod_scale_meters = 2000.0;
+	let lod = max_lod * atan(t / lod_scale_meters) / (0.5 * PI);
+	let displacement_result = computeDisplacement(in_world_position, u_global.time.time_seconds, lod, max_lod);
 
 	let world_position = displacement_result.world_position;
 

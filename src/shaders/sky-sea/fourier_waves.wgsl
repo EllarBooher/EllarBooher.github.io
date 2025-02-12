@@ -5,7 +5,7 @@ const FOURIER_GRID_DIMENSION = 1024u;
 const WAVE_PATCH_EXTENT_METERS = 50.0;
 
 const PI = 3.141592653589793;
-const FUNDAMENTAL_WAVE_NUMBER = 2.0 * PI / WAVE_PATCH_EXTENT_METERS;
+const WAVE_PERIOD_SECONDS = 100.0;
 
 const GRAVITY = 9.8;
 
@@ -31,6 +31,12 @@ struct WaveParameters
 	wind_angle: f32,
 }
 
+fn quantizeFrequency(frequency: f32, fundamental_frequency: f32) -> f32
+{
+	let multiple = frequency / fundamental_frequency;
+	return (multiple - fract(multiple)) * fundamental_frequency;
+}
+
 fn waveParameters(texel_coord: vec2<u32>) -> WaveParameters
 {
 	var result: WaveParameters;
@@ -39,31 +45,37 @@ fn waveParameters(texel_coord: vec2<u32>) -> WaveParameters
 	const g = GRAVITY;
 
 	result.wave_coord = vec2<i32>(i32(texel_coord.x), i32(texel_coord.y)) - vec2<i32>(wave_coord_offset);
-	result.wave_vector = FUNDAMENTAL_WAVE_NUMBER * vec2<f32>(result.wave_coord);
 
-	result.delta_wave_number = FUNDAMENTAL_WAVE_NUMBER;
-
-	result.wave_number = length(result.wave_vector);
-
-	// Gravity dispersion relationship for deep water
-	let k = result.wave_number;
 	const QUANTIZED_FREQUENCIES = true;
 	if (QUANTIZED_FREQUENCIES)
 	{
-		result.frequency = sqrt(g * k);
+		let frequency_quantization_step = 2.0 * PI / WAVE_PERIOD_SECONDS;
+		let fundamental_frequency = quantizeFrequency(sqrt(g * 2.0 * PI / WAVE_PATCH_EXTENT_METERS), frequency_quantization_step);
+		let fundamental_wave_number = fundamental_frequency * fundamental_frequency / g;
+		result.delta_wave_number = fundamental_wave_number;
 
-		let fundamental_frequency = sqrt(g * FUNDAMENTAL_WAVE_NUMBER);
+		let wave_number_non_quantized = length(fundamental_wave_number * vec2<f32>(result.wave_coord));
 
-		let multiple = result.frequency / fundamental_frequency;
-		result.frequency = (multiple - fract(multiple)) * fundamental_frequency;
+		result.frequency = quantizeFrequency(sqrt(g * wave_number_non_quantized), frequency_quantization_step);
 		// d/dk (sqrt(gk)) = g / (2 * sqrt(g * k))
 		result.d_frequency_d_wave_number = 0.5 * g / result.frequency;
+
+		result.wave_number = result.frequency * result.frequency / g;
+
+		result.wave_vector = result.wave_number * normalize(vec2<f32>(result.wave_coord));
 	}
 	else
 	{
-		result.frequency = sqrt(g * k);
+		let fundamental_wave_number = 2.0 * PI / WAVE_PATCH_EXTENT_METERS;
+		let fundamental_frequency = sqrt(g * fundamental_wave_number);
+		result.delta_wave_number = fundamental_wave_number;
+
+		result.wave_vector = fundamental_wave_number * vec2<f32>(result.wave_coord);
+		result.wave_number = length(result.wave_vector);
+
+		result.frequency = sqrt(g * result.wave_number);
 		// d/dk (sqrt(gk)) = g / (2 * sqrt(g * k))
-		result.d_frequency_d_wave_number = 0.5 * g * inverseSqrt(g * k);
+		result.d_frequency_d_wave_number = 0.5 * g * inverseSqrt(g * result.wave_number);
 	}
 
 	result.wind_angle = atan2(result.wave_vector.y, result.wave_vector.x);
@@ -146,7 +158,7 @@ fn computeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 	let gaussian_pair = textureLoad(in_gaussian_random_pairs, texel_coord).xy;
 	let wave = waveParameters(texel_coord);
 
-	if (abs(wave.wave_number) < FUNDAMENTAL_WAVE_NUMBER)
+	if (abs(wave.wave_number) < wave.delta_wave_number)
 	{
 		let amplitude = vec2<f32>(0.0, 0.0);
 		textureStore(out_fourier_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));
@@ -241,7 +253,7 @@ fn realizeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 	let iDy_amplitude = vec2<f32>(-Dy_amplitude.y, Dy_amplitude.x);
 
 	var one_over_wave_number = 1.0 / wave.wave_number;
-	if (abs(wave.wave_number) < FUNDAMENTAL_WAVE_NUMBER)
+	if (abs(wave.wave_number) < wave.delta_wave_number)
 	{
 		one_over_wave_number = 1.0;
 		return;

@@ -43,7 +43,7 @@ const RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES: ({
 	{ id: RenderOutput.GBufferNormal },
 	{ id: RenderOutput.FFTWaveSpectrumGaussianNoise },
 	{
-		id: RenderOutput.FFTWaveFourierAmplitude,
+		id: RenderOutput.FFTWaveInitialAmplitude,
 		colorGain: { r: 100.0, g: 100.0, b: 100.0 },
 	},
 	{
@@ -190,7 +190,7 @@ class SkySeaApp implements RendererApp {
 				"FFT Wave Gaussian Noise":
 					RenderOutput.FFTWaveSpectrumGaussianNoise,
 				"FFT Wave Initial Amplitude":
-					RenderOutput.FFTWaveFourierAmplitude,
+					RenderOutput.FFTWaveInitialAmplitude,
 				"FFT Wave Frequency Domain (Dy + i*Dxdz)":
 					RenderOutput.FFTWaveDy_plus_iDxdz_Amplitude,
 				"FFT Wave Frequency Domain (Dx + i*Dz)":
@@ -575,8 +575,8 @@ class SkySeaApp implements RendererApp {
 				fftWaveViews.gaussianNoise,
 			],
 			[
-				RenderOutput.FFTWaveFourierAmplitude,
-				fftWaveViews.fourierAmplitude,
+				RenderOutput.FFTWaveInitialAmplitude,
+				fftWaveViews.initialAmplitude,
 			],
 			[
 				RenderOutput.FFTWaveDy_plus_iDxdz_Amplitude,

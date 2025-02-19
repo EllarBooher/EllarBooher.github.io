@@ -1,18 +1,20 @@
 // Textures must have the same dimension
 //// INCLUDE types.inc.wgsl
 
-const FOURIER_GRID_DIMENSION = 1024u;
-const WAVE_PATCH_EXTENT_METERS = 50.0;
-
 const PI = 3.141592653589793;
-const WAVE_PERIOD_SECONDS = 100.0;
 
-const GRAVITY = 9.8;
+struct FourierWavesUBO
+{
+	fourier_grid_size: u32,
+	gravity: f32,
+	wave_patch_extent_meters: f32,
+	wave_period_seconds: f32,
 
-const WIND_SPEED_METERS_PER_SECOND = 5.0;
-// 10 km fetch
-const WIND_FETCH_METERS = 10.0 * 1000.0;
-const SWELL = 0.3;
+	wind_speed_meters_per_second: f32,
+	wind_fetch_meters: f32,
+	wave_swell: f32,
+	padding0: f32,
+}
 
 // Implementation derived from:
 // Nicolas Lutz, Arnaud Schoentgen, and Guillaume Gilet. 2024. Fast orientable aperiodic ocean synthesis using tiling and blending. Proc. ACM Comput. Graph. Interact. Tech. 7, 3, Article 49 (August 2024), 22 pages. https://doi.org/10.1145/3675388
@@ -20,7 +22,7 @@ const SWELL = 0.3;
 // Deterministic wave parameters derived from texture coordinate
 struct WaveParameters
 {
-	// Ranges from -FOURIER_GRID_DIMENSION / 2 to FOURIER_GRID_DIMENSION / 2
+	// Ranges from -fourier_grid_size / 2 to fourier_grid_size / 2
 	wave_coord: vec2<i32>,
 
 	wave_vector: vec2<f32>,
@@ -37,20 +39,23 @@ fn quantizeFrequency(frequency: f32, fundamental_frequency: f32) -> f32
 	return (multiple - fract(multiple)) * fundamental_frequency;
 }
 
-fn waveParameters(texel_coord: vec2<u32>) -> WaveParameters
+fn waveParameters(settings: ptr<uniform, FourierWavesUBO>, texel_coord: vec2<u32>) -> WaveParameters
 {
 	var result: WaveParameters;
 
-	const wave_coord_offset = i32(FOURIER_GRID_DIMENSION / 2u);
-	const g = GRAVITY;
+	let wave_coord_offset = i32((*settings).fourier_grid_size / 2u);
+	let g = (*settings).gravity;
 
 	result.wave_coord = vec2<i32>(i32(texel_coord.x), i32(texel_coord.y)) - vec2<i32>(wave_coord_offset);
 
 	const QUANTIZED_FREQUENCIES = true;
 	if (QUANTIZED_FREQUENCIES)
 	{
-		let frequency_quantization_step = 2.0 * PI / WAVE_PERIOD_SECONDS;
-		let fundamental_frequency = quantizeFrequency(sqrt(g * 2.0 * PI / WAVE_PATCH_EXTENT_METERS), frequency_quantization_step);
+		let frequency_quantization_step = 2.0 * PI / (*settings).wave_period_seconds;
+		let fundamental_frequency = quantizeFrequency(
+			sqrt(g * 2.0 * PI / (*settings).wave_patch_extent_meters),
+			frequency_quantization_step
+			);
 		let fundamental_wave_number = fundamental_frequency * fundamental_frequency / g;
 		result.delta_wave_number = fundamental_wave_number;
 
@@ -66,7 +71,7 @@ fn waveParameters(texel_coord: vec2<u32>) -> WaveParameters
 	}
 	else
 	{
-		let fundamental_wave_number = 2.0 * PI / WAVE_PATCH_EXTENT_METERS;
+		let fundamental_wave_number = 2.0 * PI / (*settings).wave_patch_extent_meters;
 		let fundamental_frequency = sqrt(g * fundamental_wave_number);
 		result.delta_wave_number = fundamental_wave_number;
 
@@ -83,11 +88,11 @@ fn waveParameters(texel_coord: vec2<u32>) -> WaveParameters
 	return result;
 }
 
-fn waveSpectrumJONSWAP(frequency: f32, peak_frequency: f32) -> f32
+fn waveSpectrumJONSWAP(settings: ptr<uniform, FourierWavesUBO>, frequency: f32, peak_frequency: f32) -> f32
 {
-	const wind_speed = WIND_SPEED_METERS_PER_SECOND;
-	const wind_fetch = WIND_FETCH_METERS;
-	const g = GRAVITY;
+	let wind_speed = (*settings).wind_speed_meters_per_second;
+	let wind_fetch = (*settings).wind_fetch_meters;
+	let g = (*settings).gravity;
 
 	let alpha = 0.076 * pow(wind_speed * wind_speed / (wind_fetch * g), 0.22);
 	let gamma = 3.3;
@@ -128,10 +133,10 @@ fn gammaApprox(z: f32) -> f32
 	return sqrt(2.0 * PI) * pow(z + r + 0.5, z + 0.5) * exp(-(z + r + 0.5)) * s;
 }
 
-fn waveDirectionalSpreading(frequency: f32, peak_frequency: f32, angle: f32) -> f32
+fn waveDirectionalSpreading(settings: ptr<uniform, FourierWavesUBO>, frequency: f32, peak_frequency: f32, angle: f32) -> f32
 {
 	let f_ratio = peak_frequency / frequency;
-	let swell = SWELL;
+	let swell = (*settings).wave_swell;
 
 	let s = 16.0 * tanh(f_ratio) * swell * swell;
 
@@ -143,32 +148,39 @@ fn waveDirectionalSpreading(frequency: f32, peak_frequency: f32, angle: f32) -> 
 	return q * pow(abs(cos(angle / 2.0)), 2.0 * s);
 }
 
-@group(0) @binding(0) var out_fourier_amplitude: texture_storage_2d<rg32float, write>;
+@group(0) @binding(0) var out_initial_amplitude: texture_storage_2d<rg32float, write>;
 @group(0) @binding(1) var in_gaussian_random_pairs: texture_storage_2d<rg32float, read>;
 
+@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+@group(1) @binding(1) var<uniform> u_fourier_waves: FourierWavesUBO;
+
 @compute @workgroup_size(16, 16, 1)
-fn computeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
+fn computeInitialAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 {
     let texel_coord = vec2<u32>(global_id.xy);
-    let size = textureDimensions(out_fourier_amplitude);
+    let size = textureDimensions(out_initial_amplitude);
     if texel_coord.x >= size.x || texel_coord.y >= size.y {
         return;
     }
 
 	let gaussian_pair = textureLoad(in_gaussian_random_pairs, texel_coord).xy;
-	let wave = waveParameters(texel_coord);
+	let wave = waveParameters(&u_fourier_waves, texel_coord);
 
 	if (abs(wave.wave_number) < wave.delta_wave_number)
 	{
 		let amplitude = vec2<f32>(0.0, 0.0);
-		textureStore(out_fourier_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));
+		textureStore(out_initial_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));
 		return;
 	}
 
-	let peak_frequency = 22.0 * pow(GRAVITY * GRAVITY / (WIND_SPEED_METERS_PER_SECOND * WIND_FETCH_METERS), 1.0 / 3.0);
+	let g = u_fourier_waves.gravity;
+	let wind_speed = u_fourier_waves.wind_speed_meters_per_second;
+	let wind_fetch = u_fourier_waves.wind_fetch_meters;
 
-	let spectrum = waveSpectrumJONSWAP(wave.frequency, peak_frequency)
-		* waveDirectionalSpreading(wave.frequency, peak_frequency, wave.wind_angle);
+	let peak_frequency = 22.0 * pow(g * g / (wind_speed * wind_fetch), 1.0 / 3.0);
+
+	let spectrum = waveSpectrumJONSWAP(&u_fourier_waves, wave.frequency, peak_frequency)
+		* waveDirectionalSpreading(&u_fourier_waves, wave.frequency, peak_frequency, wave.wind_angle);
 
 	let magnitude = sqrt(
 		2.0
@@ -181,7 +193,7 @@ fn computeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 		* gaussian_pair
 		* magnitude;
 
-	textureStore(out_fourier_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));
+	textureStore(out_initial_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));
 }
 
 
@@ -203,17 +215,19 @@ fn computeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 @group(0) @binding(1) var out_packed_Dx_plus_iDz_amplitude: texture_storage_2d<rg32float, write>;
 @group(0) @binding(2) var out_packed_Dydx_plus_iDydz_amplitude: texture_storage_2d<rg32float, write>;
 @group(0) @binding(3) var out_packed_Dxdx_plus_iDzdz_amplitude: texture_storage_2d<rg32float, write>;
-@group(0) @binding(4) var in_fourier_amplitude: texture_storage_2d<rg32float, read>;
+@group(0) @binding(4) var in_initial_amplitude: texture_storage_2d<rg32float, read>;
 
+/* Commented to avoid re-declaration
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
-
+@group(1) @binding(1) var<uniform> u_fourier_waves: FourierWavesUBO;
+*/
 fn complexMult(a: vec2<f32>, b: vec2<f32>) -> vec2<f32>
 {
 	return vec2<f32>(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x);
 }
 
 @compute @workgroup_size(16, 16, 1)
-fn realizeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
+fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 {
 	let texel_coord = vec2<u32>(global_id.xy);
     let size = textureDimensions(out_packed_Dy_plus_iDxdz_amplitude);
@@ -221,14 +235,14 @@ fn realizeFourierAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
         return;
     }
 
-	let wave = waveParameters(texel_coord);
-	let k_amplitude = textureLoad(in_fourier_amplitude, texel_coord).xy;
+	let wave = waveParameters(&u_fourier_waves, texel_coord);
+	let k_amplitude = textureLoad(in_initial_amplitude, texel_coord).xy;
 
 	let k_minus_coord = vec2<u32>(
-		(FOURIER_GRID_DIMENSION - texel_coord.x) % FOURIER_GRID_DIMENSION,
-		(FOURIER_GRID_DIMENSION - texel_coord.y) % FOURIER_GRID_DIMENSION
+		(u_fourier_waves.fourier_grid_size - texel_coord.x) % u_fourier_waves.fourier_grid_size,
+		(u_fourier_waves.fourier_grid_size - texel_coord.y) % u_fourier_waves.fourier_grid_size
 	);
-	let k_minus_amplitude = textureLoad(in_fourier_amplitude, k_minus_coord).xy;
+	let k_minus_amplitude = textureLoad(in_initial_amplitude, k_minus_coord).xy;
 	let k_minus_amplitude_conjugate = vec2<f32>(k_minus_amplitude.x, -k_minus_amplitude.y);
 
 	let phase = wave.frequency * u_global.time.time_seconds;

@@ -1,6 +1,6 @@
 import FourierWavesShaderPak from "../../shaders/sky-sea/fourier_waves.wgsl";
 
-import { GlobalUBO } from "./UBO.ts";
+import { GlobalUBO, UBO } from "./UBO.ts";
 import { DFFTResources } from "./FFT.ts";
 import { RenderOutputTexture, TimestampQueryInterval } from "./Common.ts";
 import {
@@ -9,15 +9,63 @@ import {
 } from "./MipMap.ts";
 
 // The dimension of the fourier grid, i.e., the sqrt of the number of unique waves for our discrete fourier transform
-const GRID_SIZE = 1024;
-const LOG_2_GRID_SIZE = 10;
+const GRID_SIZE = 512;
+const LOG_2_GRID_SIZE = 9;
+const GRAVITY = 9.8;
+const WAVE_PERIOD_SECONDS = 100.0;
+
 const GAUSSIAN_NOISE_FORMAT: GPUTextureFormat = "rg32float";
 
-const FOURIER_AMPLITUDE_FORMAT: GPUTextureFormat = "rg32float";
+const INITIAL_AMPLITUDE_FORMAT: GPUTextureFormat = "rg32float";
 const DISPLACEMENT_FORMAT: GPUTextureFormat = "rgba16float";
 const DERIVATIVES_FORMAT: GPUTextureFormat = "rgba16float";
 
 const FFT_IO_TEXTURE_FORMAT: GPUTextureFormat = "rg32float";
+
+class FourierWavesUBO extends UBO {
+	public readonly data: {
+		fourier_grid_size: number;
+		gravity: number;
+		wave_patch_extent_meters: number;
+		wave_period_seconds: number;
+
+		wind_speed_meters_per_second: number;
+		wind_fetch_meters: number;
+		wave_swell: number;
+		padding0: number;
+	} = {
+		fourier_grid_size: GRID_SIZE,
+		gravity: GRAVITY,
+		wave_patch_extent_meters: 50.0,
+		wave_period_seconds: WAVE_PERIOD_SECONDS,
+
+		wind_speed_meters_per_second: 5.0,
+		wind_fetch_meters: 10.0 * 1000.0,
+		wave_swell: 0.3,
+		padding0: 0,
+	};
+
+	constructor(device: GPUDevice) {
+		super(device, 8, "Fourier Waves UBO");
+	}
+
+	protected override packed(): ArrayBuffer {
+		const buffer = new ArrayBuffer(this.buffer.size);
+		const view = new DataView(buffer);
+
+		view.setUint32(0, this.data.fourier_grid_size, true);
+		view.setFloat32(4, this.data.gravity, true);
+		view.setFloat32(8, this.data.wave_patch_extent_meters, true);
+		view.setFloat32(12, this.data.wave_period_seconds, true);
+
+		view.setFloat32(16, this.data.wind_speed_meters_per_second, true);
+		view.setFloat32(20, this.data.wind_fetch_meters, true);
+		view.setFloat32(24, this.data.wave_swell, true);
+		view.setFloat32(28, this.data.padding0, true);
+
+		return buffer;
+	}
+}
 
 /* Box-Muller transform two uniform random numbers to gaussian pair
  * The two values returned are dependent, and should not be used directly as two independent values
@@ -39,7 +87,7 @@ function randGaussian2DBoxMuller() {
 
 export interface FFTWaveSpectrumRenderables {
 	gaussianNoise: RenderOutputTexture;
-	fourierAmplitude: RenderOutputTexture;
+	initialAmplitude: RenderOutputTexture;
 	Dy_Amplitude: RenderOutputTexture;
 	Dx_plus_iDz_Amplitude: RenderOutputTexture;
 	packed_Dydx_plus_iDydz_Amplitude: RenderOutputTexture;
@@ -96,33 +144,40 @@ export class FFTWaveSpectrumResources {
 	private gaussianNoise: GPUTexture;
 
 	// A fourier grid of wave amplitude that are a function of the wave vector
-	private fourierAmplitude: GPUTexture;
+	private initialAmplitude: GPUTexture;
+
+	private fourierWavesUBO: FourierWavesUBO;
 
 	/*
-	 * @group(0) @binding(0) var out_fourier_amplitude: texture_storage_2d<rg32float, write>;
+	 * @group(0) @binding(0) var out_initial_amplitude: texture_storage_2d<rg32float, write>;
 	 * @group(0) @binding(1) var in_gaussian_random_pairs: texture_storage_2d<rg32float, read>;
+	 *
+	 * @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+	 * @group(1) @binding(1) var<uniform> u_fourier_waves: FourierWavesUBO;
 	 */
-	private fourierAmplitudeGroup0: GPUBindGroup;
-	private fourierAmplitudePipeline: GPUComputePipeline;
-
-	// A fourier grid of realized wave amplitudes that are a function of wave vector (stored in fourierAmplitude) and time
-	private packed_Dy_plus_iDxdz_Amplitude: GPUTexture;
+	private initialAmplitudeGroup0: GPUBindGroup;
+	private initialAmplitudeGroup1: GPUBindGroup;
+	private initialAmplitudePipeline: GPUComputePipeline;
 
 	// Since we know the result is a real value, we can pack two fourier transforms into the space of one by multiplying one by i, the imaginary unit
+	private packed_Dy_plus_iDxdz_Amplitude: GPUTexture;
 	private packed_Dx_plus_iDz_Amplitude: GPUTexture;
 	private packed_Dydx_plus_iDydz_Amplitude: GPUTexture;
 	private packed_Dxdx_plus_iDzdz_Amplitude: GPUTexture;
 
 	/*
-	 * @group(0) @binding(0) var out_dy_amplitude: texture_storage_2d<rg32float, write>;
-	 * @group(0) @binding(1) var out_packed_dx_plus_idz_amplitude: texture_storage_2d<rg32float, write>;
-	 * @group(0) @binding(2) var in_fourier_amplitude: texture_storage_2d<rg32float, read>;
+	 * @group(0) @binding(0) var out_packed_Dy_plus_iDxdz_amplitude: texture_storage_2d<rg32float, write>;
+	 * @group(0) @binding(1) var out_packed_Dx_plus_iDz_amplitude: texture_storage_2d<rg32float, write>;
+	 * @group(0) @binding(2) var out_packed_Dydx_plus_iDydz_amplitude: texture_storage_2d<rg32float, write>;
+	 * @group(0) @binding(3) var out_packed_Dxdx_plus_iDzdz_amplitude: texture_storage_2d<rg32float, write>;
+	 * @group(0) @binding(4) var in_initial_amplitude: texture_storage_2d<rg32float, read>;
 	 *
 	 * @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+	 * @group(1) @binding(1) var<uniform> u_fourier_waves: FourierWavesUBO;
 	 */
-	private realizedFourierAmplitudeGroup0: GPUBindGroup;
-	private realizedFourierAmplitudeGroup1: GPUBindGroup;
-	private realizedFourierAmplitudePipeline: GPUComputePipeline;
+	private realizedAmplitudeGroup0: GPUBindGroup;
+	private realizedAmplitudeGroup1: GPUBindGroup;
+	private realizedAmplitudePipeline: GPUComputePipeline;
 
 	/*
 	 * Output textures of the FFT
@@ -193,23 +248,26 @@ export class FFTWaveSpectrumResources {
 			}
 		);
 
-		this.fourierAmplitude = device.createTexture({
+		this.fourierWavesUBO = new FourierWavesUBO(device);
+		this.fourierWavesUBO.writeToGPU(device.queue);
+
+		this.initialAmplitude = device.createTexture({
 			label: "FFT Wave Fourier Amplitude h_0(k)",
-			format: FOURIER_AMPLITUDE_FORMAT,
+			format: INITIAL_AMPLITUDE_FORMAT,
 			size: spectrumTextureSize,
 			usage:
 				GPUTextureUsage.STORAGE_BINDING |
 				GPUTextureUsage.TEXTURE_BINDING,
 		});
 
-		const fourierAmplitudeGroup0Layout = device.createBindGroupLayout({
-			label: "FFT Wave Fourier Amplitude h_0(k) Group 0",
+		const initialAmplitudeGroup0Layout = device.createBindGroupLayout({
+			label: "FFT Wave Initial Amplitude h_0(k) Group 0",
 			entries: [
 				{
 					binding: 0,
 					visibility: GPUShaderStage.COMPUTE,
 					storageTexture: {
-						format: FOURIER_AMPLITUDE_FORMAT,
+						format: INITIAL_AMPLITUDE_FORMAT,
 						access: "write-only",
 					},
 				},
@@ -224,17 +282,52 @@ export class FFTWaveSpectrumResources {
 			],
 		});
 
-		this.fourierAmplitudeGroup0 = device.createBindGroup({
-			label: "FFT Wave Fourier Amplitude h_0(k) Group 0",
-			layout: fourierAmplitudeGroup0Layout,
+		this.initialAmplitudeGroup0 = device.createBindGroup({
+			label: "FFT Wave Initial Amplitude h_0(k) Group 0",
+			layout: initialAmplitudeGroup0Layout,
 			entries: [
 				{
 					binding: 0,
-					resource: this.fourierAmplitude.createView(),
+					resource: this.initialAmplitude.createView(),
 				},
 				{
 					binding: 1,
 					resource: this.gaussianNoise.createView(),
+				},
+			],
+		});
+
+		const initialAmplitudeGroup1Layout = device.createBindGroupLayout({
+			label: "FFT Wave Initial Amplitude h_0(k) Group 1",
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: {
+						type: "uniform",
+					},
+				},
+				{
+					binding: 1,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: {
+						type: "uniform",
+					},
+				},
+			],
+		});
+
+		this.initialAmplitudeGroup1 = device.createBindGroup({
+			label: "FFT Wave Initial Amplitude h_0(k) Group 1",
+			layout: initialAmplitudeGroup1Layout,
+			entries: [
+				{
+					binding: 0,
+					resource: { buffer: globalUBO.buffer },
+				},
+				{
+					binding: 1,
+					resource: { buffer: this.fourierWavesUBO.buffer },
 				},
 			],
 		});
@@ -246,15 +339,18 @@ export class FFTWaveSpectrumResources {
 			code: FourierWavesShaderPak,
 		});
 
-		this.fourierAmplitudePipeline = device.createComputePipeline({
-			label: "FFT Wave Fourier Amplitude h_0(k)",
+		this.initialAmplitudePipeline = device.createComputePipeline({
+			label: "FFT Wave Initial Amplitude h_0(k)",
 			layout: device.createPipelineLayout({
-				label: "FFT Wave Fourier Amplitude h_0(k)",
-				bindGroupLayouts: [fourierAmplitudeGroup0Layout],
+				label: "FFT Wave Initial Amplitude h_0(k)",
+				bindGroupLayouts: [
+					initialAmplitudeGroup0Layout,
+					initialAmplitudeGroup1Layout,
+				],
 			}),
 			compute: {
 				module: shaderModule,
-				entryPoint: "computeFourierAmplitude",
+				entryPoint: "computeInitialAmplitude",
 			},
 		});
 
@@ -351,55 +447,54 @@ export class FFTWaveSpectrumResources {
 				this.Dydx_Dydz_Dxdx_Dzdz_Spatial
 			);
 
-		const realizedFourierAmplitudeGroup0Layout =
-			device.createBindGroupLayout({
-				label: "FFT Wave Realized Fourier Amplitude h(k,t) Group 0",
-				entries: [
-					{
-						binding: 0,
-						visibility: GPUShaderStage.COMPUTE,
-						storageTexture: {
-							format: "rg32float",
-							access: "write-only",
-						},
-					},
-					{
-						binding: 1,
-						visibility: GPUShaderStage.COMPUTE,
-						storageTexture: {
-							format: "rg32float",
-							access: "write-only",
-						},
-					},
-					{
-						binding: 2,
-						visibility: GPUShaderStage.COMPUTE,
-						storageTexture: {
-							format: "rg32float",
-							access: "write-only",
-						},
-					},
-					{
-						binding: 3,
-						visibility: GPUShaderStage.COMPUTE,
-						storageTexture: {
-							format: "rg32float",
-							access: "write-only",
-						},
-					},
-					{
-						binding: 4,
-						visibility: GPUShaderStage.COMPUTE,
-						storageTexture: {
-							format: "rg32float",
-							access: "read-only",
-						},
-					},
-				],
-			});
-		this.realizedFourierAmplitudeGroup0 = device.createBindGroup({
+		const realizedAmplitudeGroup0Layout = device.createBindGroupLayout({
 			label: "FFT Wave Realized Fourier Amplitude h(k,t) Group 0",
-			layout: realizedFourierAmplitudeGroup0Layout,
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.COMPUTE,
+					storageTexture: {
+						format: "rg32float",
+						access: "write-only",
+					},
+				},
+				{
+					binding: 1,
+					visibility: GPUShaderStage.COMPUTE,
+					storageTexture: {
+						format: "rg32float",
+						access: "write-only",
+					},
+				},
+				{
+					binding: 2,
+					visibility: GPUShaderStage.COMPUTE,
+					storageTexture: {
+						format: "rg32float",
+						access: "write-only",
+					},
+				},
+				{
+					binding: 3,
+					visibility: GPUShaderStage.COMPUTE,
+					storageTexture: {
+						format: "rg32float",
+						access: "write-only",
+					},
+				},
+				{
+					binding: 4,
+					visibility: GPUShaderStage.COMPUTE,
+					storageTexture: {
+						format: "rg32float",
+						access: "read-only",
+					},
+				},
+			],
+		});
+		this.realizedAmplitudeGroup0 = device.createBindGroup({
+			label: "FFT Wave Realized Fourier Amplitude h(k,t) Group 0",
+			layout: realizedAmplitudeGroup0Layout,
 			entries: [
 				{
 					binding: 0,
@@ -421,45 +516,53 @@ export class FFTWaveSpectrumResources {
 				},
 				{
 					binding: 4,
-					resource: this.fourierAmplitude.createView(),
+					resource: this.initialAmplitude.createView(),
 				},
 			],
 		});
 
-		const realizedFourierAmplitudeGroup1Layout =
-			device.createBindGroupLayout({
-				label: "FFT Wave Realized Fourier Amplitude h(k,t) Group 1",
-				entries: [
-					{
-						binding: 0,
-						visibility: GPUShaderStage.COMPUTE,
-						buffer: { type: "uniform" },
-					},
-				],
-			});
-		this.realizedFourierAmplitudeGroup1 = device.createBindGroup({
+		const realizedAmplitudeGroup1Layout = device.createBindGroupLayout({
 			label: "FFT Wave Realized Fourier Amplitude h(k,t) Group 1",
-			layout: realizedFourierAmplitudeGroup1Layout,
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: { type: "uniform" },
+				},
+				{
+					binding: 1,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: { type: "uniform" },
+				},
+			],
+		});
+		this.realizedAmplitudeGroup1 = device.createBindGroup({
+			label: "FFT Wave Realized Fourier Amplitude h(k,t) Group 1",
+			layout: realizedAmplitudeGroup1Layout,
 			entries: [
 				{
 					binding: 0,
 					resource: { buffer: globalUBO.buffer },
 				},
+				{
+					binding: 1,
+					resource: { buffer: this.fourierWavesUBO.buffer },
+				},
 			],
 		});
 
-		this.realizedFourierAmplitudePipeline = device.createComputePipeline({
+		this.realizedAmplitudePipeline = device.createComputePipeline({
 			label: "FFT Wave Realized Fourier Amplitude h(k,t)",
 			layout: device.createPipelineLayout({
 				label: "FFT Wave Realized Fourier Amplitude h(k,t)",
 				bindGroupLayouts: [
-					realizedFourierAmplitudeGroup0Layout,
-					realizedFourierAmplitudeGroup1Layout,
+					realizedAmplitudeGroup0Layout,
+					realizedAmplitudeGroup1Layout,
 				],
 			}),
 			compute: {
 				module: shaderModule,
-				entryPoint: "realizeFourierAmplitude",
+				entryPoint: "computeRealizedAmplitude",
 			},
 		});
 
@@ -568,12 +671,13 @@ export class FFTWaveSpectrumResources {
 		const passEncoder = commandEncoder.beginComputePass({
 			label: "FFT Wave Fourier Amplitude",
 		});
-		passEncoder.setPipeline(this.fourierAmplitudePipeline);
-		passEncoder.setBindGroup(0, this.fourierAmplitudeGroup0);
+		passEncoder.setPipeline(this.initialAmplitudePipeline);
+		passEncoder.setBindGroup(0, this.initialAmplitudeGroup0);
+		passEncoder.setBindGroup(1, this.initialAmplitudeGroup1);
 
 		const dispatchSize = {
-			width: this.fourierAmplitude.width,
-			height: this.fourierAmplitude.height,
+			width: this.initialAmplitude.width,
+			height: this.initialAmplitude.height,
 			depth: 1,
 		};
 
@@ -596,7 +700,7 @@ export class FFTWaveSpectrumResources {
 	views(): FFTWaveSpectrumRenderables {
 		return {
 			gaussianNoise: new RenderOutputTexture(this.gaussianNoise),
-			fourierAmplitude: new RenderOutputTexture(this.fourierAmplitude),
+			initialAmplitude: new RenderOutputTexture(this.initialAmplitude),
 			Dy_Amplitude: new RenderOutputTexture(
 				this.packed_Dy_plus_iDxdz_Amplitude
 			),
@@ -641,9 +745,9 @@ export class FFTWaveSpectrumResources {
 					  }
 					: undefined,
 		});
-		realizePassEncoder.setPipeline(this.realizedFourierAmplitudePipeline);
-		realizePassEncoder.setBindGroup(0, this.realizedFourierAmplitudeGroup0);
-		realizePassEncoder.setBindGroup(1, this.realizedFourierAmplitudeGroup1);
+		realizePassEncoder.setPipeline(this.realizedAmplitudePipeline);
+		realizePassEncoder.setBindGroup(0, this.realizedAmplitudeGroup0);
+		realizePassEncoder.setBindGroup(1, this.realizedAmplitudeGroup1);
 
 		const workgroupCounts = {
 			width: this.packed_Dy_plus_iDxdz_Amplitude.width,

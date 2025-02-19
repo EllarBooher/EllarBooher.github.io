@@ -11,7 +11,7 @@ export enum RenderOutput {
 	GBufferColor,
 	GBufferNormal,
 	FFTWaveSpectrumGaussianNoise,
-	FFTWaveFourierAmplitude,
+	FFTWaveInitialAmplitude,
 	FFTWaveDy_plus_iDxdz_Amplitude,
 	FFTWaveDx_plus_iDz_Amplitude,
 	FFTWaveDydx_plus_iDydz_Amplitude,

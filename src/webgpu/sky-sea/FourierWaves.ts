@@ -133,12 +133,14 @@ export class FFTWaveDisplacementMaps {
 	}
 }
 
+export interface FFTWaveCascade {}
+
 export class FFTWaveSpectrumResources {
 	// We produce a discrete spectrum of waves, for which the various values will be stored in square textures
 	// This dimension determines the diameter of that square, so the total number of frequencies we produce
 	// Our spectrum is discrete so we can apply an IDFT algorithm to determine the displacement when rendering the sums of these waves
 	// (x,z) position in this grid uniquely identifies a wave with wave vector k = (k_x,k_z)
-	private spectrumDimension: number;
+	private gridSize: number;
 
 	// A two-channel texture of pairs of gaussian random variables, used to generate the amplitudes of our waves
 	private gaussianNoise: GPUTexture;
@@ -208,11 +210,11 @@ export class FFTWaveSpectrumResources {
 	private mipMapBindings_Dydx_Dydz_Dxdx_Dzdz_Spatial: MipMapGenerationTextureBindings;
 
 	constructor(device: GPUDevice, globalUBO: GlobalUBO) {
-		this.spectrumDimension = GRID_SIZE;
+		this.gridSize = GRID_SIZE;
 
 		const spectrumTextureSize = {
-			width: this.spectrumDimension,
-			height: this.spectrumDimension,
+			width: this.gridSize,
+			height: this.gridSize,
 		} satisfies GPUExtent3DStrict;
 
 		this.gaussianNoise = device.createTexture({
@@ -227,11 +229,9 @@ export class FFTWaveSpectrumResources {
 
 		const FLOAT32_PER_GAUSSIAN_NOISE_TEXEL = 2;
 		const BYTES_PER_TEXEL = 8;
-		const BYTES_PER_ROW = BYTES_PER_TEXEL * this.spectrumDimension;
+		const BYTES_PER_ROW = BYTES_PER_TEXEL * this.gridSize;
 		const randomNumbers = new Float32Array(
-			this.spectrumDimension *
-				this.spectrumDimension *
-				FLOAT32_PER_GAUSSIAN_NOISE_TEXEL
+			this.gridSize * this.gridSize * FLOAT32_PER_GAUSSIAN_NOISE_TEXEL
 		);
 
 		for (let i = 0; i < randomNumbers.length; i++) {

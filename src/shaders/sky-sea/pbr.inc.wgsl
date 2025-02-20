@@ -14,23 +14,26 @@ struct PBRTexel
     metallic: f32,
 };
 
-fn convertPBRProperties(color: vec3<f32>, normal: vec3<f32>) -> PBRTexel
+fn convertPBRPropertiesWater(color: vec3<f32>, normal: vec3<f32>, surface_jacobian: f32) -> PBRTexel
 {
     let metallic = 1.0;
 
+	let foam_intensity = clamp(1.0 - surface_jacobian, 0.0, 1.0);
+
 	let specular_power = 160.0;
-    let roughness = 0.05;
+    let roughness = mix(0.05, 1.0, foam_intensity);
 
     let WATER_DEEP_COLOR = 0.2 * vec3<f32>(16.0 / 255.0, 97.0 / 255.0, 171.0 / 255.0);
+	let albedo = mix(WATER_DEEP_COLOR, vec3<f32>(1.0), foam_intensity);
 
     let dielectric_reflectance = vec3<f32>(0.04);
     let metallic_reflectance = vec3<f32>(0.5) * color / max3(color);
 
-    let normal_reflectance = mix(dielectric_reflectance, metallic_reflectance, metallic);
+    let normal_reflectance = mix(mix(dielectric_reflectance, metallic_reflectance, metallic), vec3<f32>(1.0), foam_intensity);
 
     var texel = PBRTexel();
     texel.normal = normal;
-    texel.subscattering_albedo = WATER_DEEP_COLOR;
+    texel.subscattering_albedo = albedo;
     texel.normal_reflectance = normal_reflectance;
     texel.specular_power = pow(specular_power, 1.0 - roughness);
     texel.metallic = metallic;

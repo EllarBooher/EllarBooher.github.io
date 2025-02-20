@@ -44,6 +44,7 @@ struct WaveDisplacementResult
     displacement: vec3<f32>,
     tangent: vec3<f32>,
     bitangent: vec3<f32>,
+	jacobian: f32,
 }
 
 fn sampleGerstner(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distance: f32) -> WaveDisplacementResult
@@ -85,6 +86,7 @@ fn sampleGerstner(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distanc
         - wave_amplitude * sin_theta * wave_vector.y,
         - wave_amplitude * wave_direction.y * cos_theta * wave_vector.y,
     );
+	output.jacobian = 1.0;
 
     return output;
 }
@@ -130,6 +132,7 @@ fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distance:
         - wave_amplitude * sin_theta * wave_vector.y,
         0.0,
     );
+	output.jacobian = 1.0;
 
     return output;
 }
@@ -142,8 +145,14 @@ fn sampleMap(global_uv: vec2<f32>, max_cascade: f32, gerstner: bool, lod: f32) -
 	output.displacement = vec3<f32>(0.0);
 	output.tangent = vec3<f32>(0.0);
 	output.bitangent = vec3<f32>(0.0);
+	output.jacobian = 0.0;
 
 	const WAVE_PATCH_SIZES = array<f32,3>(200.0, 50.0, 10.0);
+
+	var jacobian_xx = 1.0;
+	var jacobian_zz = 1.0;
+	var jacobian_xz = 0.0;
+	var jacobian_zx = 0.0;
 
 	for(var array_layer = 0u; array_layer <= u32(max_cascade); array_layer++)
 	{
@@ -179,7 +188,15 @@ fn sampleMap(global_uv: vec2<f32>, max_cascade: f32, gerstner: bool, lod: f32) -
 
 		output.tangent += lambda * vec3<f32>(Dxdx, Dydx, Dzdx);
 		output.bitangent += lambda * vec3<f32>(Dxdz, Dydz, Dzdz);
+
+		jacobian_xx += lambda * Dxdx;
+		jacobian_zz += lambda * Dzdz;
+
+		jacobian_xz += lambda * Dxdz;
+		jacobian_zx += lambda * Dzdx;
 	}
+
+	output.jacobian = jacobian_xx * jacobian_zz - jacobian_xz * jacobian_zx;
 
 	return output;
 }
@@ -188,6 +205,7 @@ struct DisplacementResult
 {
 	world_position: vec3<f32>,
 	world_normal: vec3<f32>,
+	jacobian: f32,
 }
 
 fn computeDisplacement(in_world_position: vec3<f32>, max_cascade: f32, time: f32, lod: f32, max_lod: f32) -> DisplacementResult
@@ -195,6 +213,7 @@ fn computeDisplacement(in_world_position: vec3<f32>, max_cascade: f32, time: f32
 	var displacement = vec3<f32>(0.0);
     var tangent = vec3<f32>(1.0, 0.0, 0.0);
     var bitangent = vec3<f32>(0.0, 0.0, 1.0);
+	var jacobian = 0.0;
 
 	if(u_settings.b_displacement_map == 1u)
 	{
@@ -205,6 +224,7 @@ fn computeDisplacement(in_world_position: vec3<f32>, max_cascade: f32, time: f32
 		displacement += result.displacement;
 		tangent += result.tangent;
 		bitangent += result.bitangent;
+		jacobian += result.jacobian;
 	}
 	else
 	{
@@ -224,6 +244,7 @@ fn computeDisplacement(in_world_position: vec3<f32>, max_cascade: f32, time: f32
 			displacement += result.displacement;
 			tangent += result.tangent;
 			bitangent += result.bitangent;
+			jacobian += result.jacobian;
 		}
 	}
 
@@ -235,6 +256,7 @@ fn computeDisplacement(in_world_position: vec3<f32>, max_cascade: f32, time: f32
 	let lod_factor = 1.0 - lod / max_lod;
 	result.world_position = in_world_position + lod_factor * displacement;
 	result.world_normal = mix(vec3<f32>(0.0, 1.0, 0.0) ,-normalize(cross(tangent, bitangent)), lod_factor);
+	result.jacobian = jacobian;
 
 	return result;
 }
@@ -265,6 +287,7 @@ struct VertexOut {
     @location(1) world_normal : vec3<f32>,
     @location(2) color : vec3<f32>,
     @location(3) camera_distance : f32,
+	@location(4) jacobian : f32,
 }
 
 /*
@@ -364,6 +387,7 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	output.position.z /= 1.001;
 	output.world_normal = displacement_result.world_normal;
 	output.color = vec3<f32>(WATER_COLOR);
+	output.jacobian = displacement_result.jacobian;
 
 	// Test screen-space density of vertices
 	// output.color = vec3<f32>(step(fract(50 * ndc_space_coord), vec2<f32>(0.1)),0.0);
@@ -386,7 +410,7 @@ fn rasterizationFragment(frag_interpolated: VertexOut) -> FragmentOut
     var output : FragmentOut;
 
     output.color = vec4<f32>(frag_interpolated.color, frag_interpolated.camera_distance);
-    output.world_normal = vec4<f32>(frag_interpolated.world_normal,0.0);
+    output.world_normal = vec4<f32>(frag_interpolated.world_normal,frag_interpolated.jacobian);
 
     return output;
 }

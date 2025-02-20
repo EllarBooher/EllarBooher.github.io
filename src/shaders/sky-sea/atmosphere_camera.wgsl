@@ -339,7 +339,7 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
         // View of virtual environment: either the sky, or the floor
         if (intersects_ground)
         {
-            let material: PBRTexel = convertPBRProperties(vec3<f32>(1.0), vec3<f32>(0.0,1.0,0.0));
+            let material: PBRTexel = convertPBRPropertiesWater(vec3<f32>(1.0), vec3<f32>(0.0,1.0,0.0), 1.0);
             luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, intersects_ground);
         }
         else
@@ -350,7 +350,7 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     else
     {
         // View of geometry in gbuffer
-        let material: PBRTexel = convertPBRProperties(color_with_depth_in_alpha.xyz, normal.xyz);
+        let material: PBRTexel = convertPBRPropertiesWater(color_with_depth_in_alpha.xyz, normal.xyz, normal.w);
         luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, true);
     }
 

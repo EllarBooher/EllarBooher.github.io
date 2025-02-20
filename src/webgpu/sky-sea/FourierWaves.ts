@@ -693,8 +693,8 @@ export class FFTWaveSpectrumResources {
 			},
 		});
 
-		function nyquistWaveNumber(spatialSampleRate: number) {
-			const wavelength = 2.0 * spatialSampleRate;
+		function nyquistWaveNumber(spatialSampleDistance: number) {
+			const wavelength = 2.0 * spatialSampleDistance;
 			return (2.0 * Math.PI) / wavelength;
 		}
 

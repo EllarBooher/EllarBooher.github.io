@@ -134,7 +134,7 @@ fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distance:
     return output;
 }
 
-fn sampleMap(global_uv: vec2<f32>, gerstner: bool, lod: f32) -> WaveDisplacementResult
+fn sampleMap(global_uv: vec2<f32>, max_cascade: f32, gerstner: bool, lod: f32) -> WaveDisplacementResult
 {
 	let delta = 0.5 / vec2<f32>(textureDimensions(Dx_Dy_Dz_Dxdz_spatial));
 
@@ -145,8 +145,14 @@ fn sampleMap(global_uv: vec2<f32>, gerstner: bool, lod: f32) -> WaveDisplacement
 
 	const WAVE_PATCH_SIZES = array<f32,3>(200.0, 50.0, 10.0);
 
-	for(var array_layer = 0u; array_layer < textureNumLayers(Dx_Dy_Dz_Dxdz_spatial); array_layer++)
+	for(var array_layer = 0u; array_layer <= u32(max_cascade); array_layer++)
 	{
+		var lambda = 1.0;
+		if(array_layer == u32(max_cascade))
+		{
+			lambda = fract(max_cascade);
+		}
+
 		let patch_uv = global_uv / WAVE_PATCH_SIZES[array_layer];
 
 		let Dx_Dy_Dz_Dxdz = textureSampleLevel(Dx_Dy_Dz_Dxdz_spatial, displacement_map_sampler, patch_uv, array_layer, f32(lod));
@@ -158,7 +164,7 @@ fn sampleMap(global_uv: vec2<f32>, gerstner: bool, lod: f32) -> WaveDisplacement
 			output.displacement.z = 0.0;
 		}
 
-		output.displacement += delta_displacement;
+		output.displacement += lambda * delta_displacement;
 
 		let Dydx_Dydz_Dxdx_Dzdz = textureSampleLevel(Dydx_Dydz_Dxdx_Dzdz_spatial, displacement_map_sampler, patch_uv, array_layer, f32(lod));
 
@@ -171,8 +177,8 @@ fn sampleMap(global_uv: vec2<f32>, gerstner: bool, lod: f32) -> WaveDisplacement
 		var Dxdx = Dydx_Dydz_Dxdx_Dzdz.z * f32(gerstner);
 		var Dzdz = Dydx_Dydz_Dxdx_Dzdz.w * f32(gerstner);
 
-		output.tangent += vec3<f32>(Dxdx, Dydx, Dzdx);
-		output.bitangent += vec3<f32>(Dxdz, Dydz, Dzdz);
+		output.tangent += lambda * vec3<f32>(Dxdx, Dydx, Dzdx);
+		output.bitangent += lambda * vec3<f32>(Dxdz, Dydz, Dzdz);
 	}
 
 	return output;
@@ -184,18 +190,17 @@ struct DisplacementResult
 	world_normal: vec3<f32>,
 }
 
-fn computeDisplacement(in_world_position: vec3<f32>, time: f32, lod: f32, max_lod: f32) -> DisplacementResult
+fn computeDisplacement(in_world_position: vec3<f32>, max_cascade: f32, time: f32, lod: f32, max_lod: f32) -> DisplacementResult
 {
 	var displacement = vec3<f32>(0.0);
     var tangent = vec3<f32>(1.0, 0.0, 0.0);
     var bitangent = vec3<f32>(0.0, 0.0, 1.0);
 
-
 	if(u_settings.b_displacement_map == 1u)
 	{
     	let uv = (in_world_position.xz + vec2<f32>(0.5,0.5));
 		let gerstner = u_settings.b_gerstner == 1u;
-		let result: WaveDisplacementResult = sampleMap(uv, gerstner, lod);
+		let result: WaveDisplacementResult = sampleMap(uv, max_cascade, gerstner, lod);
 
 		displacement += result.displacement;
 		tangent += result.tangent;
@@ -303,23 +308,54 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	let ndc_space_coord = mix(ndc_min, ndc_max, vert_coord);
 
     let near_plane_depth = 1.0;
-    let direction_view_space = camera.inv_proj * vec4(ndc_space_coord, near_plane_depth, 1.0);
+    let direction_view_space = camera.inv_proj * vec4<f32>(ndc_space_coord, near_plane_depth, 1.0) /* -vec4<f32>(0.0,0.0,0.0,1.0) === camera position */;
     let direction_world = normalize((camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
 
 	let ocean_origin = vec3<f32>(0.0, WAVE_NEUTRAL_PLANE, 0.0);
 	let ocean_normal = vec3<f32>(0.0,1.0,0.0);
 	let ocean_plane_hit = rayPlaneIntersection(camera.position.xyz, direction_world, ocean_origin, ocean_normal);
-	// We assume the camera is nice, and that our manipulation of uv above guarantees a hit
-	// assert(ocean_plane_hit.hit)
-	var t = mix(1000.0, ocean_plane_hit.t, f32(ocean_plane_hit.hit));
+	let t = mix(1000.0, ocean_plane_hit.t, f32(ocean_plane_hit.hit));
 
 	var in_world_position = camera.position.xyz + t * direction_world;
 	in_world_position.y = WAVE_NEUTRAL_PLANE;
 
+	let offset_direction_view_space = camera.inv_proj * vec4<f32>(ndc_space_coord + vec2<f32>(1.0) / f32(VERTEX_DIMENSION - 1u), near_plane_depth, 1.0);
+	let offset_direction_world = normalize((camera.inv_view * vec4<f32>(offset_direction_view_space.xyz, 0.0)).xyz);
+	let offset_ocean_plane_hit = rayPlaneIntersection(camera.position.xyz, offset_direction_world, ocean_origin, ocean_normal);
+	let offset_t = mix(1000.0, offset_ocean_plane_hit.t, f32(offset_ocean_plane_hit.hit));
+	var offset_world_position = camera.position.xyz + offset_t * offset_direction_world;
+	offset_world_position.y = WAVE_NEUTRAL_PLANE;
+	let spatial_sample_distance = length(offset_world_position - in_world_position);
+
+	/*
+	 * We don't want to sample waves outside of the nyquist limit.
+	 * Each cascade has increasing wavenumber/decreasing wavelengths, so we can just only sample cascades up to the appropriate bound
+	 * These bounds define the wavenumber intervals that each cascade contains.
+	 * TODO: this is hardcoded right now, but should be passed as a uniform
+	 */
+	const WAVE_NUMBER_FENCE_POSTS = array<f32, 5>(0.001, 8.042477193189871, 32.169908772759484, 160.8495438637974, 1000);
+
+	// Any wave with wavenumber greater than this should NOT be sampled
+	let nyquist_wavenumber = (2.0 * PI) / (spatial_sample_distance * 2.0);
+
+	// Use a float, so we can interpolate cascades
+	var max_cascade: f32 = f32(textureNumLayers(Dx_Dy_Dz_Dxdz_spatial));
+	for(var cascade = 1u; cascade < textureNumLayers(Dx_Dy_Dz_Dxdz_spatial); cascade++)
+	{
+		let wave_number_min = WAVE_NUMBER_FENCE_POSTS[cascade];
+		let wave_number_max = WAVE_NUMBER_FENCE_POSTS[cascade + 1u];
+		if(wave_number_max > nyquist_wavenumber)
+		{
+			let t = (nyquist_wavenumber - wave_number_min) / (wave_number_max - wave_number_min);
+			max_cascade = f32(cascade) + clamp(t, 0.0, 1.0);
+			break;
+		}
+	}
+
 	const max_lod = 9.0;
 	const lod_scale_meters = 2000.0;
 	let lod = max_lod * atan(t / lod_scale_meters) / (0.5 * PI);
-	let displacement_result = computeDisplacement(in_world_position, u_global.time.time_seconds, lod, max_lod);
+	let displacement_result = computeDisplacement(in_world_position, max_cascade, u_global.time.time_seconds, lod, max_lod);
 
 	let world_position = displacement_result.world_position;
 

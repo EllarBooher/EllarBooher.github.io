@@ -8,8 +8,8 @@
 
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
-@group(2) @binding(0) var gbuffer_color_with_depth_in_alpha: texture_2d<f32>;
-@group(2) @binding(1) var gbuffer_normal: texture_2d<f32>;
+@group(2) @binding(0) var gbuffer_color_with_surface_world_depth_in_alpha: texture_2d<f32>;
+@group(2) @binding(1) var gbuffer_normal_with_surface_jacobian_in_alpha: texture_2d<f32>;
 
 // vertex state NOT included
 // Render a quad and use this as the fragment stage
@@ -301,7 +301,7 @@ fn sampleGeometryLuminance(
 fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u32>)
 {
     let texel_coord = vec2<u32>(global_id.xy);
-    let size = textureDimensions(gbuffer_color_with_depth_in_alpha);
+    let size = textureDimensions(gbuffer_color_with_surface_world_depth_in_alpha);
     if(texel_coord.x >= size.x || texel_coord.y >= size.y)
     {
         return;
@@ -322,10 +322,10 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     let direction_view_space = camera.inv_proj * vec4(ndc_space_coord, near_plane_depth, 1.0);
     let direction_world = normalize((camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
 
-    let color_with_depth_in_alpha = textureLoad(gbuffer_color_with_depth_in_alpha, texel_coord, 0);
-    let normal = textureLoad(gbuffer_normal, texel_coord, 0);
+    let color_with_surface_world_depth_in_alpha = textureLoad(gbuffer_color_with_surface_world_depth_in_alpha, texel_coord, 0);
+    let normal = textureLoad(gbuffer_normal_with_surface_jacobian_in_alpha, texel_coord, 0);
 
-    let depth = color_with_depth_in_alpha.a / METERS_PER_MM;
+    let depth = color_with_surface_world_depth_in_alpha.a / METERS_PER_MM;
 
     var luminance_transfer = vec3<f32>(0.0);
 
@@ -350,7 +350,8 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     else
     {
         // View of geometry in gbuffer
-        let material: PBRTexel = convertPBRPropertiesWater(color_with_depth_in_alpha.xyz, normal.xyz, normal.w);
+		let color = color_with_surface_world_depth_in_alpha.xyz;
+        let material: PBRTexel = convertPBRPropertiesWater(color, normal.xyz, normal.w);
         luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, true);
     }
 

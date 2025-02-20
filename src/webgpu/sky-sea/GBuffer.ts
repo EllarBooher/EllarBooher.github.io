@@ -8,11 +8,11 @@ const GBUFFER_NORMAL_FORMAT: GPUTextureFormat = "rgba16float";
 const GBUFFER_NORMAL_SAMPLE_TYPE: GPUTextureSampleType = "float";
 
 export class GBuffer {
-	colorWithDepthInAlpha: GPUTexture;
-	colorWithDepthInAlphaView: GPUTextureView;
+	colorWithSurfaceWorldDepthInAlpha: GPUTexture;
+	colorWithSurfaceWorldDepthInAlphaView: GPUTextureView;
 
-	normal: GPUTexture;
-	normalView: GPUTextureView;
+	normalWithSurfaceJacobianInAlpha: GPUTexture;
+	normalWithSurfaceJacobianInAlphaView: GPUTextureView;
 
 	// Depth used for graphics pipelines that render into the gbuffer
 	depth: GPUTexture;
@@ -32,7 +32,7 @@ export class GBuffer {
 	writeGroup: GPUBindGroup;
 
 	constructor(device: GPUDevice, dimensions: Extent2D, old?: GBuffer) {
-		this.colorWithDepthInAlpha = device.createTexture({
+		this.colorWithSurfaceWorldDepthInAlpha = device.createTexture({
 			size: dimensions,
 			dimension: "2d",
 			format: GBUFFER_COLOR_FORMAT,
@@ -40,13 +40,14 @@ export class GBuffer {
 				GPUTextureUsage.STORAGE_BINDING |
 				GPUTextureUsage.RENDER_ATTACHMENT |
 				GPUTextureUsage.TEXTURE_BINDING,
-			label: "GBuffer ColorWithDepthInAlpha",
+			label: "GBuffer ColorWithSurfaceWorldDepthInAlpha",
 		});
-		this.colorWithDepthInAlphaView = this.colorWithDepthInAlpha.createView({
-			label: "GBuffer ColorWithDepthInAlpha",
-		});
+		this.colorWithSurfaceWorldDepthInAlphaView =
+			this.colorWithSurfaceWorldDepthInAlpha.createView({
+				label: "GBuffer ColorWithSurfaceWorldDepthInAlpha",
+			});
 
-		this.normal = device.createTexture({
+		this.normalWithSurfaceJacobianInAlpha = device.createTexture({
 			size: dimensions,
 			dimension: "2d",
 			format: GBUFFER_NORMAL_FORMAT,
@@ -56,7 +57,10 @@ export class GBuffer {
 				GPUTextureUsage.TEXTURE_BINDING,
 			label: "GBuffer Normal",
 		});
-		this.normalView = this.normal.createView({ label: "GBuffer Normal" });
+		this.normalWithSurfaceJacobianInAlphaView =
+			this.normalWithSurfaceJacobianInAlpha.createView({
+				label: "GBuffer Normal",
+			});
 
 		this.readGroupLayout =
 			old?.readGroupLayout ??
@@ -82,11 +86,11 @@ export class GBuffer {
 			entries: [
 				{
 					binding: 0,
-					resource: this.colorWithDepthInAlphaView,
+					resource: this.colorWithSurfaceWorldDepthInAlphaView,
 				},
 				{
 					binding: 1,
-					resource: this.normalView,
+					resource: this.normalWithSurfaceJacobianInAlphaView,
 				},
 			],
 			label: "GBuffer Read Group",
@@ -122,11 +126,11 @@ export class GBuffer {
 			entries: [
 				{
 					binding: 0,
-					resource: this.colorWithDepthInAlphaView,
+					resource: this.colorWithSurfaceWorldDepthInAlphaView,
 				},
 				{
 					binding: 1,
-					resource: this.normalView,
+					resource: this.normalWithSurfaceJacobianInAlphaView,
 				},
 			],
 			label: "GBuffer Write Group",

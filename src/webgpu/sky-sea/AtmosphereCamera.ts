@@ -13,8 +13,8 @@ export class AtmosphereCameraPassResources {
 
 		@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
-		@group(2) @binding(0) var gbuffer_color_with_depth_in_alpha: texture_2d<f32>;
-		@group(2) @binding(1) var gbuffer_normal: texture_2d<f32>;
+		@group(2) @binding(0) var gbuffer_color_with_surface_world_depth_in_alpha: texture_2d<f32>;
+		@group(2) @binding(1) var gbuffer_normal_with_surface_jacobian_in_alpha: texture_2d<f32>;
 		*/
 	group0Layout: GPUBindGroupLayout;
 	group1Layout: GPUBindGroupLayout;

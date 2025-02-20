@@ -382,8 +382,8 @@ export class WaveSurfaceDisplacementPassResources {
 			fft: boolean;
 		},
 		attachments: {
-			colorWithDepthInAlpha: GPUTextureView;
-			normal: GPUTextureView;
+			colorWithSurfaceWorldDepthInAlpha: GPUTextureView;
+			normalWithSurfaceJacobianInAlpha: GPUTextureView;
 			depth: GPUTextureView;
 		}
 	) {
@@ -401,13 +401,13 @@ export class WaveSurfaceDisplacementPassResources {
 					clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
 					loadOp: "clear",
 					storeOp: "store",
-					view: attachments.colorWithDepthInAlpha,
+					view: attachments.colorWithSurfaceWorldDepthInAlpha,
 				},
 				{
 					clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
 					loadOp: "clear",
 					storeOp: "store",
-					view: attachments.normal,
+					view: attachments.normalWithSurfaceJacobianInAlpha,
 				},
 			],
 			depthStencilAttachment: {

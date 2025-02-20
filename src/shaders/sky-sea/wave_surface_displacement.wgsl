@@ -400,8 +400,8 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 
 struct FragmentOut
 {
-    @location(0) color: vec4<f32>,
-    @location(1) world_normal: vec4<f32>,
+    @location(0) color_with_surface_world_depth_in_alpha: vec4<f32>,
+    @location(1) world_normal_with_surface_jacobian_in_alpha: vec4<f32>,
 }
 
 @fragment
@@ -409,8 +409,8 @@ fn rasterizationFragment(frag_interpolated: VertexOut) -> FragmentOut
 {
     var output : FragmentOut;
 
-    output.color = vec4<f32>(frag_interpolated.color, frag_interpolated.camera_distance);
-    output.world_normal = vec4<f32>(frag_interpolated.world_normal,frag_interpolated.jacobian);
+    output.color_with_surface_world_depth_in_alpha = vec4<f32>(frag_interpolated.color, frag_interpolated.camera_distance);
+    output.world_normal_with_surface_jacobian_in_alpha = vec4<f32>(frag_interpolated.world_normal,frag_interpolated.jacobian);
 
     return output;
 }

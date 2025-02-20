@@ -521,8 +521,8 @@ class SkySeaApp implements RendererApp {
 			new WaveSurfaceDisplacementPassResources(
 				this.device,
 				this.globalUBO,
-				this.gbuffer.colorWithDepthInAlpha.format,
-				this.gbuffer.normal.format,
+				this.gbuffer.colorWithSurfaceWorldDepthInAlpha.format,
+				this.gbuffer.normalWithSurfaceJacobianInAlpha.format,
 				this.gbuffer.depth.format,
 				this.fftWaveSpectrumResources.displacementMaps()
 			);
@@ -567,11 +567,15 @@ class SkySeaApp implements RendererApp {
 			],
 			[
 				RenderOutput.GBufferColor,
-				new RenderOutputTexture(this.gbuffer.colorWithDepthInAlpha),
+				new RenderOutputTexture(
+					this.gbuffer.colorWithSurfaceWorldDepthInAlpha
+				),
 			],
 			[
 				RenderOutput.GBufferNormal,
-				new RenderOutputTexture(this.gbuffer.normal),
+				new RenderOutputTexture(
+					this.gbuffer.normalWithSurfaceJacobianInAlpha
+				),
 			],
 			[
 				RenderOutput.FFTWaveSpectrumGaussianNoise,
@@ -827,8 +831,10 @@ class SkySeaApp implements RendererApp {
 				fft: this.settings.oceanWaveSettings.fft,
 			},
 			{
-				colorWithDepthInAlpha: this.gbuffer.colorWithDepthInAlphaView,
-				normal: this.gbuffer.normalView,
+				colorWithSurfaceWorldDepthInAlpha:
+					this.gbuffer.colorWithSurfaceWorldDepthInAlphaView,
+				normalWithSurfaceJacobianInAlpha:
+					this.gbuffer.normalWithSurfaceJacobianInAlphaView,
 				depth: this.gbuffer.depthView,
 			}
 		);
@@ -1057,11 +1063,15 @@ class SkySeaApp implements RendererApp {
 
 		this.renderOutputs.set(
 			RenderOutput.GBufferColor,
-			new RenderOutputTexture(this.gbuffer.colorWithDepthInAlpha)
+			new RenderOutputTexture(
+				this.gbuffer.colorWithSurfaceWorldDepthInAlpha
+			)
 		);
 		this.renderOutputs.set(
 			RenderOutput.GBufferNormal,
-			new RenderOutputTexture(this.gbuffer.normal)
+			new RenderOutputTexture(
+				this.gbuffer.normalWithSurfaceJacobianInAlpha
+			)
 		);
 
 		this.atmosphereCameraPassResources.outputColor =

@@ -259,12 +259,12 @@ export class WaveSurfaceDisplacementPassResources {
 				{
 					binding: 1,
 					visibility: GPUShaderStage.VERTEX,
-					texture: { sampleType: "float" },
+					texture: { sampleType: "float", viewDimension: "2d-array" },
 				},
 				{
 					binding: 2,
 					visibility: GPUShaderStage.VERTEX,
-					texture: { sampleType: "float" },
+					texture: { sampleType: "float", viewDimension: "2d-array" },
 				},
 				{
 					binding: 3,

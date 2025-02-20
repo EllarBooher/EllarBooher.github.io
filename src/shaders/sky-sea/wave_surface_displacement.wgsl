@@ -20,8 +20,8 @@ struct WaveSurfaceDisplacementUBO
 @group(0) @binding(1) var<uniform> u_global: GlobalUBO;
 
 @group(1) @binding(0) var displacement_map_sampler: sampler;
-@group(1) @binding(1) var Dx_Dy_Dz_Dxdz_spatial: texture_2d<f32>;
-@group(1) @binding(2) var Dydx_Dydz_Dxdx_Dzdz_spatial: texture_2d<f32>;
+@group(1) @binding(1) var Dx_Dy_Dz_Dxdz_spatial: texture_2d_array<f32>;
+@group(1) @binding(2) var Dydx_Dydz_Dxdx_Dzdz_spatial: texture_2d_array<f32>;
 @group(1) @binding(3) var<uniform> u_waves: array<PlaneWave, WAVE_COUNT>;
 
 const PI = 3.141592653589793;
@@ -134,35 +134,46 @@ fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distance:
     return output;
 }
 
-fn sampleMap(map: texture_2d<f32>, sampler: sampler, patch_uv: vec2<f32>, gerstner: bool, lod: f32) -> WaveDisplacementResult
+fn sampleMap(global_uv: vec2<f32>, gerstner: bool, lod: f32) -> WaveDisplacementResult
 {
 	let delta = 0.5 / vec2<f32>(textureDimensions(Dx_Dy_Dz_Dxdz_spatial));
 
     var output: WaveDisplacementResult;
+	output.displacement = vec3<f32>(0.0);
+	output.tangent = vec3<f32>(0.0);
+	output.bitangent = vec3<f32>(0.0);
 
-	let Dx_Dy_Dz_Dxdz = textureSampleLevel(Dx_Dy_Dz_Dxdz_spatial, displacement_map_sampler, patch_uv, f32(lod));
+	const WAVE_PATCH_SIZES = array<f32,3>(200.0, 50.0, 10.0);
 
-	output.displacement = Dx_Dy_Dz_Dxdz.xyz;
-
-	if(!gerstner)
+	for(var array_layer = 0u; array_layer < textureNumLayers(Dx_Dy_Dz_Dxdz_spatial); array_layer++)
 	{
-		output.displacement.x = 0.0;
-		output.displacement.z = 0.0;
+		let patch_uv = global_uv / WAVE_PATCH_SIZES[array_layer];
+
+		let Dx_Dy_Dz_Dxdz = textureSampleLevel(Dx_Dy_Dz_Dxdz_spatial, displacement_map_sampler, patch_uv, array_layer, f32(lod));
+
+		var delta_displacement = Dx_Dy_Dz_Dxdz.xyz;
+		if(!gerstner)
+		{
+			output.displacement.x = 0.0;
+			output.displacement.z = 0.0;
+		}
+
+		output.displacement += delta_displacement;
+
+		let Dydx_Dydz_Dxdx_Dzdz = textureSampleLevel(Dydx_Dydz_Dxdx_Dzdz_spatial, displacement_map_sampler, patch_uv, array_layer, f32(lod));
+
+		let Dydx = Dydx_Dydz_Dxdx_Dzdz.x;
+		let Dydz = Dydx_Dydz_Dxdx_Dzdz.y;
+
+		let Dxdz = Dx_Dy_Dz_Dxdz.w * f32(gerstner);
+		let Dzdx = Dxdz;
+
+		var Dxdx = Dydx_Dydz_Dxdx_Dzdz.z * f32(gerstner);
+		var Dzdz = Dydx_Dydz_Dxdx_Dzdz.w * f32(gerstner);
+
+		output.tangent += vec3<f32>(Dxdx, Dydx, Dzdx);
+		output.bitangent += vec3<f32>(Dxdz, Dydz, Dzdz);
 	}
-
-	let Dydx_Dydz_Dxdx_Dzdz = textureSampleLevel(Dydx_Dydz_Dxdx_Dzdz_spatial, displacement_map_sampler, patch_uv, f32(lod));
-
-	let Dydx = Dydx_Dydz_Dxdx_Dzdz.x;
-	let Dydz = Dydx_Dydz_Dxdx_Dzdz.y;
-
-	let Dxdz = Dx_Dy_Dz_Dxdz.w * f32(gerstner);
-	let Dzdx = Dxdz;
-
-	var Dxdx = Dydx_Dydz_Dxdx_Dzdz.z * f32(gerstner);
-	var Dzdz = Dydx_Dydz_Dxdx_Dzdz.w * f32(gerstner);
-
-	output.tangent = vec3<f32>(Dxdx, Dydx, Dzdx);
-	output.bitangent = vec3<f32>(Dxdz, Dydz, Dzdz);
 
 	return output;
 }
@@ -179,12 +190,12 @@ fn computeDisplacement(in_world_position: vec3<f32>, time: f32, lod: f32, max_lo
     var tangent = vec3<f32>(1.0, 0.0, 0.0);
     var bitangent = vec3<f32>(0.0, 0.0, 1.0);
 
-    let uv = (in_world_position.xz + vec2<f32>(0.5,0.5)) / (2.0 * u_settings.patch_world_half_extent);
 
 	if(u_settings.b_displacement_map == 1u)
 	{
+    	let uv = (in_world_position.xz + vec2<f32>(0.5,0.5));
 		let gerstner = u_settings.b_gerstner == 1u;
-		let result: WaveDisplacementResult = sampleMap(Dx_Dy_Dz_Dxdz_spatial, displacement_map_sampler, uv, gerstner, lod);
+		let result: WaveDisplacementResult = sampleMap(uv, gerstner, lod);
 
 		displacement += result.displacement;
 		tangent += result.tangent;

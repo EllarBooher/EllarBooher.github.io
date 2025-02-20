@@ -134,6 +134,7 @@ class SkySeaApp implements RendererApp {
 			gerstner: boolean;
 			fft: boolean;
 		};
+		pauseGlobalTime: boolean;
 		renderOutputTransforms: Map<RenderOutput, RenderOutputTransform>;
 		currentRenderOutputTransform: RenderOutputTransform;
 		orbit: {
@@ -225,6 +226,7 @@ class SkySeaApp implements RendererApp {
 		gui.add(this.settings.oceanWaveSettings, "fft").name(
 			"FFT Accelerated Waves"
 		);
+		gui.add(this.settings, "pauseGlobalTime").name("Pause Waves");
 
 		const sunFolder = gui.addFolder("Sun Parameters").open();
 
@@ -384,6 +386,7 @@ class SkySeaApp implements RendererApp {
 				RenderOutput,
 				RenderOutputTransform
 			>(),
+			pauseGlobalTime: false,
 			currentRenderOutputTransform: new RenderOutputTransform(),
 			orbit: {
 				timeHours: 5.6,
@@ -712,7 +715,9 @@ class SkySeaApp implements RendererApp {
 
 	updateTime(deltaTimeMilliseconds: number) {
 		const timeUBO = this.globalUBO.data.time;
-		timeUBO.timeSeconds += deltaTimeMilliseconds / 1000.0;
+		if (!this.settings.pauseGlobalTime) {
+			timeUBO.timeSeconds += deltaTimeMilliseconds / 1000.0;
+		}
 
 		const NON_FFT_WAVE_PERIOD_SECONDS = 60.0;
 		const FFT_WAVE_PERIOD_SECONDS = 100.0;

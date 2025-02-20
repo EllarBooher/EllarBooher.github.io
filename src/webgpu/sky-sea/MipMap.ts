@@ -5,6 +5,7 @@ const MIP_MAP_TEXTURE_FORMAT = "rgba16float";
 export interface MipMapGenerationTextureBindings {
 	bindGroupsByMipLevel: GPUBindGroup[];
 	level0Size: { width: number; height: number };
+	arrayLevelCount: number;
 }
 
 export class MipMapGenerationPassResources {
@@ -28,6 +29,14 @@ export class MipMapGenerationPassResources {
 				`Invalid source texture (label ${texture.label}) for MipMap generation`,
 				{
 					cause: `Source format is ${texture.format} when expected ${MIP_MAP_TEXTURE_FORMAT}`,
+				}
+			);
+		}
+		if (texture.dimension != "2d") {
+			throw new RangeError(
+				`Invalid source texture (label ${texture.label}) for MipMap generation`,
+				{
+					cause: `Source texture is not 2d`,
 				}
 			);
 		}
@@ -72,6 +81,7 @@ export class MipMapGenerationPassResources {
 						{
 							binding: 0,
 							resource: texture.createView({
+								dimension: "2d-array",
 								baseMipLevel: nextMipLevel,
 								mipLevelCount: 1,
 							}),
@@ -79,6 +89,7 @@ export class MipMapGenerationPassResources {
 						{
 							binding: 1,
 							resource: texture.createView({
+								dimension: "2d-array",
 								baseMipLevel: previousMipLevel,
 								mipLevelCount: 1,
 							}),
@@ -86,6 +97,7 @@ export class MipMapGenerationPassResources {
 					],
 				});
 			}),
+			arrayLevelCount: texture.depthOrArrayLayers,
 		};
 	}
 
@@ -96,12 +108,18 @@ export class MipMapGenerationPassResources {
 				{
 					binding: 0,
 					visibility: GPUShaderStage.COMPUTE,
-					storageTexture: { format: MIP_MAP_TEXTURE_FORMAT },
+					storageTexture: {
+						format: MIP_MAP_TEXTURE_FORMAT,
+						viewDimension: "2d-array",
+					},
 				},
 				{
 					binding: 1,
 					visibility: GPUShaderStage.COMPUTE,
-					texture: { sampleType: "unfilterable-float" },
+					texture: {
+						sampleType: "unfilterable-float",
+						viewDimension: "2d-array",
+					},
 				},
 			],
 		});
@@ -135,6 +153,7 @@ export class MipMapGenerationPassResources {
 		});
 
 		fillMipMapsPass.setPipeline(this.fillMipMapKernel);
+
 		target.bindGroupsByMipLevel.forEach((bindGroup, index) => {
 			fillMipMapsPass.setBindGroup(0, bindGroup);
 
@@ -142,7 +161,8 @@ export class MipMapGenerationPassResources {
 
 			fillMipMapsPass.dispatchWorkgroups(
 				target.level0Size.width / previousMipScale / 16,
-				target.level0Size.height / previousMipScale / 16
+				target.level0Size.height / previousMipScale / 16,
+				target.arrayLevelCount / 1
 			);
 		});
 		fillMipMapsPass.end();

@@ -29,7 +29,12 @@ export class RenderOutputTexture {
 
 	constructor(texture: GPUTexture) {
 		this.texture = texture;
-		this.view = texture.createView();
+		this.view = texture.createView({
+			label: `Render Output View for '${texture.label}'`,
+			dimension: "2d",
+			arrayLayerCount: 1,
+			baseArrayLayer: 0,
+		});
 	}
 }
 

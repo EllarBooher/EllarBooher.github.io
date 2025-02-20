@@ -200,15 +200,6 @@ export interface FFTWaveCascade {
 	Dx_Dz_Spatial: GPUTexture;
 	Dydx_Dydz_Spatial: GPUTexture;
 	Dxdx_Dzdz_Spatial: GPUTexture;
-
-	/*
-	 * Final output maps, organized versions of the FFT outputs above
-	 */
-	Dx_Dy_Dz_Dxdz_Spatial: GPUTexture;
-	Dydx_Dydz_Dxdx_Dzdz_Spatial: GPUTexture;
-
-	Dx_Dy_Dz_Dxdz_Spatial_MipMapBindings: MipMapGenerationTextureBindings;
-	Dydx_Dydz_Dxdx_Dzdz_Spatial_MipMapBindings: MipMapGenerationTextureBindings;
 }
 
 export class FFTWaveSpectrumResources {
@@ -232,11 +223,23 @@ export class FFTWaveSpectrumResources {
 
 	private cascades: FFTWaveCascade[];
 
+	/*
+	 * Final output maps, organized versions of the FFT outputs above.
+	 * There is one layer for each cascade.
+	 */
+	private Dx_Dy_Dz_Dxdz_SpatialArray: GPUTexture;
+	private Dydx_Dydz_Dxdx_Dzdz_SpatialArray: GPUTexture;
+
+	private Dx_Dy_Dz_Dxdz_SpatialArray_MipMapBindings: MipMapGenerationTextureBindings;
+	private Dydx_Dydz_Dxdx_Dzdz_SpatialArray_MipMapBindings: MipMapGenerationTextureBindings;
+
 	private createCascade(
 		device: GPUDevice,
 		globalUBO: GlobalUBO,
 		patchExtentMeters: number,
-		waveNumberMinMax: [number, number]
+		waveNumberMinMax: [number, number],
+		Dx_Dy_Dz_Dxdz_SpatialView: GPUTextureView,
+		Dydx_Dydz_Dxdx_Dzdz_SpatialView: GPUTextureView
 	): FFTWaveCascade {
 		const textureGridSize: GPUExtent3DStrict = {
 			width: this.gridSize,
@@ -425,41 +428,17 @@ export class FFTWaveSpectrumResources {
 			usage: Dy_Dxdz_Spatial.usage,
 		});
 
-		const Dx_Dy_Dz_Dxdz_Spatial = device.createTexture({
-			label: "FFT Wave Final Displacement",
-			format: DISPLACEMENT_FORMAT,
-			size: textureGridSize,
-			mipLevelCount: LOG_2_GRID_SIZE,
-			usage:
-				GPUTextureUsage.STORAGE_BINDING |
-				GPUTextureUsage.TEXTURE_BINDING |
-				GPUTextureUsage.COPY_SRC |
-				GPUTextureUsage.COPY_DST,
-		});
-
-		const Dydx_Dydz_Dxdx_Dzdz_Spatial = device.createTexture({
-			label: "FFT Wave Final Derivatives",
-			format: DERIVATIVES_FORMAT,
-			size: textureGridSize,
-			mipLevelCount: Dx_Dy_Dz_Dxdz_Spatial.mipLevelCount,
-			usage: Dx_Dy_Dz_Dxdz_Spatial.usage,
-		});
-
 		const fillSpatialTexturesGroup0 = device.createBindGroup({
 			label: "FFT Wave Fill Spatial Textures Group 0",
 			layout: this.fillSpatialTexturesKernel.getBindGroupLayout(0),
 			entries: [
 				{
 					binding: 0,
-					resource: Dx_Dy_Dz_Dxdz_Spatial.createView({
-						mipLevelCount: 1,
-					}),
+					resource: Dx_Dy_Dz_Dxdz_SpatialView,
 				},
 				{
 					binding: 1,
-					resource: Dydx_Dydz_Dxdx_Dzdz_Spatial.createView({
-						mipLevelCount: 1,
-					}),
+					resource: Dydx_Dydz_Dxdx_Dzdz_SpatialView,
 				},
 				{
 					binding: 2,
@@ -480,17 +459,6 @@ export class FFTWaveSpectrumResources {
 			],
 		});
 
-		const Dx_Dy_Dz_Dxdz_Spatial_MipMapBindings =
-			this.mipMapGenerator.createBindGroups(
-				device,
-				Dx_Dy_Dz_Dxdz_Spatial
-			);
-		const Dydx_Dydz_Dxdx_Dzdz_Spatial_MipMapBindings =
-			this.mipMapGenerator.createBindGroups(
-				device,
-				Dydx_Dydz_Dxdx_Dzdz_Spatial
-			);
-
 		return {
 			gaussianNoise: gaussianNoise,
 			initialAmplitude: initialAmplitude,
@@ -508,12 +476,6 @@ export class FFTWaveSpectrumResources {
 			Dx_Dz_Spatial: Dx_Dz_Spatial,
 			Dydx_Dydz_Spatial: Dydx_Dydz_Spatial,
 			Dxdx_Dzdz_Spatial: Dxdx_Dzdz_Spatial,
-			Dx_Dy_Dz_Dxdz_Spatial: Dx_Dy_Dz_Dxdz_Spatial,
-			Dydx_Dydz_Dxdx_Dzdz_Spatial: Dydx_Dydz_Dxdx_Dzdz_Spatial,
-			Dx_Dy_Dz_Dxdz_Spatial_MipMapBindings:
-				Dx_Dy_Dz_Dxdz_Spatial_MipMapBindings,
-			Dydx_Dydz_Dxdx_Dzdz_Spatial_MipMapBindings:
-				Dydx_Dydz_Dxdx_Dzdz_Spatial_MipMapBindings,
 		} satisfies FFTWaveCascade;
 	}
 
@@ -671,6 +633,7 @@ export class FFTWaveSpectrumResources {
 					visibility: GPUShaderStage.COMPUTE,
 					storageTexture: {
 						format: DISPLACEMENT_FORMAT,
+						viewDimension: "2d",
 						access: "write-only",
 					},
 				},
@@ -679,6 +642,7 @@ export class FFTWaveSpectrumResources {
 					visibility: GPUShaderStage.COMPUTE,
 					storageTexture: {
 						format: DERIVATIVES_FORMAT,
+						viewDimension: "2d",
 						access: "write-only",
 					},
 				},
@@ -742,7 +706,6 @@ export class FFTWaveSpectrumResources {
 			),
 			1000.0,
 		];
-		console.log(WAVE_NUMBER_FENCE_POSTS);
 
 		const CASCADE_PARAMETERS: {
 			patchExtentMeters: number;
@@ -757,14 +720,69 @@ export class FFTWaveSpectrumResources {
 			};
 		});
 
-		this.cascades = CASCADE_PARAMETERS.map((value) =>
+		const CASCADE_COUNT = CASCADE_PARAMETERS.length;
+		this.Dx_Dy_Dz_Dxdz_SpatialArray = device.createTexture({
+			label: "FFT Wave Final Displacement Array",
+			format: DISPLACEMENT_FORMAT,
+			dimension: "2d",
+			size: {
+				width: this.gridSize,
+				height: this.gridSize,
+				depthOrArrayLayers: CASCADE_COUNT,
+			},
+			mipLevelCount: LOG_2_GRID_SIZE,
+			usage:
+				GPUTextureUsage.STORAGE_BINDING |
+				GPUTextureUsage.TEXTURE_BINDING |
+				GPUTextureUsage.COPY_SRC |
+				GPUTextureUsage.COPY_DST,
+		});
+		this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray = device.createTexture({
+			label: "FFT Wave Final Derivatives Array",
+			format: this.Dx_Dy_Dz_Dxdz_SpatialArray.format,
+			size: {
+				width: this.Dx_Dy_Dz_Dxdz_SpatialArray.width,
+				height: this.Dx_Dy_Dz_Dxdz_SpatialArray.height,
+				depthOrArrayLayers:
+					this.Dx_Dy_Dz_Dxdz_SpatialArray.depthOrArrayLayers,
+			},
+			mipLevelCount: this.Dx_Dy_Dz_Dxdz_SpatialArray.mipLevelCount,
+			usage: this.Dx_Dy_Dz_Dxdz_SpatialArray.usage,
+		});
+
+		this.cascades = CASCADE_PARAMETERS.map((value, index) =>
 			this.createCascade(
 				device,
 				globalUBO,
 				value.patchExtentMeters,
-				value.waveNumberMinMax
+				value.waveNumberMinMax,
+				this.Dx_Dy_Dz_Dxdz_SpatialArray.createView({
+					dimension: "2d",
+					baseMipLevel: 0,
+					mipLevelCount: 1,
+					baseArrayLayer: index,
+					arrayLayerCount: 1,
+				}),
+				this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray.createView({
+					dimension: "2d",
+					baseMipLevel: 0,
+					mipLevelCount: 1,
+					baseArrayLayer: index,
+					arrayLayerCount: 1,
+				})
 			)
 		);
+
+		this.Dx_Dy_Dz_Dxdz_SpatialArray_MipMapBindings =
+			this.mipMapGenerator.createBindGroups(
+				device,
+				this.Dx_Dy_Dz_Dxdz_SpatialArray
+			);
+		this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray_MipMapBindings =
+			this.mipMapGenerator.createBindGroups(
+				device,
+				this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray
+			);
 
 		const commandEncoder = device.createCommandEncoder({
 			label: "FFT Wave Initial Amplitude",
@@ -812,25 +830,25 @@ export class FFTWaveSpectrumResources {
 			Dx_plus_iDz_Amplitude: new RenderOutputTexture(
 				cascade.packed_Dx_plus_iDz_Amplitude
 			),
-			Dx_Dy_Dz_Dxdz_Spatial: new RenderOutputTexture(
-				cascade.Dx_Dy_Dz_Dxdz_Spatial
-			),
 			packed_Dxdx_plus_iDzdz_Amplitude: new RenderOutputTexture(
 				cascade.packed_Dxdx_plus_iDzdz_Amplitude
 			),
 			packed_Dydx_plus_iDydz_Amplitude: new RenderOutputTexture(
 				cascade.packed_Dydx_plus_iDydz_Amplitude
 			),
+			Dx_Dy_Dz_Dxdz_Spatial: new RenderOutputTexture(
+				this.Dx_Dy_Dz_Dxdz_SpatialArray
+			),
 			Dydx_Dydz_Dxdx_Dzdz_Spatial: new RenderOutputTexture(
-				cascade.Dydx_Dydz_Dxdx_Dzdz_Spatial
+				this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray
 			),
 		};
 	}
 
 	displacementMaps(): FFTWaveDisplacementMaps {
 		return new FFTWaveDisplacementMaps(
-			this.cascades[0].Dx_Dy_Dz_Dxdz_Spatial,
-			this.cascades[0].Dydx_Dydz_Dxdx_Dzdz_Spatial
+			this.Dx_Dy_Dz_Dxdz_SpatialArray,
+			this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray
 		);
 	}
 
@@ -926,23 +944,21 @@ export class FFTWaveSpectrumResources {
 				cascade.fillSpatialTexturesGroup0
 			);
 			fillDisplacementPassEncoder.dispatchWorkgroups(
-				cascade.Dx_Dy_Dz_Dxdz_Spatial.width / 16,
-				cascade.Dx_Dy_Dz_Dxdz_Spatial.height / 16,
+				this.Dx_Dy_Dz_Dxdz_SpatialArray.width / 16,
+				this.Dx_Dy_Dz_Dxdz_SpatialArray.height / 16,
 				1
 			);
 		});
 
 		fillDisplacementPassEncoder.end();
 
-		this.cascades.forEach((cascade) => {
-			this.mipMapGenerator.updateMipMaps(
-				commandEncoder,
-				cascade.Dx_Dy_Dz_Dxdz_Spatial_MipMapBindings
-			);
-			this.mipMapGenerator.updateMipMaps(
-				commandEncoder,
-				cascade.Dydx_Dydz_Dxdx_Dzdz_Spatial_MipMapBindings
-			);
-		});
+		this.mipMapGenerator.updateMipMaps(
+			commandEncoder,
+			this.Dx_Dy_Dz_Dxdz_SpatialArray_MipMapBindings
+		);
+		this.mipMapGenerator.updateMipMaps(
+			commandEncoder,
+			this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray_MipMapBindings
+		);
 	}
 }

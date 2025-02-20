@@ -169,7 +169,10 @@ fn computeInitialAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
 	let gaussian_pair = textureLoad(in_gaussian_random_pairs, texel_coord).xy;
 	let wave = waveParameters(&u_fourier_waves, texel_coord);
 
-	if (abs(wave.wave_number) < wave.delta_wave_number)
+	if (abs(wave.wave_number) < wave.delta_wave_number
+		|| abs(wave.wave_number) < u_fourier_waves.wave_number_min_max.x
+		|| abs(wave.wave_number) > u_fourier_waves.wave_number_min_max.y
+	)
 	{
 		let amplitude = vec2<f32>(0.0, 0.0);
 		textureStore(out_initial_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));

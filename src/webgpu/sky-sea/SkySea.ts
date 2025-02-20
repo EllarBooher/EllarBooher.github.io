@@ -47,19 +47,11 @@ const RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES: ({
 		colorGain: { r: 100.0, g: 100.0, b: 100.0 },
 	},
 	{
-		id: RenderOutput.FFTWaveDy_plus_iDxdz_Amplitude,
+		id: RenderOutput.FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude,
 		colorGain: { r: 100.0, g: 100.0, b: 100.0 },
 	},
 	{
-		id: RenderOutput.FFTWaveDx_plus_iDz_Amplitude,
-		colorGain: { r: 100.0, g: 100.0, b: 100.0 },
-	},
-	{
-		id: RenderOutput.FFTWaveDydx_plus_iDydz_Amplitude,
-		colorGain: { r: 100.0, g: 100.0, b: 100.0 },
-	},
-	{
-		id: RenderOutput.FFTWaveDxdx_plus_iDzdz_Amplitude,
+		id: RenderOutput.FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,
 		colorGain: { r: 100.0, g: 100.0, b: 100.0 },
 	},
 	{
@@ -192,14 +184,10 @@ class SkySeaApp implements RendererApp {
 					RenderOutput.FFTWaveSpectrumGaussianNoise,
 				"FFT Wave Initial Amplitude":
 					RenderOutput.FFTWaveInitialAmplitude,
-				"FFT Wave Frequency Domain (Dy + i*Dxdz)":
-					RenderOutput.FFTWaveDy_plus_iDxdz_Amplitude,
-				"FFT Wave Frequency Domain (Dx + i*Dz)":
-					RenderOutput.FFTWaveDx_plus_iDz_Amplitude,
-				"FFT Wave Frequency Domain (Dydx + i*Dydz)":
-					RenderOutput.FFTWaveDydx_plus_iDydz_Amplitude,
-				"FFT Wave Frequency Domain (Dxdx + i*Dzdz)":
-					RenderOutput.FFTWaveDxdx_plus_iDzdz_Amplitude,
+				"FFT Wave Frequency Domain (Dx + i * Dy, Dz + i * Dxdz)":
+					RenderOutput.FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude,
+				"FFT Wave Frequency Domain (Dydx + i * Dydz, Dxdx + i * Dzdz)":
+					RenderOutput.FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,
 				"FFT Wave Spatial Domain (Dx, Dy, Dz, Dxdz)":
 					RenderOutput.FFTWaveDx_Dy_Dz_Dxdz_Spatial,
 				"FFT Wave Spatial Domain (Dydx, Dydz, Dxdx, Dzdx)":
@@ -586,20 +574,12 @@ class SkySeaApp implements RendererApp {
 				fftWaveViews.initialAmplitude,
 			],
 			[
-				RenderOutput.FFTWaveDy_plus_iDxdz_Amplitude,
-				fftWaveViews.Dy_Amplitude,
+				RenderOutput.FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude,
+				fftWaveViews.packed_Dx_plus_iDy_Dz_iDxdz_Amplitude,
 			],
 			[
-				RenderOutput.FFTWaveDx_plus_iDz_Amplitude,
-				fftWaveViews.Dx_plus_iDz_Amplitude,
-			],
-			[
-				RenderOutput.FFTWaveDydx_plus_iDydz_Amplitude,
-				fftWaveViews.packed_Dydx_plus_iDydz_Amplitude,
-			],
-			[
-				RenderOutput.FFTWaveDxdx_plus_iDzdz_Amplitude,
-				fftWaveViews.packed_Dxdx_plus_iDzdz_Amplitude,
+				RenderOutput.FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,
+				fftWaveViews.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,
 			],
 			[
 				RenderOutput.FFTWaveDx_Dy_Dz_Dxdz_Spatial,

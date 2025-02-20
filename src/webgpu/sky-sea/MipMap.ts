@@ -145,13 +145,9 @@ export class MipMapGenerationPassResources {
 	}
 
 	updateMipMaps(
-		commandEncoder: GPUCommandEncoder,
+		fillMipMapsPass: GPUComputePassEncoder,
 		target: MipMapGenerationTextureBindings
 	) {
-		const fillMipMapsPass = commandEncoder.beginComputePass({
-			label: `MipMap Generation`,
-		});
-
 		fillMipMapsPass.setPipeline(this.fillMipMapKernel);
 
 		target.bindGroupsByMipLevel.forEach((bindGroup, index) => {
@@ -165,6 +161,5 @@ export class MipMapGenerationPassResources {
 				target.arrayLevelCount / 1
 			);
 		});
-		fillMipMapsPass.end();
 	}
 }

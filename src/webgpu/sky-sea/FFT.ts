@@ -29,6 +29,8 @@ class DFFTParametersUBO extends UBO {
 	}
 }
 
+const REQUIRED_OUTPUT_FORMAT: GPUTextureFormat = "rgba16float";
+
 export class DFFTResources {
 	private parametersUBO: DFFTParametersUBO;
 	private intermediateDFTs: GPUBuffer;
@@ -37,6 +39,7 @@ export class DFFTResources {
 	private complexBuffer0: GPUBuffer;
 	private complexBuffer1: GPUBuffer;
 	private stepCounterBuffer: GPUBuffer;
+	private outputTexture: GPUTexture;
 
 	/*
 	 * @group(0) @binding(0) var<uniform> u_parameters: DFFTParameters;
@@ -51,10 +54,11 @@ export class DFFTResources {
 	 * @group(0) @binding(2) var<storage, read_write> buffer_0: array<vec2<f32>>;
 	 * @group(0) @binding(3) var<storage, read_write> buffer_1: array<vec2<f32>>;
 	 * @group(0) @binding(4) var<uniform> step_counter: u32;
+	 * @group(0) @binding(5) var<uniform, read_write> out_half_precision_buffer: array<vec4<f16>>;
 	 */
 	private performBindGroup: GPUBindGroup;
 	private performKernel: GPUComputePipeline;
-	private performSwapEvenSignsKernel: GPUComputePipeline;
+	private performSwapEvenSignsAndCopyToHalfPrecisionOutputKernel: GPUComputePipeline;
 
 	/*
 	 * @group(0) @binding(0) var<storage, read_write> out_step_counter: u32;
@@ -169,11 +173,19 @@ export class DFFTResources {
 					visibility: GPUShaderStage.COMPUTE,
 					buffer: { type: "uniform" },
 				},
+				{
+					binding: 5,
+					visibility: GPUShaderStage.COMPUTE,
+					storageTexture: {
+						format: REQUIRED_OUTPUT_FORMAT,
+						access: "write-only",
+					},
+				},
 			],
 		});
 
-		// We store complex numbers as vec2<f32>
-		const BYTES_PER_COMPLEX_BUFFER_ELEMENT = 8;
+		// We store complex numbers as vec4<f32>
+		const BYTES_PER_COMPLEX_BUFFER_ELEMENT = 16;
 
 		this.complexBuffer0 = device.createBuffer({
 			label: "DFFT Buffer 0",
@@ -202,6 +214,13 @@ export class DFFTResources {
 		stepCounterInitial[0] = 0;
 		device.queue.writeBuffer(this.stepCounterBuffer, 0, stepCounterInitial);
 
+		this.outputTexture = device.createTexture({
+			label: "DFFT Output Texture",
+			format: REQUIRED_OUTPUT_FORMAT,
+			size: { width: gridSize, height: gridSize, depthOrArrayLayers: 1 },
+			usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+		});
+
 		this.performBindGroup = device.createBindGroup({
 			label: "DFFT Perform Group 0",
 			layout: performBindGroup0Layout,
@@ -228,6 +247,10 @@ export class DFFTResources {
 					binding: 4,
 					resource: { buffer: this.stepCounterBuffer },
 				},
+				{
+					binding: 5,
+					resource: this.outputTexture.createView(),
+				},
 			],
 		});
 
@@ -244,14 +267,16 @@ export class DFFTResources {
 			},
 			layout: performPipelineLayout,
 		});
-		this.performSwapEvenSignsKernel = device.createComputePipeline({
-			label: "DFFT Perform Swap Even Signs",
-			compute: {
-				module: shaderModule,
-				entryPoint: "performSwapEvenSigns",
-			},
-			layout: performPipelineLayout,
-		});
+		this.performSwapEvenSignsAndCopyToHalfPrecisionOutputKernel =
+			device.createComputePipeline({
+				label: "DFFT Perform Swap Even Signs",
+				compute: {
+					module: shaderModule,
+					entryPoint:
+						"performSwapEvenSignsAndCopyToHalfPrecisionOutput",
+				},
+				layout: performPipelineLayout,
+			});
 
 		const stepCounterBindGroupLayout = device.createBindGroupLayout({
 			label: "DFFT Step Counter Bind Group 0",
@@ -307,7 +332,7 @@ export class DFFTResources {
 		});
 		passEncoder.setPipeline(this.intermediateDFTsKernel);
 		passEncoder.setBindGroup(0, this.intermediateDFTsBindGroup);
-		passEncoder.dispatchWorkgroups(gridSize / 2 / 2, 1, 1);
+		passEncoder.dispatchWorkgroups(gridSize / 2 / 2, 1);
 		passEncoder.end();
 
 		device.queue.submit([commandEncoder.finish()]);
@@ -331,20 +356,22 @@ export class DFFTResources {
 			if (step === 0) {
 				passEncoder.setPipeline(this.resetStepCounterKernel);
 				passEncoder.setBindGroup(0, this.stepCounterBindGroup);
-				passEncoder.dispatchWorkgroups(1, 1, 1);
+				passEncoder.dispatchWorkgroups(1);
 			} else {
 				passEncoder.setPipeline(this.incrementStepCounterKernel);
 				passEncoder.setBindGroup(0, this.stepCounterBindGroup);
-				passEncoder.dispatchWorkgroups(1, 1, 1);
+				passEncoder.dispatchWorkgroups(1);
 			}
 			passEncoder.setPipeline(this.performKernel);
 			passEncoder.setBindGroup(0, this.performBindGroup);
-			passEncoder.dispatchWorkgroups(gridSize / 16, gridSize / 16, 1);
+			passEncoder.dispatchWorkgroups(gridSize / 16, gridSize / 16);
 		}
 
-		passEncoder.setPipeline(this.performSwapEvenSignsKernel);
+		passEncoder.setPipeline(
+			this.performSwapEvenSignsAndCopyToHalfPrecisionOutputKernel
+		);
 		passEncoder.setBindGroup(0, this.performBindGroup);
-		passEncoder.dispatchWorkgroups(gridSize / 16, gridSize / 16, 1);
+		passEncoder.dispatchWorkgroups(gridSize / 16, gridSize / 16);
 
 		passEncoder.end();
 	}
@@ -355,27 +382,37 @@ export class DFFTResources {
 	 * @param {GPUDevice} device
 	 * @param {GPUCommandEncoder} commandEncoder
 	 * @param {GPUTexture} sourceTexture - The texture to copy the input from. Its format should be "rg32float"
-	 * @param {GPUTexture} destinationTexture - The texture to copy the output into. Its format should be "rg32float"
+	 * @param {GPUTexture} destinationArray - The texture to copy the output into. Its format should be "rg32float"
+	 * @param {number} destinationArrayLayer - Which layer in the destination array to copy the output into
 	 * @param {boolean} inverse - Whether to perform an inverse transform or not.
+	 * @param {(GPUComputePassTimestampWrites | undefined)} endTimestampWrites
 	 * @memberof DFFTResources
 	 */
 	recordPerform(
 		device: GPUDevice,
 		commandEncoder: GPUCommandEncoder,
 		sourceTexture: GPUTexture,
-		destinationTexture: GPUTexture,
+		destinationArray: GPUTexture,
+		destinationArrayLayer: number,
 		inverse: boolean,
 		endTimestampWrites: GPUComputePassTimestampWrites | undefined
 	) {
-		// TODO: We should be able to pack 2 complex numbers into a source texture
-		// We require this format so it maps perfectly to our buffers of complex numbers (WGSL type: vec2<f32>)
-		const REQUIRED_FORMAT: GPUTextureFormat = "rg32float";
-		if (
-			sourceTexture.format != REQUIRED_FORMAT ||
-			destinationTexture.format != REQUIRED_FORMAT
-		) {
+		// We require this format so it maps perfectly to our buffers of complex numbers (WGSL type: vec4<f32>)
+		const REQUIRED_INPUT_FORMAT: GPUTextureFormat = "rgba32float";
+		if (sourceTexture.format != REQUIRED_INPUT_FORMAT) {
 			throw RangeError(
-				`SourceTexture (format ${sourceTexture.format}) and DestinationTexture (format ${destinationTexture.format}) must both be ${REQUIRED_FORMAT}`
+				`sourceTexture (format ${sourceTexture.format}) must be ${REQUIRED_INPUT_FORMAT}`
+			);
+		}
+		if (destinationArray.format != REQUIRED_OUTPUT_FORMAT) {
+			throw RangeError(
+				`destinationArray (format ${sourceTexture.format}) must be ${REQUIRED_INPUT_FORMAT}`
+			);
+		}
+		if (sourceTexture.depthOrArrayLayers !== 1) {
+			// TODO: input should maybe also be an array, it would be cleaner
+			console.warn(
+				`Source Texture '${sourceTexture.label}' DepthOrArrayLayers > 1 - will only use the first layer.`
 			);
 		}
 
@@ -393,22 +430,24 @@ export class DFFTResources {
 			{
 				width: sourceTexture.width,
 				height: sourceTexture.height,
-				depthOrArrayLayers: sourceTexture.depthOrArrayLayers,
+				depthOrArrayLayers: 1,
 			}
 		);
 
 		this.recordPerformOnBuffer0(commandEncoder, endTimestampWrites);
 
-		commandEncoder.copyBufferToTexture(
+		commandEncoder.copyTextureToTexture(
 			{
-				buffer: this.complexBuffer0,
-				bytesPerRow: this.complexBuffer0.size / gridSize,
+				texture: this.outputTexture,
 			},
-			{ texture: destinationTexture },
 			{
-				width: destinationTexture.width,
-				height: destinationTexture.height,
-				depthOrArrayLayers: destinationTexture.depthOrArrayLayers,
+				texture: destinationArray,
+				origin: { x: 0, y: 0, z: destinationArrayLayer },
+			},
+			{
+				width: destinationArray.width,
+				height: destinationArray.height,
+				depthOrArrayLayers: 1,
 			}
 		);
 	}

@@ -48,8 +48,8 @@ fn complexExp(imaginary_arg: f32) -> vec2<f32>
 	return vec2<f32>(cos(imaginary_arg),sin(imaginary_arg));
 }
 
-// Dispatch should have (N / 2, 1, 1) invocations, where N is the grid size.
-@compute @workgroup_size(2, 1, 1)
+// Dispatch should have (N / 2, 1) invocations, where N is the grid size.
+@compute @workgroup_size(2, 1)
 fn precomputeDFFTInstructions(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
 	var major_index = global_id.x;
@@ -82,13 +82,19 @@ fn precomputeDFFTInstructions(@builtin(global_invocation_id) global_id: vec3<u32
 // Avoid redeclare
 // @group(0) @binding(0) var<uniform> u_parameters: DFFTParameters;
 @group(0) @binding(1) var<storage, read> intermediate_dfts_log2n_by_n: array<TwoPointDFT>;
-@group(0) @binding(2) var<storage, read_write> buffer_0: array<vec2<f32>>;
-@group(0) @binding(3) var<storage, read_write> buffer_1: array<vec2<f32>>;
+@group(0) @binding(2) var<storage, read_write> buffer_0: array<vec4<f32>>;
+@group(0) @binding(3) var<storage, read_write> buffer_1: array<vec4<f32>>;
 @group(0) @binding(4) var<uniform> step_counter: u32;
+@group(0) @binding(5) var out_texture: texture_storage_2d<rgba16float, write>;
 
 fn complexMult(a: vec2<f32>, b: vec2<f32>) -> vec2<f32>
 {
 	return vec2<f32>(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+fn complexMult2(a: vec4<f32>, b: vec4<f32>) -> vec4<f32>
+{
+	return vec4<f32>(complexMult(a.xy, b.xy), complexMult(a.zw, b.zw));
 }
 
 fn bufferIndex(x: u32, y: u32) -> u32
@@ -110,7 +116,7 @@ fn loadTwoPointDFT(major_index: u32) -> TwoPointDFT
 * The final output will be in buffer_0 (since vertical + horizontal guarantees an even amount of ping-pongs)
 * Make sure step_counter is updated between steps, incrementing by one until 2 * log2(N)
 */
-@compute @workgroup_size(16, 16, 1)
+@compute @workgroup_size(16, 16)
 fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
 	// We need to bounce between buffers since each cell in each step relies on multiple cells from the previous step
@@ -128,7 +134,7 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 			let lower_input = buffer_1[bufferIndex(two_point_dft.lower_index, global_id.y)];
 			let upper_input = buffer_1[bufferIndex(two_point_dft.upper_index, global_id.y)];
 
-			let result = lower_input + complexMult(two_point_dft.twiddle, upper_input);
+			let result = lower_input + complexMult2(vec4<f32>(two_point_dft.twiddle, two_point_dft.twiddle), upper_input);
 
 			buffer_0[bufferIndex(global_id.x, global_id.y)] = result;
 		}
@@ -137,7 +143,7 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 			let lower_input = buffer_0[bufferIndex(two_point_dft.lower_index, global_id.y)];
 			let upper_input = buffer_0[bufferIndex(two_point_dft.upper_index, global_id.y)];
 
-			let result = lower_input + complexMult(two_point_dft.twiddle, upper_input);
+			let result = lower_input + complexMult2(vec4<f32>(two_point_dft.twiddle, two_point_dft.twiddle), upper_input);
 
 			buffer_1[bufferIndex(global_id.x, global_id.y)] = result;
 		}
@@ -151,7 +157,7 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 			let lower_input = buffer_1[bufferIndex(global_id.x, two_point_dft.lower_index)];
 			let upper_input = buffer_1[bufferIndex(global_id.x, two_point_dft.upper_index)];
 
-			let result = lower_input + complexMult(two_point_dft.twiddle, upper_input);
+			let result = lower_input + complexMult2(vec4<f32>(two_point_dft.twiddle, two_point_dft.twiddle), upper_input);
 
 			buffer_0[bufferIndex(global_id.x, global_id.y)] = result;
 		}
@@ -160,7 +166,7 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 			let lower_input = buffer_0[bufferIndex(global_id.x, two_point_dft.lower_index)];
 			let upper_input = buffer_0[bufferIndex(global_id.x, two_point_dft.upper_index)];
 
-			let result = lower_input + complexMult(two_point_dft.twiddle, upper_input);
+			let result = lower_input + complexMult2(vec4<f32>(two_point_dft.twiddle, two_point_dft.twiddle), upper_input);
 
 			buffer_1[bufferIndex(global_id.x, global_id.y)] = result;
 		}
@@ -168,7 +174,7 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 }
 
 /*
- * Flips the sign of even numbered cells in the fourier grid. A cell is even when (x + y) is even.
+ * Flips the sign of even numbered cells in the fourier grid. A cell at (x,y) is even when (x + y) is even.
  * step_counter should be left as it was for the last step performed.
  *
  * Why you might do this:
@@ -177,8 +183,8 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
  *
  * This sort of clustering occurs with how we process ocean waves, since our wave "origin" with the longest wavelength, highest frequency/energy waves is at (grid_size/2, grid_size/2)
  */
-@compute @workgroup_size(16, 16, 1)
-fn performSwapEvenSigns(@builtin(global_invocation_id) global_id: vec3<u32>)
+@compute @workgroup_size(16, 16)
+fn performSwapEvenSignsAndCopyToHalfPrecisionOutput(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
 	let ping_pong = (step_counter % 2u) == 1u;
 
@@ -186,28 +192,28 @@ fn performSwapEvenSigns(@builtin(global_invocation_id) global_id: vec3<u32>)
 
 	if(ping_pong)
 	{
-		buffer_0[bufferIndex(global_id.x, global_id.y)] *= factor;
+		textureStore(out_texture, global_id.xy, buffer_0[bufferIndex(global_id.x, global_id.y)] * factor);
 	}
 	else
 	{
-		buffer_1[bufferIndex(global_id.x, global_id.y)] *= factor;
+		textureStore(out_texture, global_id.xy, buffer_1[bufferIndex(global_id.x, global_id.y)] * factor);
 	}
 }
 
 @group(0) @binding(0) var<storage, read_write> out_step_counter: u32;
 
-@compute @workgroup_size(1, 1, 1)
+@compute @workgroup_size(1)
 fn incrementStepCounter(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
-	if(global_id.x == 0 && global_id.y == 0)
+	if(global_id.x == 0)
 	{
 		out_step_counter = out_step_counter + 1;
 	}
 }
-@compute @workgroup_size(1,1,1)
+@compute @workgroup_size(1)
 fn resetStepCounter(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
-	if(global_id.x == 0 && global_id.y == 0)
+	if(global_id.x == 0)
 	{
 		out_step_counter = 0;
 	}

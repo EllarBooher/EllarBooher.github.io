@@ -388,7 +388,7 @@ export class WaveSurfaceDisplacementPassResources {
 		}
 	) {
 		this.settingsUBO.data.patch_world_half_extent = settings.fft
-			? 25.0
+			? 100.0
 			: 300.0;
 		this.settingsUBO.data.b_gerstner = settings.gerstner;
 		this.settingsUBO.data.b_fft = settings.fft;

@@ -14,6 +14,9 @@ struct FourierWavesUBO
 	wind_fetch_meters: f32,
 	wave_swell: f32,
 	padding0: f32,
+
+	wave_number_min_max: vec2<f32>,
+	padding1: vec2<f32>,
 }
 
 // Implementation derived from:

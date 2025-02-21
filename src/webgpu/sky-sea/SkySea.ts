@@ -28,6 +28,7 @@ class RenderOutputTransform {
 		b: number;
 	} = { r: 1.0, g: 1.0, b: 1.0 };
 	mipLevel = 0;
+	arrayLayer = 0;
 }
 
 const RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES: ({
@@ -283,6 +284,13 @@ class SkySeaApp implements RendererApp {
 			.step(1)
 			.name("Mip Level")
 			.listen();
+		const arrayLayerController = outputTextureFolder
+			.add(this.settings.currentRenderOutputTransform, "arrayLayer")
+			.min(0)
+			.max(0)
+			.step(1)
+			.name("Array Layer")
+			.listen();
 		outputTextureFolder
 			.add({ gain: 0.0 }, "gain")
 			.name("RGB")
@@ -311,6 +319,7 @@ class SkySeaApp implements RendererApp {
 			.min(0.0)
 			.max(100.0)
 			.listen();
+
 		outputTextureController.onChange((newValue: RenderOutput) => {
 			const previousValue =
 				outputTextureController._listenPrevValue as RenderOutput;
@@ -329,8 +338,25 @@ class SkySeaApp implements RendererApp {
 			);
 
 			const renderOutput = this.renderOutputs.get(newValue);
-			mipLevelController.max(renderOutput?.mipLevelCount ?? 0);
-			mipLevelController.updateDisplay();
+			if (renderOutput !== undefined) {
+				mipLevelController.max(renderOutput.mipLevelCount - 1);
+				mipLevelController.disable(renderOutput.mipLevelCount == 1);
+				if (renderOutput.mipLevelCount == 1) {
+					mipLevelController.setValue(0);
+				}
+				mipLevelController.updateDisplay();
+
+				arrayLayerController.max(
+					renderOutput.depthOrArrayLayerCount - 1
+				);
+				arrayLayerController.disable(
+					renderOutput.depthOrArrayLayerCount == 1
+				);
+				if (renderOutput.depthOrArrayLayerCount == 1) {
+					arrayLayerController.setValue(0);
+				}
+				arrayLayerController.updateDisplay();
+			}
 
 			rController.object =
 				this.settings.currentRenderOutputTransform.colorGain;
@@ -339,6 +365,27 @@ class SkySeaApp implements RendererApp {
 			bController.object =
 				this.settings.currentRenderOutputTransform.colorGain;
 		});
+
+		const renderOutput = this.renderOutputs.get(
+			outputTextureController.getValue()
+		);
+		if (renderOutput !== undefined) {
+			mipLevelController.max(renderOutput.mipLevelCount - 1);
+			mipLevelController.disable(renderOutput.mipLevelCount == 1);
+			if (renderOutput.mipLevelCount == 1) {
+				mipLevelController.setValue(0);
+			}
+			mipLevelController.updateDisplay();
+
+			arrayLayerController.max(renderOutput.depthOrArrayLayerCount - 1);
+			arrayLayerController.disable(
+				renderOutput.depthOrArrayLayerCount == 1
+			);
+			if (renderOutput.depthOrArrayLayerCount == 1) {
+				arrayLayerController.setValue(0);
+			}
+			arrayLayerController.updateDisplay();
+		}
 
 		const performanceFolder = gui.addFolder("Performance").close();
 		this.frametimeAverages.forEach((_value, category) => {
@@ -591,7 +638,12 @@ class SkySeaApp implements RendererApp {
 			],
 		]);
 		for (const [id, resource] of this.renderOutputs) {
-			this.fullscreenQuadPassResources.setView(device, id, resource.view);
+			this.fullscreenQuadPassResources.setView(
+				device,
+				id,
+				resource.view,
+				resource.depthOrArrayLayerCount > 1
+			);
 		}
 
 		const commandEncoder = device.createCommandEncoder();
@@ -906,6 +958,9 @@ class SkySeaApp implements RendererApp {
 				1.0
 			);
 			uboData.mip_level_u32 = Math.round(renderOutputTransform.mipLevel);
+			uboData.array_layer_u32 = Math.round(
+				renderOutputTransform.arrayLayer
+			);
 
 			timestampIndexMapping.set(
 				FrametimeCategory.FullscreenQuad,
@@ -1106,7 +1161,8 @@ class SkySeaApp implements RendererApp {
 			this.fullscreenQuadPassResources.setView(
 				this.device,
 				key,
-				value.view
+				value.view,
+				value.depthOrArrayLayerCount > 1
 			);
 		});
 	}

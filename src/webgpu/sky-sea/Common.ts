@@ -24,13 +24,17 @@ export class RenderOutputTexture {
 	get mipLevelCount() {
 		return this.texture.mipLevelCount;
 	}
+	get depthOrArrayLayerCount() {
+		return this.texture.depthOrArrayLayers;
+	}
 
 	constructor(texture: GPUTexture) {
 		this.texture = texture;
+
 		this.view = texture.createView({
 			label: `Render Output View for '${texture.label}'`,
-			dimension: "2d",
-			arrayLayerCount: 1,
+			dimension: this.depthOrArrayLayerCount > 1 ? "2d-array" : "2d",
+			arrayLayerCount: this.depthOrArrayLayerCount,
 			baseArrayLayer: 0,
 		});
 	}

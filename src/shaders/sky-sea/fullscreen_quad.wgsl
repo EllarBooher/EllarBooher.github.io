@@ -1,13 +1,15 @@
 // Call this in a render pass, passing in an index buffer [0, 1, 2, 0, 2, 3]
 
 @group(0) @binding(0) var b_texture: texture_2d<f32>;
+@group(0) @binding(0) var b_texture_array: texture_2d_array<f32>;
 @group(0) @binding(1) var b_sampler: sampler;
 
 struct FullscreenQuadUBO
 {
     color_gain: vec4<f32>,
     vertex_scale: vec4<f32>,
-	padding0: vec3<f32>,
+	padding0: vec2<f32>,
+	array_layer: u32,
 	mip_level: u32,
 }
 
@@ -32,7 +34,7 @@ struct VertexOut {
 }
 
 @vertex
-fn vertex_main(@builtin(vertex_index) index : u32) -> VertexOut
+fn vertexMain(@builtin(vertex_index) index : u32) -> VertexOut
 {
     var output : VertexOut;
     output.position = u_fullscreen_quad.vertex_scale * QUAD_VERTICES[index];
@@ -41,8 +43,15 @@ fn vertex_main(@builtin(vertex_index) index : u32) -> VertexOut
 }
 
 @fragment
-fn fragment_main(fragData: VertexOut) -> @location(0) vec4<f32>
+fn fragmentMain(fragData: VertexOut) -> @location(0) vec4<f32>
 {
     let color = u_fullscreen_quad.color_gain * textureSampleLevel(b_texture, b_sampler, fragData.uv, f32(u_fullscreen_quad.mip_level));
+    return vec4<f32>(color.xyz, 1.0);
+}
+
+@fragment
+fn fragmentMainArray(fragData: VertexOut) -> @location(0) vec4<f32>
+{
+    let color = u_fullscreen_quad.color_gain * textureSampleLevel(b_texture_array, b_sampler, fragData.uv, u_fullscreen_quad.array_layer, f32(u_fullscreen_quad.mip_level));
     return vec4<f32>(color.xyz, 1.0);
 }

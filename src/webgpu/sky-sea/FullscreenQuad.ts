@@ -1,12 +1,13 @@
 import { UBO } from "./UBO";
 import { RenderOutput, TimestampQueryInterval } from "./Common";
 import FullscreenQuadPak from "../../shaders/sky-sea/fullscreen_quad.wgsl";
-import { Vec3, vec3, Vec4, vec4 } from "wgpu-matrix";
+import { Vec2, vec2, Vec4, vec4 } from "wgpu-matrix";
 
 export class FullscreenQuadUBOData {
 	color_gain: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
 	vertex_scale: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
-	padding0: Vec3 = vec3.create();
+	padding0: Vec2 = vec2.create();
+	array_layer_u32 = 0;
 	mip_level_u32 = 0;
 }
 
@@ -23,7 +24,8 @@ export class FullscreenQuadUBO extends UBO {
 
 		new Float32Array(buffer).set(this.data.color_gain, 0 / 4);
 		new Float32Array(buffer).set(this.data.vertex_scale, 16 / 4);
-		// padding0 byteOffset: 32 byteLength: 12
+		// padding0 byteOffset: 32 byteLength: 8
+		view.setUint32(40, this.data.array_layer_u32, true);
 		view.setUint32(44, this.data.mip_level_u32, true);
 
 		return buffer;
@@ -33,8 +35,12 @@ export class FullscreenQuadUBO extends UBO {
 export class FullscreenQuadPassResources {
 	// keep layout for resetting textures when resizing them
 	private group0Layout: GPUBindGroupLayout;
+	private group0LayoutArray: GPUBindGroupLayout;
 
-	private group0ByOutputTexture: Map<RenderOutput, GPUBindGroup>;
+	private group0ByOutputTexture: Map<
+		RenderOutput,
+		{ array: boolean; bindGroup: GPUBindGroup }
+	>;
 	private group0Sampler: GPUSampler;
 
 	private ubo: FullscreenQuadUBO;
@@ -42,14 +48,19 @@ export class FullscreenQuadPassResources {
 	private fullscreenQuadIndexBuffer: GPUBuffer;
 
 	private group1: GPUBindGroup;
-
 	private pipeline: GPURenderPipeline;
+	private arrayPipeline: GPURenderPipeline;
 
-	setView(device: GPUDevice, id: RenderOutput, view: GPUTextureView) {
-		this.group0ByOutputTexture.set(
-			id,
-			device.createBindGroup({
-				layout: this.group0Layout,
+	setView(
+		device: GPUDevice,
+		id: RenderOutput,
+		view: GPUTextureView,
+		array: boolean
+	) {
+		this.group0ByOutputTexture.set(id, {
+			array: array,
+			bindGroup: device.createBindGroup({
+				layout: array ? this.group0LayoutArray : this.group0Layout,
 				entries: [
 					{
 						binding: 0,
@@ -61,8 +72,8 @@ export class FullscreenQuadPassResources {
 					},
 				],
 				label: `Fullscreen Quad Group 0 Texture '${view.label}'`,
-			})
-		);
+			}),
+		});
 	}
 
 	constructor(device: GPUDevice, outputFormat: GPUTextureFormat) {
@@ -94,8 +105,29 @@ export class FullscreenQuadPassResources {
 			],
 			label: "Fullscreen Quad Group 0",
 		});
+		this.group0LayoutArray = device.createBindGroupLayout({
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.FRAGMENT,
+					texture: {
+						viewDimension: "2d-array",
+						sampleType: "unfilterable-float",
+					},
+				},
+				{
+					binding: 1,
+					visibility: GPUShaderStage.FRAGMENT,
+					sampler: { type: "non-filtering" },
+				},
+			],
+			label: "Fullscreen Quad Group 0 Array",
+		});
 
-		this.group0ByOutputTexture = new Map<RenderOutput, GPUBindGroup>();
+		this.group0ByOutputTexture = new Map<
+			RenderOutput,
+			{ array: boolean; bindGroup: GPUBindGroup }
+		>();
 
 		this.group0Sampler = device.createSampler({
 			magFilter: "nearest",
@@ -131,11 +163,11 @@ export class FullscreenQuadPassResources {
 		this.pipeline = device.createRenderPipeline({
 			vertex: {
 				module: shaderModule,
-				entryPoint: "vertex_main",
+				entryPoint: "vertexMain",
 			},
 			fragment: {
 				module: shaderModule,
-				entryPoint: "fragment_main",
+				entryPoint: "fragmentMain",
 				targets: [
 					{
 						format: outputFormat,
@@ -149,6 +181,30 @@ export class FullscreenQuadPassResources {
 			},
 			layout: device.createPipelineLayout({
 				bindGroupLayouts: [this.group0Layout, group1Layout],
+			}),
+			label: "Fullscreen Quad",
+		});
+		this.arrayPipeline = device.createRenderPipeline({
+			vertex: {
+				module: shaderModule,
+				entryPoint: "vertexMain",
+			},
+			fragment: {
+				module: shaderModule,
+				entryPoint: "fragmentMainArray",
+				targets: [
+					{
+						format: outputFormat,
+					},
+				],
+			},
+			primitive: {
+				topology: "triangle-list",
+				cullMode: "none",
+				frontFace: "ccw",
+			},
+			layout: device.createPipelineLayout({
+				bindGroupLayouts: [this.group0LayoutArray, group1Layout],
 			}),
 			label: "Fullscreen Quad",
 		});
@@ -191,20 +247,24 @@ export class FullscreenQuadPassResources {
 			label: "Fullscreen Pass",
 		});
 
-		fullscreenPassEncoder.setPipeline(this.pipeline);
+		// This should happen upon changing params in the UI, not every draw?
+		// It probably does not matter too much with how small the buffer is,
+		// and how it is mostly static each frame.
+		this.ubo.data = renderParams;
+		this.ubo.writeToGPU(device.queue);
+
 		fullscreenPassEncoder.setIndexBuffer(
 			this.fullscreenQuadIndexBuffer,
 			"uint32",
 			0,
 			this.fullscreenQuadIndexBuffer.size
 		);
-
-		fullscreenPassEncoder.setBindGroup(0, bindGroup0);
-
-		this.ubo.data = renderParams;
-		this.ubo.writeToGPU(device.queue);
-
 		fullscreenPassEncoder.setBindGroup(1, this.group1);
+
+		fullscreenPassEncoder.setPipeline(
+			bindGroup0.array ? this.arrayPipeline : this.pipeline
+		);
+		fullscreenPassEncoder.setBindGroup(0, bindGroup0.bindGroup);
 
 		fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);
 

@@ -231,7 +231,7 @@ fn complexMult(a: vec2<f32>, b: vec2<f32>) -> vec2<f32>
 }
 
 @compute @workgroup_size(16, 16)
-fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,)
+fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
 	let texel_coord = vec2<u32>(global_id.xy);
     let size = textureDimensions(out_packed_Dx_plus_iDy_Dz_iDxdz_amplitude);
@@ -240,6 +240,24 @@ fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,
     }
 
 	let wave = waveParameters(&u_fourier_waves, texel_coord);
+
+	if (abs(wave.wave_number) < wave.delta_wave_number
+		|| abs(wave.wave_number) < u_fourier_waves.wave_number_min_max.x
+		|| abs(wave.wave_number) > u_fourier_waves.wave_number_min_max.y)
+	{
+		textureStore(
+			out_packed_Dx_plus_iDy_Dz_iDxdz_amplitude,
+			texel_coord,
+			vec4<f32>(0.0)
+		);
+		textureStore(
+			out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitude,
+			texel_coord,
+			vec4<f32>(0.0)
+		);
+		return;
+	}
+
 	let k_amplitude = textureLoad(in_initial_amplitude, texel_coord).xy;
 
 	let k_minus_coord = vec2<u32>(
@@ -256,26 +274,24 @@ fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,
 	let Dy_amplitude = complexMult(exponential, k_amplitude) + complexMult(exponential_conjugate, k_minus_amplitude_conjugate);
 
 	/*
-	 * For gerstner waves, displacement in x/z directions is based on the gradient
-	 * (x,z)-Displacement of:
+	 * For gerstner waves, displacement in x/z directions is based on the
+	 * gradient (x,z)-Displacement of:
 	 *
 	 * h(k,t) * exp(i * dot(k,x))
 	 * 	= i * k(k,t)/k * h(k,t) * exp(i * dot(k,x))
 	 *
 	 * Where i is the imaginary number sqrt(-1)
 	 *
-	 * We're going to be doing a few derivatives. h(k,t) is independent of (x,z),
-	 * so in general taking the derivative brings down a factor of i * k_x or i * k_z from the exponential
+	 * We're going to be doing a few derivatives.
+	 * h(k,t) is independent of (x,z) when performing the fourier transform sum,
+	 * since we sum over all fixed k and k is not a function of position at this
+	 * point. So in general taking the derivative brings down a factor of
+	 * i * k_x or i * k_z from the exponential
 	 */
 
 	let iDy_amplitude = vec2<f32>(-Dy_amplitude.y, Dy_amplitude.x);
 
 	var one_over_wave_number = 1.0 / wave.wave_number;
-	if (abs(wave.wave_number) < wave.delta_wave_number)
-	{
-		one_over_wave_number = 1.0;
-		return;
-	}
 
 	// wave.wave_vector.y here actually refers to the wave-vector's z component, since it is two-channel
 	let k_x = wave.wave_vector.x;
@@ -286,10 +302,10 @@ fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>,
 
 	let Dxdx_amplitude = -Dy_amplitude * k_x * k_x * one_over_wave_number;
 	let Dydx_amplitude = iDy_amplitude * k_x;
-	let Dxdz_amplitude = -Dy_amplitude * k_z * k_x * one_over_wave_number;
-
 	// Mixed derivative is redundant, since Dxdz = Dzdx, so we do not keep it
 	// let Dzdx_amplitude = -Dy_amplitude * k_x * k_z / wave.wave_number;
+
+	let Dxdz_amplitude = -Dy_amplitude * k_x * k_z * one_over_wave_number;
 	let Dydz_amplitude = iDy_amplitude * k_z;
 	let Dzdz_amplitude = -Dy_amplitude * k_z * k_z * one_over_wave_number;
 

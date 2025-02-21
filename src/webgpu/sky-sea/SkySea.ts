@@ -383,7 +383,7 @@ class SkySeaApp implements RendererApp {
 		});
 
 		const renderOutput = this.renderOutputs.get(
-			outputTextureController.getValue()
+			outputTextureController.getValue() as RenderOutput
 		);
 		if (renderOutput !== undefined) {
 			mipLevelController.max(renderOutput.mipLevelCount - 1);

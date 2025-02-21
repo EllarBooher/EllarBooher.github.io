@@ -185,7 +185,6 @@ export class GlobalUBO extends UBO {
 
 	protected override packed(): Float32Array {
 		const vec2_zeroed = new Float32Array(2).fill(0.0);
-		const vec3_zeroed = new Float32Array(3).fill(0.0);
 		const vec4_zeroed = new Float32Array(4).fill(0.0);
 		const mat2x4_zeroed = new Float32Array(4 * 2).fill(0.0);
 

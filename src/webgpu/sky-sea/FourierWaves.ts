@@ -147,7 +147,7 @@ export class FFTWaveDisplacementMaps {
 		this.turbulenceJacobianOneMip = this.turbulenceJacobian.map(
 			(texture, index) =>
 				texture.createView({
-					label: `FFT Wave DisplacementMaps for ${this.turbulenceJacobian} index ${index}`,
+					label: `FFT Wave DisplacementMaps for ${this.turbulenceJacobian[index].label} index ${index}`,
 				})
 		);
 	}
@@ -237,7 +237,7 @@ export class FFTWaveSpectrumResources {
 	 */
 
 	private turbulenceJacobianArrays: TurbulenceJacobianEntry[];
-	private turbulenceJacobianIndex: number = 0;
+	private turbulenceJacobianIndex = 0;
 
 	public get turbulenceMapIndex() {
 		return this.turbulenceJacobianIndex;

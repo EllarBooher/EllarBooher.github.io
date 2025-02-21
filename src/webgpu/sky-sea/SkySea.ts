@@ -213,18 +213,22 @@ class SkySeaApp implements RendererApp {
 			.name("Average FPS")
 			.listen();
 
-		gui.add(this.settings.oceanWaveSettings, "gerstner").name(
-			"Gerstner Waves"
-		);
-		gui.add(this.settings.oceanWaveSettings, "fft").name(
-			"FFT Accelerated Waves"
-		);
-		gui.add(this.settings, "pauseGlobalTime").name("Pause Waves");
-		gui.add(this.settings.oceanWaveSettings, "foamScale")
+		const oceanFolder = gui.addFolder("Ocean Parameters").open();
+
+		oceanFolder
+			.add(this.settings.oceanWaveSettings, "gerstner")
+			.name("Gerstner Waves");
+		oceanFolder
+			.add(this.settings.oceanWaveSettings, "fft")
+			.name("FFT Accelerated Waves");
+		oceanFolder.add(this.settings, "pauseGlobalTime").name("Pause Waves");
+		oceanFolder
+			.add(this.settings.oceanWaveSettings, "foamScale")
 			.name("Foam Scale")
 			.min(-4.0)
 			.max(4.0);
-		gui.add(this.settings.oceanWaveSettings, "foamBias")
+		oceanFolder
+			.add(this.settings.oceanWaveSettings, "foamBias")
 			.name("Foam Bias")
 			.min(-0.5)
 			.max(0.5);

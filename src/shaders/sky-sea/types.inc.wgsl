@@ -56,8 +56,9 @@ struct Camera
 // Alignof(Time) = 16
 struct Time
 {
-	padding0: vec3<f32>,
+	padding0: vec2<f32>,
 	time_seconds: f32,
+	delta_time_seconds: f32,
 }
 
 // All of these uniform values have identical lifetimes: they update before rendering for the frame, and are constant throughout

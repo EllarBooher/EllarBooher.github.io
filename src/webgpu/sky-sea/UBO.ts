@@ -124,6 +124,7 @@ interface Camera {
 
 interface Time {
 	timeSeconds: number;
+	deltaTimeSeconds: number;
 }
 
 const ALIGNOF_GPU_ATMOSPHERE = 16;
@@ -174,6 +175,7 @@ export class GlobalUBO extends UBO {
 		},
 		time: {
 			timeSeconds: 0.0,
+			deltaTimeSeconds: 0.0,
 		},
 	};
 
@@ -182,6 +184,7 @@ export class GlobalUBO extends UBO {
 	}
 
 	protected override packed(): Float32Array {
+		const vec2_zeroed = new Float32Array(2).fill(0.0);
 		const vec3_zeroed = new Float32Array(3).fill(0.0);
 		const vec4_zeroed = new Float32Array(4).fill(0.0);
 		const mat2x4_zeroed = new Float32Array(4 * 2).fill(0.0);
@@ -229,7 +232,11 @@ export class GlobalUBO extends UBO {
 		]);
 
 		const time = this.data.time;
-		const timePacked = new Float32Array([...vec3_zeroed, time.timeSeconds]);
+		const timePacked = new Float32Array([
+			...vec2_zeroed,
+			time.timeSeconds,
+			time.deltaTimeSeconds,
+		]);
 
 		return new Float32Array([
 			...cameraPacked,

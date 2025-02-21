@@ -14,6 +14,8 @@ struct WaveSurfaceDisplacementUBO
 	patch_world_half_extent: f32,
 	b_gerstner: u32,
 	b_displacement_map: u32,
+	foam_scale: f32,
+	foam_bias: f32,
 }
 
 @group(0) @binding(0) var<uniform> u_settings: WaveSurfaceDisplacementUBO;
@@ -23,6 +25,8 @@ struct WaveSurfaceDisplacementUBO
 @group(1) @binding(1) var Dx_Dy_Dz_Dxdz_spatial: texture_2d_array<f32>;
 @group(1) @binding(2) var Dydx_Dydz_Dxdx_Dzdz_spatial: texture_2d_array<f32>;
 @group(1) @binding(3) var<uniform> u_waves: array<PlaneWave, WAVE_COUNT>;
+
+@group(2) @binding(0) var turbulence_jacobian: texture_2d_array<f32>;
 
 const PI = 3.141592653589793;
 
@@ -44,7 +48,7 @@ struct WaveDisplacementResult
     displacement: vec3<f32>,
     tangent: vec3<f32>,
     bitangent: vec3<f32>,
-	jacobian: f32,
+	foam_strength: f32,
 }
 
 fn sampleGerstner(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distance: f32) -> WaveDisplacementResult
@@ -86,7 +90,7 @@ fn sampleGerstner(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distanc
         - wave_amplitude * sin_theta * wave_vector.y,
         - wave_amplitude * wave_direction.y * cos_theta * wave_vector.y,
     );
-	output.jacobian = 1.0;
+	output.foam_strength = 0.0;
 
     return output;
 }
@@ -132,7 +136,7 @@ fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distance:
         - wave_amplitude * sin_theta * wave_vector.y,
         0.0,
     );
-	output.jacobian = 1.0;
+	output.foam_strength = 0.0;
 
     return output;
 }
@@ -145,14 +149,9 @@ fn sampleMap(global_uv: vec2<f32>, max_cascade: f32, gerstner: bool, lod: f32) -
 	output.displacement = vec3<f32>(0.0);
 	output.tangent = vec3<f32>(0.0);
 	output.bitangent = vec3<f32>(0.0);
-	output.jacobian = 0.0;
+	output.foam_strength = 0.0;
 
 	const WAVE_PATCH_SIZES = array<f32,3>(200.0, 50.0, 10.0);
-
-	var jacobian_xx = 1.0;
-	var jacobian_zz = 1.0;
-	var jacobian_xz = 0.0;
-	var jacobian_zx = 0.0;
 
 	for(var array_layer = 0u; array_layer <= u32(max_cascade); array_layer++)
 	{
@@ -189,14 +188,13 @@ fn sampleMap(global_uv: vec2<f32>, max_cascade: f32, gerstner: bool, lod: f32) -
 		output.tangent += lambda * vec3<f32>(Dxdx, Dydx, Dzdx);
 		output.bitangent += lambda * vec3<f32>(Dxdz, Dydz, Dzdz);
 
-		jacobian_xx += lambda * Dxdx;
-		jacobian_zz += lambda * Dzdz;
-
-		jacobian_xz += lambda * Dxdz;
-		jacobian_zx += lambda * Dzdx;
+		let turbulence = textureSampleLevel(turbulence_jacobian, displacement_map_sampler, patch_uv, array_layer, 0.0).x;
+		output.foam_strength += u_settings.foam_scale * lambda * (turbulence+u_settings.foam_bias) / max_cascade;
 	}
 
-	output.jacobian = jacobian_xx * jacobian_zz - jacobian_xz * jacobian_zx;
+	// Weaken foam at lower detail levels
+	// TODO: this could use more rigour
+	output.foam_strength =  clamp((0.5 * max_cascade / 3.0 + 0.5) * 5.0 * (1.0 - output.foam_strength) - 1.5, 0.0, 1.0);
 
 	return output;
 }
@@ -205,7 +203,7 @@ struct DisplacementResult
 {
 	world_position: vec3<f32>,
 	world_normal: vec3<f32>,
-	jacobian: f32,
+	foam_strength: f32,
 }
 
 fn computeDisplacement(in_world_position: vec3<f32>, max_cascade: f32, time: f32, lod: f32, max_lod: f32) -> DisplacementResult
@@ -213,7 +211,7 @@ fn computeDisplacement(in_world_position: vec3<f32>, max_cascade: f32, time: f32
 	var displacement = vec3<f32>(0.0);
     var tangent = vec3<f32>(1.0, 0.0, 0.0);
     var bitangent = vec3<f32>(0.0, 0.0, 1.0);
-	var jacobian = 0.0;
+	var foam_strength = 0.0;
 
 	if(u_settings.b_displacement_map == 1u)
 	{
@@ -224,7 +222,7 @@ fn computeDisplacement(in_world_position: vec3<f32>, max_cascade: f32, time: f32
 		displacement += result.displacement;
 		tangent += result.tangent;
 		bitangent += result.bitangent;
-		jacobian += result.jacobian;
+		foam_strength += result.foam_strength;
 	}
 	else
 	{
@@ -244,7 +242,7 @@ fn computeDisplacement(in_world_position: vec3<f32>, max_cascade: f32, time: f32
 			displacement += result.displacement;
 			tangent += result.tangent;
 			bitangent += result.bitangent;
-			jacobian += result.jacobian;
+			foam_strength += result.foam_strength;
 		}
 	}
 
@@ -256,7 +254,7 @@ fn computeDisplacement(in_world_position: vec3<f32>, max_cascade: f32, time: f32
 	let lod_factor = 1.0 - lod / max_lod;
 	result.world_position = in_world_position + lod_factor * displacement;
 	result.world_normal = mix(vec3<f32>(0.0, 1.0, 0.0) ,-normalize(cross(tangent, bitangent)), lod_factor);
-	result.jacobian = jacobian;
+	result.foam_strength = clamp(foam_strength, 0.0, 1.0);
 
 	return result;
 }
@@ -287,7 +285,7 @@ struct VertexOut {
     @location(1) world_normal : vec3<f32>,
     @location(2) color : vec3<f32>,
     @location(3) camera_distance : f32,
-	@location(4) jacobian : f32,
+	@location(4) foam_strength : f32,
 }
 
 /*
@@ -387,7 +385,7 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	output.position.z /= 1.001;
 	output.world_normal = displacement_result.world_normal;
 	output.color = vec3<f32>(WATER_COLOR);
-	output.jacobian = displacement_result.jacobian;
+	output.foam_strength = displacement_result.foam_strength;
 
 	// Test screen-space density of vertices
 	// output.color = vec3<f32>(step(fract(50 * ndc_space_coord), vec2<f32>(0.1)),0.0);
@@ -401,7 +399,7 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 struct FragmentOut
 {
     @location(0) color_with_surface_world_depth_in_alpha: vec4<f32>,
-    @location(1) world_normal_with_surface_jacobian_in_alpha: vec4<f32>,
+    @location(1) world_normal_with_surface_foam_strength_in_alpha: vec4<f32>,
 }
 
 @fragment
@@ -410,7 +408,7 @@ fn rasterizationFragment(frag_interpolated: VertexOut) -> FragmentOut
     var output : FragmentOut;
 
     output.color_with_surface_world_depth_in_alpha = vec4<f32>(frag_interpolated.color, frag_interpolated.camera_distance);
-    output.world_normal_with_surface_jacobian_in_alpha = vec4<f32>(frag_interpolated.world_normal,frag_interpolated.jacobian);
+    output.world_normal_with_surface_foam_strength_in_alpha = vec4<f32>(frag_interpolated.world_normal,frag_interpolated.foam_strength);
 
     return output;
 }

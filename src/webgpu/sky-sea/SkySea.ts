@@ -126,6 +126,8 @@ class SkySeaApp implements RendererApp {
 		oceanWaveSettings: {
 			gerstner: boolean;
 			fft: boolean;
+			foamScale: number;
+			foamBias: number;
 		};
 		pauseGlobalTime: boolean;
 		renderOutputTransforms: Map<RenderOutput, RenderOutputTransform>;
@@ -189,6 +191,8 @@ class SkySeaApp implements RendererApp {
 					RenderOutput.FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude,
 				"FFT Wave Frequency Domain (Dydx + i * Dydz, Dxdx + i * Dzdz)":
 					RenderOutput.FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,
+				"FFT Wave (Turbulence, Jacobian)":
+					RenderOutput.FFTWaveTurbulenceJacobian,
 				"FFT Wave Spatial Domain (Dx, Dy, Dz, Dxdz)":
 					RenderOutput.FFTWaveDx_Dy_Dz_Dxdz_Spatial,
 				"FFT Wave Spatial Domain (Dydx, Dydz, Dxdx, Dzdx)":
@@ -216,6 +220,14 @@ class SkySeaApp implements RendererApp {
 			"FFT Accelerated Waves"
 		);
 		gui.add(this.settings, "pauseGlobalTime").name("Pause Waves");
+		gui.add(this.settings.oceanWaveSettings, "foamScale")
+			.name("Foam Scale")
+			.min(-4.0)
+			.max(4.0);
+		gui.add(this.settings.oceanWaveSettings, "foamBias")
+			.name("Foam Bias")
+			.min(-0.5)
+			.max(0.5);
 
 		const sunFolder = gui.addFolder("Sun Parameters").open();
 
@@ -416,6 +428,8 @@ class SkySeaApp implements RendererApp {
 			oceanWaveSettings: {
 				gerstner: true,
 				fft: true,
+				foamScale: 1.05,
+				foamBias: -0.07,
 			},
 			renderOutputTransforms: new Map<
 				RenderOutput,
@@ -557,7 +571,7 @@ class SkySeaApp implements RendererApp {
 				this.device,
 				this.globalUBO,
 				this.gbuffer.colorWithSurfaceWorldDepthInAlpha.format,
-				this.gbuffer.normalWithSurfaceJacobianInAlpha.format,
+				this.gbuffer.normalWithSurfaceFoamStrengthInAlpha.format,
 				this.gbuffer.depth.format,
 				this.fftWaveSpectrumResources.displacementMaps()
 			);
@@ -609,7 +623,7 @@ class SkySeaApp implements RendererApp {
 			[
 				RenderOutput.GBufferNormal,
 				new RenderOutputTexture(
-					this.gbuffer.normalWithSurfaceJacobianInAlpha
+					this.gbuffer.normalWithSurfaceFoamStrengthInAlpha
 				),
 			],
 			[
@@ -627,6 +641,10 @@ class SkySeaApp implements RendererApp {
 			[
 				RenderOutput.FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,
 				fftWaveViews.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,
+			],
+			[
+				RenderOutput.FFTWaveTurbulenceJacobian,
+				fftWaveViews.turbulenceJacobian,
 			],
 			[
 				RenderOutput.FFTWaveDx_Dy_Dz_Dxdz_Spatial,
@@ -752,7 +770,10 @@ class SkySeaApp implements RendererApp {
 	updateTime(deltaTimeMilliseconds: number) {
 		const timeUBO = this.globalUBO.data.time;
 		if (!this.settings.pauseGlobalTime) {
-			timeUBO.timeSeconds += deltaTimeMilliseconds / 1000.0;
+			timeUBO.deltaTimeSeconds = deltaTimeMilliseconds / 1000.0;
+			timeUBO.timeSeconds += timeUBO.deltaTimeSeconds;
+		} else {
+			timeUBO.deltaTimeSeconds = 0.0;
 		}
 
 		const NON_FFT_WAVE_PERIOD_SECONDS = 60.0;
@@ -762,6 +783,8 @@ class SkySeaApp implements RendererApp {
 			? FFT_WAVE_PERIOD_SECONDS
 			: NON_FFT_WAVE_PERIOD_SECONDS;
 
+		// It is important to NOT set the time, instead modulo it.
+		// This keeps the delta time consistent.
 		timeUBO.timeSeconds -=
 			Math.floor(timeUBO.timeSeconds / periodSeconds) * periodSeconds;
 	}
@@ -858,15 +881,18 @@ class SkySeaApp implements RendererApp {
 						endWriteIndex: timestampQueryIndex++,
 				  }
 				: undefined,
+			this.fftWaveSpectrumResources.turbulenceMapIndex,
 			{
 				gerstner: this.settings.oceanWaveSettings.gerstner,
 				fft: this.settings.oceanWaveSettings.fft,
+				foamBias: this.settings.oceanWaveSettings.foamBias,
+				foamScale: this.settings.oceanWaveSettings.foamScale,
 			},
 			{
 				colorWithSurfaceWorldDepthInAlpha:
 					this.gbuffer.colorWithSurfaceWorldDepthInAlphaView,
-				normalWithSurfaceJacobianInAlpha:
-					this.gbuffer.normalWithSurfaceJacobianInAlphaView,
+				normalWithSurfaceFoamInAlpha:
+					this.gbuffer.normalWithSurfaceFoamStrengthInAlphaView,
 				depth: this.gbuffer.depthView,
 			}
 		);
@@ -1105,7 +1131,7 @@ class SkySeaApp implements RendererApp {
 		this.renderOutputs.set(
 			RenderOutput.GBufferNormal,
 			new RenderOutputTexture(
-				this.gbuffer.normalWithSurfaceJacobianInAlpha
+				this.gbuffer.normalWithSurfaceFoamStrengthInAlpha
 			)
 		);
 

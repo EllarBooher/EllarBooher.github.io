@@ -19,6 +19,7 @@ const GAUSSIAN_NOISE_FORMAT: GPUTextureFormat = "rg32float";
 
 const INITIAL_AMPLITUDE_FORMAT: GPUTextureFormat = "rg32float";
 const DISPLACEMENT_FORMAT: GPUTextureFormat = "rgba16float";
+const TURBULENCE_JACOBIAN_FORMAT: GPUTextureFormat = "rgba16float";
 
 const FFT_IO_TEXTURE_FORMAT: GPUTextureFormat = "rgba32float";
 
@@ -42,7 +43,7 @@ class FourierWavesUBO extends UBO {
 		wave_patch_extent_meters: 50.0,
 		wave_period_seconds: WAVE_PERIOD_SECONDS,
 
-		wind_speed_meters_per_second: 5.0,
+		wind_speed_meters_per_second: 10.0,
 		wind_fetch_meters: 10.0 * 1000.0,
 		wave_swell: 0.3,
 		padding0: 0,
@@ -100,6 +101,7 @@ export interface FFTWaveSpectrumRenderables {
 	initialAmplitude: RenderOutputTexture;
 	packed_Dx_plus_iDy_Dz_iDxdz_Amplitude: RenderOutputTexture;
 	packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude: RenderOutputTexture;
+	turbulenceJacobian: RenderOutputTexture;
 	Dx_Dy_Dz_Dxdz_Spatial: RenderOutputTexture;
 	Dydx_Dydz_Dxdx_Dzdz_Spatial: RenderOutputTexture;
 }
@@ -107,37 +109,47 @@ export interface FFTWaveSpectrumRenderables {
 export class FFTWaveDisplacementMaps {
 	private Dx_Dy_Dz_Dxdz_Spatial: GPUTexture;
 	private Dydx_Dydz_Dxdx_Dzdz_Spatial: GPUTexture;
+	private turbulenceJacobian: GPUTexture[];
 
 	get mipLevelCount() {
 		return this.Dx_Dy_Dz_Dxdz_Spatial.mipLevelCount;
 	}
 	readonly Dx_Dy_Dz_Dxdz_SpatialAllMips: GPUTextureView;
 	readonly Dydx_Dydz_Dxdx_Dzdz_SpatialAllMips: GPUTextureView;
+	readonly turbulenceJacobianOneMip: GPUTextureView[];
 
 	constructor(
 		Dx_Dy_Dz_Dxdz_Spatial: GPUTexture,
-		Dydx_Dydz_Dxdx_Dzdz_Spatial: GPUTexture
+		Dydx_Dydz_Dxdx_Dzdz_Spatial: GPUTexture,
+		turbulenceJacobian: GPUTexture[]
 	) {
 		if (
 			Dx_Dy_Dz_Dxdz_Spatial.mipLevelCount !=
 			Dydx_Dydz_Dxdx_Dzdz_Spatial.mipLevelCount
 		) {
 			console.warn(
-				`FFT Displacement maps do not have identical mip levels. ${Dx_Dy_Dz_Dxdz_Spatial.mipLevelCount} vs ${Dydx_Dydz_Dxdx_Dzdz_Spatial.mipLevelCount}`
+				`FFT Wave Displacement maps do not have identical mip levels. ${Dx_Dy_Dz_Dxdz_Spatial.mipLevelCount} vs ${Dydx_Dydz_Dxdx_Dzdz_Spatial.mipLevelCount}`
 			);
 		}
 
 		this.Dx_Dy_Dz_Dxdz_Spatial = Dx_Dy_Dz_Dxdz_Spatial;
 		this.Dydx_Dydz_Dxdx_Dzdz_Spatial = Dydx_Dydz_Dxdx_Dzdz_Spatial;
+		this.turbulenceJacobian = turbulenceJacobian;
 
 		this.Dx_Dy_Dz_Dxdz_SpatialAllMips =
 			this.Dx_Dy_Dz_Dxdz_Spatial.createView({
-				label: `FFTWaveDisplacementMaps for ${this.Dx_Dy_Dz_Dxdz_Spatial.label}`,
+				label: `FFT Wave DisplacementMaps for ${this.Dx_Dy_Dz_Dxdz_Spatial.label}`,
 			});
 		this.Dydx_Dydz_Dxdx_Dzdz_SpatialAllMips =
 			this.Dydx_Dydz_Dxdx_Dzdz_Spatial.createView({
-				label: `FFTWaveDisplacementMaps for ${this.Dydx_Dydz_Dxdx_Dzdz_Spatial.label}`,
+				label: `FFT Wave DisplacementMaps for ${this.Dydx_Dydz_Dxdx_Dzdz_Spatial.label}`,
 			});
+		this.turbulenceJacobianOneMip = this.turbulenceJacobian.map(
+			(texture, index) =>
+				texture.createView({
+					label: `FFT Wave DisplacementMaps for ${this.turbulenceJacobian} index ${index}`,
+				})
+		);
 	}
 }
 
@@ -183,6 +195,11 @@ export interface FFTWaveCascade {
 	realizedAmplitudeGroup1: GPUBindGroup;
 }
 
+interface TurbulenceJacobianEntry {
+	textureArray: GPUTexture;
+	bindGroup: GPUBindGroup;
+}
+
 export class FFTWaveSpectrumResources {
 	/*
 	 * We produce a discrete spectrum of waves, for which the various values
@@ -196,6 +213,7 @@ export class FFTWaveSpectrumResources {
 
 	private initialAmplitudeKernel: GPUComputePipeline;
 	private realizedAmplitudeKernel: GPUComputePipeline;
+	private accumulateTurbulenceKernel: GPUComputePipeline;
 
 	private dfftResources: DFFTResources;
 
@@ -209,6 +227,21 @@ export class FFTWaveSpectrumResources {
 	 */
 	private Dx_Dy_Dz_Dxdz_SpatialArray: GPUTexture;
 	private Dydx_Dydz_Dxdx_Dzdz_SpatialArray: GPUTexture;
+
+	/*
+	 * Array layer N contains the jacobian computed from layers 1 through N.
+	 * Each layer is a cascade, so it is done this way in case we only sample the lower cascades.
+	 * We do not want the turbulence from higher cascades to affect the lower cascades.
+	 *
+	 * We need two storage textures since we cannot natively have read_write storage. They are swapped out each frame.
+	 */
+
+	private turbulenceJacobianArrays: TurbulenceJacobianEntry[];
+	private turbulenceJacobianIndex: number = 0;
+
+	public get turbulenceMapIndex() {
+		return this.turbulenceJacobianIndex;
+	}
 
 	private Dx_Dy_Dz_Dxdz_SpatialArray_MipMapBindings: MipMapGenerationTextureBindings;
 	private Dydx_Dydz_Dxdx_Dzdz_SpatialArray_MipMapBindings: MipMapGenerationTextureBindings;
@@ -501,6 +534,61 @@ export class FFTWaveSpectrumResources {
 			},
 		});
 
+		const accumulateTurbulenceGroup0Layout = device.createBindGroupLayout({
+			label: "FFT Wave Accumulate Turbulence Group 0",
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.COMPUTE,
+					storageTexture: {
+						viewDimension: "2d-array",
+						format: TURBULENCE_JACOBIAN_FORMAT,
+					},
+				},
+				{
+					binding: 1,
+					visibility: GPUShaderStage.COMPUTE,
+					texture: {
+						viewDimension: "2d-array",
+						sampleType: "unfilterable-float",
+					},
+				},
+				{
+					binding: 2,
+					visibility: GPUShaderStage.COMPUTE,
+					texture: {
+						viewDimension: "2d-array",
+						sampleType: "unfilterable-float",
+					},
+				},
+				{
+					binding: 3,
+					visibility: GPUShaderStage.COMPUTE,
+					texture: {
+						viewDimension: "2d-array",
+						sampleType: "unfilterable-float",
+					},
+				},
+				{
+					binding: 4,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: { type: "uniform" },
+				},
+			],
+		});
+
+		this.accumulateTurbulenceKernel = device.createComputePipeline({
+			label: "FFT Wave Accumulate Turbulence",
+			layout: device.createPipelineLayout({
+				label: "FFT Wave Accumulate Turbulence",
+				bindGroupLayouts: [accumulateTurbulenceGroup0Layout],
+			}),
+			compute: {
+				module: shaderModule,
+				entryPoint: "accumulateTurbulence",
+			},
+		});
+
 		function nyquistWaveNumber(spatialSampleDistance: number) {
 			const wavelength = 2.0 * spatialSampleDistance;
 			return (2.0 * Math.PI) / wavelength;
@@ -567,6 +655,97 @@ export class FFTWaveSpectrumResources {
 			)
 		);
 
+		// We need to fill rgba16float buffer with 1.0, there may be a better way
+		const ONE_IN_FLOAT16_AS_UINT = 15360;
+		const turbulenceJacobianInitialBuffer = new Uint16Array(
+			this.Dx_Dy_Dz_Dxdz_SpatialArray.width *
+				this.Dx_Dy_Dz_Dxdz_SpatialArray.height *
+				this.Dx_Dy_Dz_Dxdz_SpatialArray.depthOrArrayLayers *
+				4
+		).fill(ONE_IN_FLOAT16_AS_UINT);
+
+		this.turbulenceJacobianArrays = [0, 0]
+			.map((_value, index) => {
+				return device.createTexture({
+					label: `FFT Wave (Turbulence,Jacobian) Array ${index}`,
+					format: TURBULENCE_JACOBIAN_FORMAT,
+					size: {
+						width: this.Dx_Dy_Dz_Dxdz_SpatialArray.width,
+						height: this.Dx_Dy_Dz_Dxdz_SpatialArray.height,
+						depthOrArrayLayers:
+							this.Dx_Dy_Dz_Dxdz_SpatialArray.depthOrArrayLayers,
+					},
+					mipLevelCount: 1,
+					usage:
+						GPUTextureUsage.STORAGE_BINDING | // write to
+						GPUTextureUsage.TEXTURE_BINDING | // read from to accumulate turbulence
+						GPUTextureUsage.COPY_DST, // initialize/wipe turbulence to 0
+				});
+			})
+			.reduce<TurbulenceJacobianEntry[]>(
+				(accumulatedEntries, texture, index, textures) => {
+					device.queue.writeTexture(
+						{ texture: texture },
+						turbulenceJacobianInitialBuffer,
+						{
+							bytesPerRow:
+								this.Dx_Dy_Dz_Dxdz_SpatialArray.width * 8,
+							rowsPerImage:
+								this.Dx_Dy_Dz_Dxdz_SpatialArray.height,
+						},
+						{
+							width: this.Dx_Dy_Dz_Dxdz_SpatialArray.width,
+							height: this.Dx_Dy_Dz_Dxdz_SpatialArray.height,
+							depthOrArrayLayers:
+								this.Dx_Dy_Dz_Dxdz_SpatialArray
+									.depthOrArrayLayers,
+						}
+					);
+
+					const bindGroup = device.createBindGroup({
+						layout: this.accumulateTurbulenceKernel.getBindGroupLayout(
+							0
+						),
+						entries: [
+							{
+								binding: 0,
+								resource: texture.createView({}),
+							},
+							{
+								binding: 1,
+								resource: textures[
+									(index + 1) % textures.length
+								].createView({}),
+							},
+							{
+								binding: 2,
+								resource:
+									this.Dx_Dy_Dz_Dxdz_SpatialArray.createView(
+										{}
+									),
+							},
+							{
+								binding: 3,
+								resource:
+									this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray.createView(
+										{}
+									),
+							},
+							{
+								binding: 4,
+								resource: { buffer: globalUBO.buffer },
+							},
+						],
+					});
+
+					return accumulatedEntries.concat({
+						textureArray: texture,
+						bindGroup: bindGroup,
+					});
+				},
+				[]
+			);
+
 		this.Dx_Dy_Dz_Dxdz_SpatialArray_MipMapBindings =
 			this.mipMapGenerator.createBindGroups(
 				device,
@@ -625,6 +804,9 @@ export class FFTWaveSpectrumResources {
 				new RenderOutputTexture(
 					cascade.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude
 				),
+			turbulenceJacobian: new RenderOutputTexture(
+				this.turbulenceJacobianArrays[0].textureArray
+			),
 			Dx_Dy_Dz_Dxdz_Spatial: new RenderOutputTexture(
 				this.Dx_Dy_Dz_Dxdz_SpatialArray
 			),
@@ -637,7 +819,8 @@ export class FFTWaveSpectrumResources {
 	displacementMaps(): FFTWaveDisplacementMaps {
 		return new FFTWaveDisplacementMaps(
 			this.Dx_Dy_Dz_Dxdz_SpatialArray,
-			this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray
+			this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray,
+			this.turbulenceJacobianArrays.map((value) => value.textureArray)
 		);
 	}
 
@@ -697,6 +880,25 @@ export class FFTWaveSpectrumResources {
 				undefined
 			);
 		});
+
+		const accumulateTurbulencePass = commandEncoder.beginComputePass({
+			label: "Turbulence Accumulation",
+		});
+		accumulateTurbulencePass.setPipeline(this.accumulateTurbulenceKernel);
+		accumulateTurbulencePass.setBindGroup(
+			0,
+			this.turbulenceJacobianArrays[this.turbulenceJacobianIndex++]
+				.bindGroup
+		);
+		this.turbulenceJacobianIndex %= this.turbulenceJacobianArrays.length;
+
+		accumulateTurbulencePass.dispatchWorkgroups(
+			this.gridSize / 16,
+			this.gridSize / 16
+		);
+
+		accumulateTurbulencePass.end();
+
 		const fillMipMapsPass = commandEncoder.beginComputePass({
 			label: `MipMap Generation`,
 			timestampWrites:

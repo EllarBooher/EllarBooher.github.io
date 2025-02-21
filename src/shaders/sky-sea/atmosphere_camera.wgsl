@@ -9,7 +9,7 @@
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
 @group(2) @binding(0) var gbuffer_color_with_surface_world_depth_in_alpha: texture_2d<f32>;
-@group(2) @binding(1) var gbuffer_normal_with_surface_jacobian_in_alpha: texture_2d<f32>;
+@group(2) @binding(1) var gbuffer_normal_with_surface_foam_strength_in_alpha: texture_2d<f32>;
 
 // vertex state NOT included
 // Render a quad and use this as the fragment stage
@@ -323,7 +323,9 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     let direction_world = normalize((camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
 
     let color_with_surface_world_depth_in_alpha = textureLoad(gbuffer_color_with_surface_world_depth_in_alpha, texel_coord, 0);
-    let normal = textureLoad(gbuffer_normal_with_surface_jacobian_in_alpha, texel_coord, 0);
+    let normal_with_surface_foam_strength_in_alpha = textureLoad(gbuffer_normal_with_surface_foam_strength_in_alpha, texel_coord, 0);
+	let normal = normal_with_surface_foam_strength_in_alpha.xyz;
+	let foam_strength = normal_with_surface_foam_strength_in_alpha.w;
 
     let depth = color_with_surface_world_depth_in_alpha.a / METERS_PER_MM;
 
@@ -351,7 +353,7 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     {
         // View of geometry in gbuffer
 		let color = color_with_surface_world_depth_in_alpha.xyz;
-        let material: PBRTexel = convertPBRPropertiesWater(color, normal.xyz, normal.w);
+        let material: PBRTexel = convertPBRPropertiesWater(color, normal.xyz, foam_strength);
         luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, true);
     }
 

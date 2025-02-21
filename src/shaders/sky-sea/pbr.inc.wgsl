@@ -14,11 +14,11 @@ struct PBRTexel
     metallic: f32,
 };
 
-fn convertPBRPropertiesWater(color: vec3<f32>, normal: vec3<f32>, surface_jacobian: f32) -> PBRTexel
+fn convertPBRPropertiesWater(color: vec3<f32>, normal: vec3<f32>, foam: f32) -> PBRTexel
 {
     let metallic = 1.0;
 
-	let foam_intensity = clamp(1.0 - surface_jacobian, 0.0, 1.0);
+	let foam_intensity = foam;
 
 	let specular_power = 160.0;
     let roughness = mix(0.05, 1.0, foam_intensity);

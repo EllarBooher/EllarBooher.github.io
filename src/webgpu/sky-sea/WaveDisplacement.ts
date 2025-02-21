@@ -9,14 +9,18 @@ class WaveSurfaceDisplacementUBO extends UBO {
 		patch_world_half_extent: number;
 		b_gerstner: boolean;
 		b_fft: boolean;
+		foam_scale: number;
+		foam_bias: number;
 	} = {
 		patch_world_half_extent: 50.0,
 		b_gerstner: true,
 		b_fft: true,
+		foam_scale: 1.0,
+		foam_bias: 0.0,
 	};
 
 	constructor(device: GPUDevice) {
-		const FLOAT_COUNT = 3;
+		const FLOAT_COUNT = 5;
 		super(
 			device,
 			FLOAT_COUNT,
@@ -31,6 +35,8 @@ class WaveSurfaceDisplacementUBO extends UBO {
 		view.setFloat32(0, this.data.patch_world_half_extent, true);
 		view.setUint32(4, this.data.b_gerstner ? 1 : 0, true);
 		view.setUint32(8, this.data.b_fft ? 1 : 0, true);
+		view.setFloat32(12, this.data.foam_scale, true);
+		view.setFloat32(16, this.data.foam_bias, true);
 
 		return buffer;
 	}
@@ -52,6 +58,8 @@ export class WaveSurfaceDisplacementPassResources {
 	 * @group(1) @binding(3) var<uniform> u_waves: array<PlaneWave, WAVE_COUNT>;
 	 */
 	group1: GPUBindGroup;
+
+	group2ByTurbulenceMapIndex: GPUBindGroup[];
 
 	settingsUBO: WaveSurfaceDisplacementUBO;
 
@@ -274,13 +282,13 @@ export class WaveSurfaceDisplacementPassResources {
 			],
 		});
 		this.group1 = device.createBindGroup({
-			label: "Wave Surface Displacement Group 2 Compute (Displacement Map)",
+			label: "Wave Surface Displacement Group 1 Compute (Displacement Map)",
 			layout: group1Layout,
 			entries: [
 				{
 					binding: 0,
 					resource: device.createSampler({
-						label: "Wave Surface Displacement Group 2 Sampler",
+						label: "Wave Surface Displacement Group 1 Sampler",
 						minFilter: "linear",
 						magFilter: "linear",
 						addressModeU: "repeat",
@@ -303,6 +311,30 @@ export class WaveSurfaceDisplacementPassResources {
 			],
 		});
 		this.mipLevelCount = displacementMaps.mipLevelCount;
+
+		const group2Layout = device.createBindGroupLayout({
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.VERTEX,
+					texture: { sampleType: "float", viewDimension: "2d-array" },
+				},
+			],
+		});
+
+		this.group2ByTurbulenceMapIndex =
+			displacementMaps.turbulenceJacobianOneMip.map((view, index) => {
+				return device.createBindGroup({
+					label: `Wave Surface Displacement Group 2 Compute (Turbulence) index ${index}`,
+					layout: group2Layout,
+					entries: [
+						{
+							binding: 0,
+							resource: view,
+						},
+					],
+				});
+			});
 
 		const group0Layout = device.createBindGroupLayout({
 			entries: [
@@ -348,7 +380,7 @@ export class WaveSurfaceDisplacementPassResources {
 
 		this.oceanSurfaceRasterizationPipeline = device.createRenderPipeline({
 			layout: device.createPipelineLayout({
-				bindGroupLayouts: [group0Layout, group1Layout],
+				bindGroupLayouts: [group0Layout, group1Layout, group2Layout],
 			}),
 			vertex: {
 				module: shaderModule,
@@ -377,13 +409,16 @@ export class WaveSurfaceDisplacementPassResources {
 		device: GPUDevice,
 		commandEncoder: GPUCommandEncoder,
 		timestampInterval: TimestampQueryInterval | undefined,
+		turbulenceMapIndex: number,
 		settings: {
 			gerstner: boolean;
 			fft: boolean;
+			foamScale: number;
+			foamBias: number;
 		},
 		attachments: {
 			colorWithSurfaceWorldDepthInAlpha: GPUTextureView;
-			normalWithSurfaceJacobianInAlpha: GPUTextureView;
+			normalWithSurfaceFoamInAlpha: GPUTextureView;
 			depth: GPUTextureView;
 		}
 	) {
@@ -392,6 +427,8 @@ export class WaveSurfaceDisplacementPassResources {
 			: 300.0;
 		this.settingsUBO.data.b_gerstner = settings.gerstner;
 		this.settingsUBO.data.b_fft = settings.fft;
+		this.settingsUBO.data.foam_bias = settings.foamBias;
+		this.settingsUBO.data.foam_scale = settings.foamScale;
 		this.settingsUBO.writeToGPU(device.queue);
 
 		const surfaceRasterizationPassEncoder = commandEncoder.beginRenderPass({
@@ -407,7 +444,7 @@ export class WaveSurfaceDisplacementPassResources {
 					clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
 					loadOp: "clear",
 					storeOp: "store",
-					view: attachments.normalWithSurfaceJacobianInAlpha,
+					view: attachments.normalWithSurfaceFoamInAlpha,
 				},
 			],
 			depthStencilAttachment: {
@@ -433,6 +470,10 @@ export class WaveSurfaceDisplacementPassResources {
 		);
 		surfaceRasterizationPassEncoder.setBindGroup(0, this.group0);
 		surfaceRasterizationPassEncoder.setBindGroup(1, this.group1);
+		surfaceRasterizationPassEncoder.setBindGroup(
+			2,
+			this.group2ByTurbulenceMapIndex[turbulenceMapIndex]
+		);
 		surfaceRasterizationPassEncoder.setIndexBuffer(this.indices, "uint32");
 
 		surfaceRasterizationPassEncoder.drawIndexed(this.baseIndexCount, 1);

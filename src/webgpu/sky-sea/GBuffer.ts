@@ -11,8 +11,8 @@ export class GBuffer {
 	colorWithSurfaceWorldDepthInAlpha: GPUTexture;
 	colorWithSurfaceWorldDepthInAlphaView: GPUTextureView;
 
-	normalWithSurfaceJacobianInAlpha: GPUTexture;
-	normalWithSurfaceJacobianInAlphaView: GPUTextureView;
+	normalWithSurfaceFoamStrengthInAlpha: GPUTexture;
+	normalWithSurfaceFoamStrengthInAlphaView: GPUTextureView;
 
 	// Depth used for graphics pipelines that render into the gbuffer
 	depth: GPUTexture;
@@ -47,7 +47,7 @@ export class GBuffer {
 				label: "GBuffer ColorWithSurfaceWorldDepthInAlpha",
 			});
 
-		this.normalWithSurfaceJacobianInAlpha = device.createTexture({
+		this.normalWithSurfaceFoamStrengthInAlpha = device.createTexture({
 			size: dimensions,
 			dimension: "2d",
 			format: GBUFFER_NORMAL_FORMAT,
@@ -57,8 +57,8 @@ export class GBuffer {
 				GPUTextureUsage.TEXTURE_BINDING,
 			label: "GBuffer Normal",
 		});
-		this.normalWithSurfaceJacobianInAlphaView =
-			this.normalWithSurfaceJacobianInAlpha.createView({
+		this.normalWithSurfaceFoamStrengthInAlphaView =
+			this.normalWithSurfaceFoamStrengthInAlpha.createView({
 				label: "GBuffer Normal",
 			});
 
@@ -90,7 +90,7 @@ export class GBuffer {
 				},
 				{
 					binding: 1,
-					resource: this.normalWithSurfaceJacobianInAlphaView,
+					resource: this.normalWithSurfaceFoamStrengthInAlphaView,
 				},
 			],
 			label: "GBuffer Read Group",
@@ -130,7 +130,7 @@ export class GBuffer {
 				},
 				{
 					binding: 1,
-					resource: this.normalWithSurfaceJacobianInAlphaView,
+					resource: this.normalWithSurfaceFoamStrengthInAlphaView,
 				},
 			],
 			label: "GBuffer Write Group",

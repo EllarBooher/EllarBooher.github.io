@@ -14,6 +14,7 @@ export enum RenderOutput {
 	FFTWaveInitialAmplitude,
 	FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude,
 	FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,
+	FFTWaveTurbulenceJacobian,
 	FFTWaveDx_Dy_Dz_Dxdz_Spatial,
 	FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial,
 }

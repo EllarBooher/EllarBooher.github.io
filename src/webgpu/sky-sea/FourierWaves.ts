@@ -23,6 +23,13 @@ const TURBULENCE_JACOBIAN_FORMAT: GPUTextureFormat = "rgba16float";
 
 const FFT_IO_TEXTURE_FORMAT: GPUTextureFormat = "rgba32float";
 
+export interface FFTWavesSettings {
+	gravity: number;
+	windSpeedMetersPerSeconds: number;
+	windFetchMeters: number;
+	waveSwell: number;
+}
+
 class FourierWavesUBO extends UBO {
 	public readonly data: {
 		fourier_grid_size: number;
@@ -245,6 +252,8 @@ export class FFTWaveSpectrumResources {
 
 	private Dx_Dy_Dz_Dxdz_SpatialArray_MipMapBindings: MipMapGenerationTextureBindings;
 	private Dydx_Dydz_Dxdx_Dzdz_SpatialArray_MipMapBindings: MipMapGenerationTextureBindings;
+
+	private waveSettings: FFTWavesSettings;
 
 	private createCascade(
 		device: GPUDevice,
@@ -757,32 +766,12 @@ export class FFTWaveSpectrumResources {
 				this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray
 			);
 
-		const commandEncoder = device.createCommandEncoder({
-			label: "FFT Wave Initial Amplitude",
-		});
-		const passEncoder = commandEncoder.beginComputePass({
-			label: "FFT Wave Initial Amplitude",
-		});
-		this.cascades.forEach((value) => {
-			passEncoder.setPipeline(this.initialAmplitudeKernel);
-			passEncoder.setBindGroup(0, value.initialAmplitudeGroup0);
-			passEncoder.setBindGroup(1, value.initialAmplitudeGroup1);
-
-			const dispatchSize = {
-				width: value.initialAmplitude.width,
-				height: value.initialAmplitude.height,
-				depth: value.initialAmplitude.depthOrArrayLayers,
-			};
-
-			passEncoder.dispatchWorkgroups(
-				dispatchSize.width / 16,
-				dispatchSize.height / 16,
-				dispatchSize.depth / 1
-			);
-		});
-
-		passEncoder.end();
-		device.queue.submit([commandEncoder.finish()]);
+		this.waveSettings = {
+			gravity: 0.0,
+			waveSwell: 0.0,
+			windFetchMeters: 0.0,
+			windSpeedMetersPerSeconds: 0.0,
+		};
 	}
 
 	/**
@@ -827,8 +816,53 @@ export class FFTWaveSpectrumResources {
 	record(
 		device: GPUDevice,
 		commandEncoder: GPUCommandEncoder,
+		settings: FFTWavesSettings,
 		timestampInterval: TimestampQueryInterval | undefined
 	) {
+		const settingsChanged =
+			settings.gravity != this.waveSettings.gravity ||
+			settings.waveSwell != this.waveSettings.waveSwell ||
+			settings.windSpeedMetersPerSeconds !=
+				this.waveSettings.windSpeedMetersPerSeconds ||
+			settings.windFetchMeters != this.waveSettings.windFetchMeters;
+
+		if (settingsChanged) {
+			this.waveSettings = structuredClone(settings);
+			const passEncoder = commandEncoder.beginComputePass({
+				label: "FFT Wave Initial Amplitude",
+			});
+
+			this.cascades.forEach((cascade) => {
+				cascade.waveSettings.data.wave_swell =
+					this.waveSettings.waveSwell;
+				cascade.waveSettings.data.wind_fetch_meters =
+					this.waveSettings.windFetchMeters;
+				cascade.waveSettings.data.wind_speed_meters_per_second =
+					this.waveSettings.windSpeedMetersPerSeconds;
+				cascade.waveSettings.data.gravity = this.waveSettings.gravity;
+
+				cascade.waveSettings.writeToGPU(device.queue);
+
+				passEncoder.setPipeline(this.initialAmplitudeKernel);
+				passEncoder.setBindGroup(0, cascade.initialAmplitudeGroup0);
+				passEncoder.setBindGroup(1, cascade.initialAmplitudeGroup1);
+
+				const dispatchSize = {
+					width: cascade.initialAmplitude.width,
+					height: cascade.initialAmplitude.height,
+					depth: cascade.initialAmplitude.depthOrArrayLayers,
+				};
+
+				passEncoder.dispatchWorkgroups(
+					dispatchSize.width / 16,
+					dispatchSize.height / 16,
+					dispatchSize.depth / 1
+				);
+			});
+
+			passEncoder.end();
+		}
+
 		const realizePassEncoder = commandEncoder.beginComputePass({
 			label: "FFT Wave Fourier Amplitude Realization",
 			timestampWrites:

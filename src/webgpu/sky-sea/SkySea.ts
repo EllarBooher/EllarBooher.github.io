@@ -8,7 +8,7 @@ import { GBuffer } from "./GBuffer.ts";
 import { TransmittanceLUTPassResources } from "./TransmittanceLUT.ts";
 import { MultiscatterLUTPassResources } from "./MultiscatterLUT.ts";
 import { SkyViewLUTPassResources } from "./SkyViewLUT.ts";
-import { FFTWaveSpectrumResources } from "./FourierWaves.ts";
+import { FFTWaveSpectrumResources, FFTWavesSettings } from "./FourierWaves.ts";
 import { WaveSurfaceDisplacementPassResources } from "./WaveDisplacement.ts";
 import { AtmosphereCameraPassResources } from "./AtmosphereCamera.ts";
 import {
@@ -123,12 +123,13 @@ class SkySeaApp implements RendererApp {
 
 	settings: {
 		outputTexture: RenderOutput;
-		oceanWaveSettings: {
+		oceanSurfaceSettings: {
 			gerstner: boolean;
 			fft: boolean;
 			foamScale: number;
 			foamBias: number;
 		};
+		fourierWavesSettings: FFTWavesSettings;
 		pauseGlobalTime: boolean;
 		renderOutputTransforms: Map<RenderOutput, RenderOutputTransform>;
 		currentRenderOutputTransform: RenderOutputTransform;
@@ -216,22 +217,46 @@ class SkySeaApp implements RendererApp {
 		const oceanFolder = gui.addFolder("Ocean Parameters").open();
 
 		oceanFolder
-			.add(this.settings.oceanWaveSettings, "gerstner")
+			.add(this.settings.oceanSurfaceSettings, "gerstner")
 			.name("Gerstner Waves");
 		oceanFolder
-			.add(this.settings.oceanWaveSettings, "fft")
+			.add(this.settings.oceanSurfaceSettings, "fft")
 			.name("FFT Accelerated Waves");
 		oceanFolder.add(this.settings, "pauseGlobalTime").name("Pause Waves");
 		oceanFolder
-			.add(this.settings.oceanWaveSettings, "foamScale")
+			.add(this.settings.oceanSurfaceSettings, "foamScale")
 			.name("Foam Scale")
 			.min(-4.0)
 			.max(4.0);
 		oceanFolder
-			.add(this.settings.oceanWaveSettings, "foamBias")
+			.add(this.settings.oceanSurfaceSettings, "foamBias")
 			.name("Foam Bias")
 			.min(-0.5)
 			.max(0.5);
+
+		oceanFolder
+			.add(this.settings.fourierWavesSettings, "gravity")
+			.name("Gravity (m / s^2)")
+			.min(0.01)
+			.max(20.0);
+		oceanFolder
+			.add(this.settings.fourierWavesSettings, "waveSwell")
+			.name("Wave Swell")
+			.min(0.01)
+			.max(1.0);
+		oceanFolder
+			.add(this.settings.fourierWavesSettings, "windFetchMeters")
+			.name("Wind Fetch (m)")
+			.min(1000.0)
+			.max(100.0 * 1000.0);
+		oceanFolder
+			.add(
+				this.settings.fourierWavesSettings,
+				"windSpeedMetersPerSeconds"
+			)
+			.name("Wind Speed (m/s)")
+			.min(0.01)
+			.max(100.0);
 
 		const sunFolder = gui.addFolder("Sun Parameters").open();
 
@@ -429,11 +454,17 @@ class SkySeaApp implements RendererApp {
 		this.startTime = time;
 		this.settings = {
 			outputTexture: RenderOutput.Scene,
-			oceanWaveSettings: {
+			oceanSurfaceSettings: {
 				gerstner: true,
 				fft: true,
 				foamScale: 1.05,
 				foamBias: -0.07,
+			},
+			fourierWavesSettings: {
+				gravity: 9.8,
+				windSpeedMetersPerSeconds: 10.0,
+				windFetchMeters: 10.0 * 1000.0,
+				waveSwell: 0.3,
 			},
 			renderOutputTransforms: new Map<
 				RenderOutput,
@@ -783,7 +814,7 @@ class SkySeaApp implements RendererApp {
 		const NON_FFT_WAVE_PERIOD_SECONDS = 60.0;
 		const FFT_WAVE_PERIOD_SECONDS = 100.0;
 
-		const periodSeconds = this.settings.oceanWaveSettings.fft
+		const periodSeconds = this.settings.oceanSurfaceSettings.fft
 			? FFT_WAVE_PERIOD_SECONDS
 			: NON_FFT_WAVE_PERIOD_SECONDS;
 
@@ -861,6 +892,7 @@ class SkySeaApp implements RendererApp {
 		this.fftWaveSpectrumResources.record(
 			this.device,
 			commandEncoder,
+			this.settings.fourierWavesSettings,
 			this.frametimeQuery !== undefined
 				? {
 						querySet: this.frametimeQuery.querySet,
@@ -887,10 +919,10 @@ class SkySeaApp implements RendererApp {
 				: undefined,
 			this.fftWaveSpectrumResources.turbulenceMapIndex,
 			{
-				gerstner: this.settings.oceanWaveSettings.gerstner,
-				fft: this.settings.oceanWaveSettings.fft,
-				foamBias: this.settings.oceanWaveSettings.foamBias,
-				foamScale: this.settings.oceanWaveSettings.foamScale,
+				gerstner: this.settings.oceanSurfaceSettings.gerstner,
+				fft: this.settings.oceanSurfaceSettings.fft,
+				foamBias: this.settings.oceanSurfaceSettings.foamBias,
+				foamScale: this.settings.oceanSurfaceSettings.foamScale,
 			},
 			{
 				colorWithSurfaceWorldDepthInAlpha:

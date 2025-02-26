@@ -14,6 +14,9 @@ struct WaveSurfaceDisplacementUBO
 	patch_world_half_extent: f32,
 	b_gerstner: u32,
 	b_displacement_map: u32,
+	padding0: f32,
+
+	gbuffer_extent: vec2<f32>,
 	foam_scale: f32,
 	foam_bias: f32,
 }
@@ -141,7 +144,11 @@ fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distance:
     return output;
 }
 
-fn sampleMap(global_uv: vec2<f32>, max_cascade: f32, gerstner: bool, lod: f32) -> WaveDisplacementResult
+fn sampleMap(
+	global_uv: vec2<f32>,
+	cascade_weights: array<vec2<f32>,10u>,
+	gerstner: bool,
+) -> WaveDisplacementResult
 {
 	let delta = 0.5 / vec2<f32>(textureDimensions(Dx_Dy_Dz_Dxdz_spatial));
 
@@ -153,17 +160,22 @@ fn sampleMap(global_uv: vec2<f32>, max_cascade: f32, gerstner: bool, lod: f32) -
 
 	const WAVE_PATCH_SIZES = array<f32,3>(200.0, 50.0, 10.0);
 
-	for(var array_layer = 0u; array_layer <= u32(max_cascade); array_layer++)
+	var turbulence_accumulated = 0.0;
+	var turbulence_max = 0.0;
+	for(var array_layer = 0u; array_layer <= 3u; array_layer++)
 	{
-		var lambda = 1.0;
-		if(array_layer == u32(max_cascade))
-		{
-			lambda = fract(max_cascade);
-		}
+		let position_lambda = cascade_weights[array_layer].x;
+		let normal_lambda = cascade_weights[array_layer].y;
 
 		let patch_uv = global_uv / WAVE_PATCH_SIZES[array_layer];
 
-		let Dx_Dy_Dz_Dxdz = textureSampleLevel(Dx_Dy_Dz_Dxdz_spatial, displacement_map_sampler, patch_uv, array_layer, f32(lod));
+		let Dx_Dy_Dz_Dxdz = textureSampleLevel(
+			Dx_Dy_Dz_Dxdz_spatial,
+			displacement_map_sampler,
+			patch_uv,
+			array_layer,
+			0.0
+		);
 
 		var delta_displacement = Dx_Dy_Dz_Dxdz.xyz;
 		if(!gerstner)
@@ -172,9 +184,15 @@ fn sampleMap(global_uv: vec2<f32>, max_cascade: f32, gerstner: bool, lod: f32) -
 			output.displacement.z = 0.0;
 		}
 
-		output.displacement += lambda * delta_displacement;
+		output.displacement += position_lambda * delta_displacement;
 
-		let Dydx_Dydz_Dxdx_Dzdz = textureSampleLevel(Dydx_Dydz_Dxdx_Dzdz_spatial, displacement_map_sampler, patch_uv, array_layer, f32(lod));
+		let Dydx_Dydz_Dxdx_Dzdz = textureSampleLevel(
+			Dydx_Dydz_Dxdx_Dzdz_spatial,
+			displacement_map_sampler,
+			patch_uv,
+			array_layer,
+			0.0
+		);
 
 		let Dydx = Dydx_Dydz_Dxdx_Dzdz.x;
 		let Dydz = Dydx_Dydz_Dxdx_Dzdz.y;
@@ -185,16 +203,27 @@ fn sampleMap(global_uv: vec2<f32>, max_cascade: f32, gerstner: bool, lod: f32) -
 		var Dxdx = Dydx_Dydz_Dxdx_Dzdz.z * f32(gerstner);
 		var Dzdz = Dydx_Dydz_Dxdx_Dzdz.w * f32(gerstner);
 
-		output.tangent += lambda * vec3<f32>(Dxdx, Dydx, Dzdx);
-		output.bitangent += lambda * vec3<f32>(Dxdz, Dydz, Dzdz);
+		output.tangent += normal_lambda * vec3<f32>(Dxdx, Dydx, Dzdx);
+		output.bitangent += normal_lambda * vec3<f32>(Dxdz, Dydz, Dzdz);
 
-		let turbulence = textureSampleLevel(turbulence_jacobian, displacement_map_sampler, patch_uv, array_layer, 0.0).x;
-		output.foam_strength += u_settings.foam_scale * lambda * (turbulence+u_settings.foam_bias) / max_cascade;
+		let turbulence = textureSampleLevel(
+			turbulence_jacobian,
+			displacement_map_sampler,
+			patch_uv,
+			array_layer,
+			0.0
+		).x;
+		turbulence_accumulated += normal_lambda * turbulence;
+		turbulence_max += normal_lambda;
 	}
 
 	// Weaken foam at lower detail levels
 	// TODO: this could use more rigour
-	output.foam_strength =  clamp((0.5 * max_cascade / 3.0 + 0.5) * 5.0 * (1.0 - output.foam_strength) - 1.5, 0.0, 1.0);
+	output.foam_strength = clamp(
+		u_settings.foam_scale * (1.0 - turbulence_accumulated / turbulence_max - u_settings.foam_bias),
+		0.0,
+		1.0
+	);
 
 	return output;
 }
@@ -206,7 +235,11 @@ struct DisplacementResult
 	foam_strength: f32,
 }
 
-fn computeDisplacement(in_world_position: vec3<f32>, max_cascade: f32, time: f32, lod: f32, max_lod: f32) -> DisplacementResult
+fn computeDisplacement(
+	in_world_position: vec3<f32>,
+	cascade_weights: array<vec2<f32>,10u>,
+	time: f32,
+) -> DisplacementResult
 {
 	var displacement = vec3<f32>(0.0);
     var tangent = vec3<f32>(1.0, 0.0, 0.0);
@@ -217,7 +250,7 @@ fn computeDisplacement(in_world_position: vec3<f32>, max_cascade: f32, time: f32
 	{
     	let uv = (in_world_position.xz + vec2<f32>(0.5,0.5));
 		let gerstner = u_settings.b_gerstner == 1u;
-		let result: WaveDisplacementResult = sampleMap(uv, max_cascade, gerstner, lod);
+		let result: WaveDisplacementResult = sampleMap(uv, cascade_weights, gerstner);
 
 		displacement += result.displacement;
 		tangent += result.tangent;
@@ -247,13 +280,10 @@ fn computeDisplacement(in_world_position: vec3<f32>, max_cascade: f32, time: f32
 	}
 
 	var result: DisplacementResult;
-	/*
-	 * To minimize aliasing, we smooth the distance ocean.
-	 * TODO: Phase in a distance BRDF that models the current choppiness of the ocean surface
-	 */
-	let lod_factor = 1.0 - lod / max_lod;
-	result.world_position = in_world_position + lod_factor * displacement;
-	result.world_normal = mix(vec3<f32>(0.0, 1.0, 0.0) ,-normalize(cross(tangent, bitangent)), lod_factor);
+
+	result.world_position = in_world_position + displacement;
+	// our system is right-handed, so negate WGSL left-handed cross
+	result.world_normal = normalize(-cross(tangent, bitangent));
 	result.foam_strength = clamp(foam_strength, 0.0, 1.0);
 
 	return result;
@@ -286,6 +316,30 @@ struct VertexOut {
     @location(2) color : vec3<f32>,
     @location(3) camera_distance : f32,
 	@location(4) foam_strength : f32,
+}
+
+fn projectNDCToPlaneWorldPosition(
+	ndc: vec2<f32>,
+	ndc_offset: vec2<f32>,
+	camera: Camera,
+	ocean_origin: vec3<f32>,
+	ocean_normal: vec3<f32>
+) -> vec3<f32>
+{
+	let near_plane = 1.0;
+	let direction_view_space = camera.inv_proj * vec4<f32>(
+		ndc + ndc_offset,
+		near_plane,
+		1.0
+	);
+
+	let direction_world = normalize((camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
+
+	let ocean_plane_hit = rayPlaneIntersection(camera.position.xyz, direction_world, ocean_origin, ocean_normal);
+	let t = mix(1000.0, ocean_plane_hit.t, f32(ocean_plane_hit.hit));
+	var world_position = camera.position.xyz + t * direction_world;
+
+	return world_position;
 }
 
 /*
@@ -328,55 +382,90 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 
 	let ndc_space_coord = mix(ndc_min, ndc_max, vert_coord);
 
-    let near_plane_depth = 1.0;
-    let direction_view_space = camera.inv_proj * vec4<f32>(ndc_space_coord, near_plane_depth, 1.0) /* -vec4<f32>(0.0,0.0,0.0,1.0) === camera position */;
-    let direction_world = normalize((camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
-
 	let ocean_origin = vec3<f32>(0.0, WAVE_NEUTRAL_PLANE, 0.0);
 	let ocean_normal = vec3<f32>(0.0,1.0,0.0);
-	let ocean_plane_hit = rayPlaneIntersection(camera.position.xyz, direction_world, ocean_origin, ocean_normal);
-	let t = mix(1000.0, ocean_plane_hit.t, f32(ocean_plane_hit.hit));
 
-	var in_world_position = camera.position.xyz + t * direction_world;
-	in_world_position.y = WAVE_NEUTRAL_PLANE;
-
-	let offset_direction_view_space = camera.inv_proj * vec4<f32>(ndc_space_coord + vec2<f32>(1.0) / f32(VERTEX_DIMENSION - 1u), near_plane_depth, 1.0);
-	let offset_direction_world = normalize((camera.inv_view * vec4<f32>(offset_direction_view_space.xyz, 0.0)).xyz);
-	let offset_ocean_plane_hit = rayPlaneIntersection(camera.position.xyz, offset_direction_world, ocean_origin, ocean_normal);
-	let offset_t = mix(1000.0, offset_ocean_plane_hit.t, f32(offset_ocean_plane_hit.hit));
-	var offset_world_position = camera.position.xyz + offset_t * offset_direction_world;
-	offset_world_position.y = WAVE_NEUTRAL_PLANE;
-	let spatial_sample_distance = length(offset_world_position - in_world_position);
+	let cell_world_position = projectNDCToPlaneWorldPosition(
+		ndc_space_coord,
+		vec2<f32>(0.0,0.0),
+		camera,
+		ocean_origin,
+		ocean_normal,
+	);
+	let neighbor_world_position = projectNDCToPlaneWorldPosition(
+		ndc_space_coord,
+		vec2<f32>(1.0) / f32(VERTEX_DIMENSION - 1u),
+		camera,
+		ocean_origin,
+		ocean_normal,
+	);
+	let pixel_neighbor_world_position = projectNDCToPlaneWorldPosition(
+		ndc_space_coord,
+		vec2<f32>(1.0) / u_settings.gbuffer_extent,
+		camera,
+		ocean_origin,
+		ocean_normal,
+	);
 
 	/*
-	 * We don't want to sample waves outside of the nyquist limit.
-	 * Each cascade has increasing wavenumber/decreasing wavelengths, so we can just only sample cascades up to the appropriate bound
-	 * These bounds define the wavenumber intervals that each cascade contains.
-	 * TODO: this is hardcoded right now, but should be passed as a uniform
+	 * When projecting this grid of screen-space triangles to the ocean, each
+	 * vertex is a sample of our ocean wave data. We don't want to sample waves
+	 * outside the nyquist limit for a given cell/pixel.
+	 *
+	 * We filter cascades' effect on POSITION by the sample rate of the entire
+	 * triangle/cell.
+	 *
+	 * We filter cascades' effect on NORMAL by the sample rate of each pixel.
+	 *
+	 * These criteria are separated since normals are per pixel, while
+	 * displacement visually relies on triangle rasterization and visible
+	 * feature detail is bounded by the final distance of vertices.
 	 */
-	const WAVE_NUMBER_FENCE_POSTS = array<f32, 5>(0.001, 8.042477193189871, 32.169908772759484, 160.8495438637974, 1000);
+
+	const CASCADE_CAPACITY = 10u;
+	var cascade_weights = array<vec2<f32>, CASCADE_CAPACITY>();
+
+	const NYQUIST_MIN = 1.0;
+	const NYQUIST_MAX = 2.5;
+
+	// TODO: this is hardcoded right now, but should be updated as wave initial amplitudes are changed
+	const WAVE_NUMBER_FENCE_POSTS = array<f32, 5>(
+		0.001,
+		8.042477193189871,
+		32.169908772759484,
+		160.8495438637974,
+		1000
+	);
 
 	// Any wave with wavenumber greater than this should NOT be sampled
-	let nyquist_wavenumber = (2.0 * PI) / (spatial_sample_distance * 2.0);
+	let cell_nyquist_wavenumber = (2.0 * PI) / (distance(neighbor_world_position, cell_world_position) * 2.0);
+	let pixel_nyquist_wavenumber = (2.0 * PI) / (distance(pixel_neighbor_world_position, cell_world_position) * 2.0);
 
-	// Use a float, so we can interpolate cascades
-	var max_cascade: f32 = f32(textureNumLayers(Dx_Dy_Dz_Dxdz_spatial));
-	for(var cascade = 1u; cascade < textureNumLayers(Dx_Dy_Dz_Dxdz_spatial); cascade++)
+	for(var cascade = 0u; cascade < textureNumLayers(Dx_Dy_Dz_Dxdz_spatial); cascade++)
 	{
 		let wave_number_min = WAVE_NUMBER_FENCE_POSTS[cascade];
 		let wave_number_max = WAVE_NUMBER_FENCE_POSTS[cascade + 1u];
-		if(wave_number_max > nyquist_wavenumber)
-		{
-			let t = (nyquist_wavenumber - wave_number_min) / (wave_number_max - wave_number_min);
-			max_cascade = f32(cascade) + clamp(t, 0.0, 1.0);
-			break;
-		}
+
+		let wave_number_concentration = mix(wave_number_min, wave_number_max, 0.1);
+
+		const MIN_SCALE = 1.0;
+		const MAX_SCALE = 2.5;
+
+		let position_scale = 1.0 - smoothstep(
+			cell_nyquist_wavenumber * MIN_SCALE,
+			cell_nyquist_wavenumber * MAX_SCALE,
+			wave_number_concentration
+		);
+		let normal_scale = 1.0 - smoothstep(
+			pixel_nyquist_wavenumber * MIN_SCALE,
+			pixel_nyquist_wavenumber * MAX_SCALE,
+			wave_number_concentration
+		);
+
+		cascade_weights[cascade] = vec2<f32>(position_scale, normal_scale);
 	}
 
-	const max_lod = 9.0;
-	const lod_scale_meters = 2000.0;
-	let lod = max_lod * atan(t / lod_scale_meters) / (0.5 * PI);
-	let displacement_result = computeDisplacement(in_world_position, max_cascade, u_global.time.time_seconds, lod, max_lod);
+	let displacement_result = computeDisplacement(cell_world_position, cascade_weights, u_global.time.time_seconds);
 
 	let world_position = displacement_result.world_position;
 

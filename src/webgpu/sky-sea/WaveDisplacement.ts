@@ -9,18 +9,20 @@ class WaveSurfaceDisplacementUBO extends UBO {
 		patch_world_half_extent: number;
 		b_gerstner: boolean;
 		b_fft: boolean;
+		gbuffer_extent: Vec2;
 		foam_scale: number;
 		foam_bias: number;
 	} = {
 		patch_world_half_extent: 50.0,
 		b_gerstner: true,
 		b_fft: true,
+		gbuffer_extent: vec2.create(1.0, 1.0),
 		foam_scale: 1.0,
 		foam_bias: 0.0,
 	};
 
 	constructor(device: GPUDevice) {
-		const FLOAT_COUNT = 5;
+		const FLOAT_COUNT = 8;
 		super(
 			device,
 			FLOAT_COUNT,
@@ -31,12 +33,16 @@ class WaveSurfaceDisplacementUBO extends UBO {
 	protected override packed(): ArrayBuffer {
 		const buffer = new ArrayBuffer(this.buffer.size);
 		const view = new DataView(buffer);
+		const float32 = new Float32Array(buffer);
 
 		view.setFloat32(0, this.data.patch_world_half_extent, true);
 		view.setUint32(4, this.data.b_gerstner ? 1 : 0, true);
 		view.setUint32(8, this.data.b_fft ? 1 : 0, true);
-		view.setFloat32(12, this.data.foam_scale, true);
-		view.setFloat32(16, this.data.foam_bias, true);
+		view.setFloat32(12, 0.0, true);
+
+		float32.set(this.data.gbuffer_extent, 4);
+		view.setFloat32(24, this.data.foam_scale, true);
+		view.setFloat32(28, this.data.foam_bias, true);
 
 		return buffer;
 	}
@@ -417,6 +423,7 @@ export class WaveSurfaceDisplacementPassResources {
 			foamBias: number;
 		},
 		attachments: {
+			extent: Vec2;
 			colorWithSurfaceWorldDepthInAlpha: GPUTextureView;
 			normalWithSurfaceFoamInAlpha: GPUTextureView;
 			depth: GPUTextureView;
@@ -428,6 +435,7 @@ export class WaveSurfaceDisplacementPassResources {
 		this.settingsUBO.data.b_gerstner = settings.gerstner;
 		this.settingsUBO.data.b_fft = settings.fft;
 		this.settingsUBO.data.foam_bias = settings.foamBias;
+		this.settingsUBO.data.gbuffer_extent = attachments.extent;
 		this.settingsUBO.data.foam_scale = settings.foamScale;
 		this.settingsUBO.writeToGPU(device.queue);
 

@@ -1,6 +1,6 @@
 import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { RendererApp, RendererAppConstructor } from "../RendererApp.ts";
-import { mat4, vec3, vec4 } from "wgpu-matrix";
+import { mat4, vec2, vec3, vec4 } from "wgpu-matrix";
 import { GlobalUBO } from "./UBO.ts";
 import { Extent2D, RenderOutput, RenderOutputTexture } from "./Common.ts";
 
@@ -226,13 +226,13 @@ class SkySeaApp implements RendererApp {
 		oceanFolder
 			.add(this.settings.oceanSurfaceSettings, "foamScale")
 			.name("Foam Scale")
-			.min(-4.0)
-			.max(4.0);
+			.min(-10.0)
+			.max(10.0);
 		oceanFolder
 			.add(this.settings.oceanSurfaceSettings, "foamBias")
 			.name("Foam Bias")
-			.min(-0.5)
-			.max(0.5);
+			.min(-1.0)
+			.max(1.0);
 
 		oceanFolder
 			.add(this.settings.fourierWavesSettings, "gravity")
@@ -457,8 +457,8 @@ class SkySeaApp implements RendererApp {
 			oceanSurfaceSettings: {
 				gerstner: true,
 				fft: true,
-				foamScale: 1.05,
-				foamBias: -0.07,
+				foamScale: 5,
+				foamBias: 0.25,
 			},
 			fourierWavesSettings: {
 				gravity: 9.8,
@@ -925,6 +925,10 @@ class SkySeaApp implements RendererApp {
 				foamScale: this.settings.oceanSurfaceSettings.foamScale,
 			},
 			{
+				extent: vec2.create(
+					this.gbuffer.colorWithSurfaceWorldDepthInAlpha.width,
+					this.gbuffer.colorWithSurfaceWorldDepthInAlpha.height
+				),
 				colorWithSurfaceWorldDepthInAlpha:
 					this.gbuffer.colorWithSurfaceWorldDepthInAlphaView,
 				normalWithSurfaceFoamInAlpha:

@@ -252,26 +252,30 @@ fn sampleGeometryLuminance(
 		light_direction
 	);
 
+	// Reflected luminance from the sky
+	let sky_luminance = sampleSkyViewLUT(atmosphere, surface_position, reflection_direction);
 	light_luminance_transfer +=
 		transmittance_to_surface
-		* sampleSkyViewLUT(atmosphere, surface_position, reflection_direction)
+		* sky_luminance
 		* computeFresnelPerfectReflection(material, reflection_direction);
 
+	// Reflected and scattered luminance directly from light
+	let light_luminance = surface_transmittance_to_sun
+		* sunFractionOfRadianceVisible(atmosphere, light, surface_position, light_direction);
 	light_luminance_transfer +=
 		transmittance_to_surface
-		* surface_transmittance_to_sun
-		* sunFractionOfRadianceVisible(atmosphere, light, surface_position, light_direction)
+		* light_luminance
 		* mix(
 			specularBRDF(material, light_direction, -direction),
 			diffuseBRDF(material),
 			computeFresnelMicrofacet(material, light_direction, -direction)
 		);
 
-	let diffuse = diffuseBRDF(material);
-    light_luminance_transfer +=
-        transmittance_to_surface
-        * diffuse
-        * sampleMultiscatterLUT(multiscatter_lut, lut_sampler, atmosphere, surface_step.radius, surface_step.mu_light);
+	// Scattered luminance from below the sea (mostly near-surface interactions)
+	let sky_visible_solid_angle = mix(0.0, 2.0 * PI, 0.5 * dot(vec3<f32>(0.0, 1.0, 0.0), material.normal) + 0.5);
+	let sky_indirect_radiance = sampleSkyViewLUT(atmosphere, surface_position, reflect(-light_direction, vec3<f32>(0.0,1.0,0.0)));
+	let sea_luminance = diffuseBRDF(material) * sky_visible_solid_angle * sky_indirect_radiance;
+	light_luminance_transfer += transmittance_to_surface * sea_luminance;
 
 	/*
     {
@@ -341,7 +345,11 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
         // View of virtual environment: either the sky, or the floor
         if (intersects_ground)
         {
-            let material: PBRTexel = convertPBRPropertiesWater(vec3<f32>(1.0), vec3<f32>(0.0,1.0,0.0), 1.0);
+            let material: PBRTexel = convertPBRPropertiesWater(
+				vec3<f32>(1.0),
+				vec3<f32>(0.0,1.0,0.0),
+				1.0
+			);
             luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, intersects_ground);
         }
         else
@@ -353,7 +361,11 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     {
         // View of geometry in gbuffer
 		let color = color_with_surface_world_depth_in_alpha.xyz;
-        let material: PBRTexel = convertPBRPropertiesWater(color, normal.xyz, foam_strength);
+        let material: PBRTexel = convertPBRPropertiesWater(
+			color,
+			normal.xyz,
+			foam_strength
+		);
         luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, true);
     }
 

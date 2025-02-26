@@ -318,12 +318,11 @@ struct VertexOut {
 	@location(4) foam_strength : f32,
 }
 
-fn projectNDCToPlaneWorldPosition(
+fn projectNDCToOceanSurface(
 	ndc: vec2<f32>,
 	ndc_offset: vec2<f32>,
 	camera: Camera,
-	ocean_origin: vec3<f32>,
-	ocean_normal: vec3<f32>
+	height: f32,
 ) -> vec3<f32>
 {
 	let near_plane = 1.0;
@@ -335,9 +334,13 @@ fn projectNDCToPlaneWorldPosition(
 
 	let direction_world = normalize((camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
 
+	let ocean_origin = vec3<f32>(0.0, height, 0.0);
+	let ocean_normal = vec3<f32>(0.0, 1.0, 0.0);
+
 	let ocean_plane_hit = rayPlaneIntersection(camera.position.xyz, direction_world, ocean_origin, ocean_normal);
 	let t = mix(1000.0, ocean_plane_hit.t, f32(ocean_plane_hit.hit));
 	var world_position = camera.position.xyz + t * direction_world;
+	world_position.y = ocean_origin.y;
 
 	return world_position;
 }
@@ -385,26 +388,23 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	let ocean_origin = vec3<f32>(0.0, WAVE_NEUTRAL_PLANE, 0.0);
 	let ocean_normal = vec3<f32>(0.0,1.0,0.0);
 
-	let cell_world_position = projectNDCToPlaneWorldPosition(
+	let cell_world_position = projectNDCToOceanSurface(
 		ndc_space_coord,
 		vec2<f32>(0.0,0.0),
 		camera,
-		ocean_origin,
-		ocean_normal,
+		WAVE_NEUTRAL_PLANE
 	);
-	let neighbor_world_position = projectNDCToPlaneWorldPosition(
+	let neighbor_world_position = projectNDCToOceanSurface(
 		ndc_space_coord,
 		vec2<f32>(1.0) / f32(VERTEX_DIMENSION - 1u),
 		camera,
-		ocean_origin,
-		ocean_normal,
+		WAVE_NEUTRAL_PLANE
 	);
-	let pixel_neighbor_world_position = projectNDCToPlaneWorldPosition(
+	let pixel_neighbor_world_position = projectNDCToOceanSurface(
 		ndc_space_coord,
 		vec2<f32>(1.0) / u_settings.gbuffer_extent,
 		camera,
-		ocean_origin,
-		ocean_normal,
+		WAVE_NEUTRAL_PLANE
 	);
 
 	/*

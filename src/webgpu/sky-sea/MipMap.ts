@@ -18,7 +18,10 @@ export class MipMapGenerationPassResources {
 
 	// private baseSize: { width: number; height: number };
 
+	// Workgroup size is (16,16,1)
 	private fillMipMapKernel: GPUComputePipeline;
+	// Workgroup size is (1,1,1)
+	private fillMipMapSmallerKernel: GPUComputePipeline;
 
 	createBindGroups(
 		device: GPUDevice,
@@ -142,24 +145,43 @@ export class MipMapGenerationPassResources {
 				entryPoint: "fillMipMap",
 			},
 		});
+		this.fillMipMapSmallerKernel = device.createComputePipeline({
+			label: "MipMap Generation fillMipMapSmaller Kernel",
+			layout: fillMipMapKernelLayout,
+			compute: {
+				module: shaderModule,
+				entryPoint: "fillMipMapSmaller",
+			},
+		});
 	}
 
 	updateMipMaps(
 		fillMipMapsPass: GPUComputePassEncoder,
 		target: MipMapGenerationTextureBindings
 	) {
-		fillMipMapsPass.setPipeline(this.fillMipMapKernel);
-
 		target.bindGroupsByMipLevel.forEach((bindGroup, index) => {
 			fillMipMapsPass.setBindGroup(0, bindGroup);
 
 			const previousMipScale = 1 << index;
 
-			fillMipMapsPass.dispatchWorkgroups(
-				target.level0Size.width / previousMipScale / 16,
-				target.level0Size.height / previousMipScale / 16,
-				target.arrayLevelCount / 1
-			);
+			const threadCountX = target.level0Size.width / previousMipScale;
+			const threadCountY = target.level0Size.height / previousMipScale;
+
+			if (threadCountX >= 16 && threadCountY >= 16) {
+				fillMipMapsPass.setPipeline(this.fillMipMapKernel);
+				fillMipMapsPass.dispatchWorkgroups(
+					threadCountX / 16,
+					threadCountY / 16,
+					target.arrayLevelCount
+				);
+			} else {
+				fillMipMapsPass.setPipeline(this.fillMipMapSmallerKernel);
+				fillMipMapsPass.dispatchWorkgroups(
+					threadCountX,
+					threadCountY,
+					target.arrayLevelCount
+				);
+			}
 		});
 	}
 }

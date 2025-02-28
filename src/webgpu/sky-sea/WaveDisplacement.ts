@@ -96,8 +96,7 @@ export class WaveSurfaceDisplacementPassResources {
 		depthFormat: GPUTextureFormat,
 		displacementMaps: FFTWaveDisplacementMaps
 	) {
-		// Extra 1 for tiling
-		const VERTEX_DIMENSION = 3000;
+		const VERTEX_DIMENSION = 1000;
 
 		this.vertexDimension = VERTEX_DIMENSION;
 
@@ -263,26 +262,26 @@ export class WaveSurfaceDisplacementPassResources {
 		this.settingsUBO = new WaveSurfaceDisplacementUBO(device);
 
 		const group1Layout = device.createBindGroupLayout({
-			label: "Wave Surface Displacement Group 2 Compute (Displacement Map)",
+			label: "Wave Surface Displacement Group 1 Compute (Displacement Map)",
 			entries: [
 				{
 					binding: 0,
-					visibility: GPUShaderStage.VERTEX,
+					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
 					sampler: { type: "filtering" },
 				},
 				{
 					binding: 1,
-					visibility: GPUShaderStage.VERTEX,
+					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
 					texture: { sampleType: "float", viewDimension: "2d-array" },
 				},
 				{
 					binding: 2,
-					visibility: GPUShaderStage.VERTEX,
+					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
 					texture: { sampleType: "float", viewDimension: "2d-array" },
 				},
 				{
 					binding: 3,
-					visibility: GPUShaderStage.VERTEX,
+					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
 					buffer: { type: "uniform" },
 				},
 			],
@@ -322,7 +321,7 @@ export class WaveSurfaceDisplacementPassResources {
 			entries: [
 				{
 					binding: 0,
-					visibility: GPUShaderStage.VERTEX,
+					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
 					texture: { sampleType: "float", viewDimension: "2d-array" },
 				},
 			],
@@ -347,13 +346,13 @@ export class WaveSurfaceDisplacementPassResources {
 				{
 					// settings
 					binding: 0,
-					visibility: GPUShaderStage.VERTEX,
+					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
 					buffer: { type: "uniform" },
 				},
 				{
 					// global UBO
 					binding: 1,
-					visibility: GPUShaderStage.VERTEX,
+					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
 					buffer: { type: "uniform" },
 				},
 			],

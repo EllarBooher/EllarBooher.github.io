@@ -34,7 +34,7 @@ struct WaveSurfaceDisplacementUBO
 const PI = 3.141592653589793;
 
 // Extra 1 for tiling
-const VERTEX_DIMENSION = 3000u;
+const VERTEX_DIMENSION = 1000u;
 const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 // const TRIANGLE_COUNT = 2u * (VERTEX_DIMENSION - 1u) * (VERTEX_DIMENSION - 1u);
 // const INDEX_COUNT = 3u * TRIANGLE_COUNT;
@@ -44,17 +44,19 @@ const WAVE_COUNT = 12u;
 const WATER_COLOR = vec3<f32>(1.0 / 255.0, 123.0 / 255.0, 146.0 / 255.0);
 const WAVE_NEUTRAL_PLANE = 1.0;
 
-// When sampling multiple waves, these properties should be summed since we assume waves add linearly
-// The gradient distributes linearly, so sum all tangents and bitangent before crossing to produce normal
-struct WaveDisplacementResult
+const CASCADE_CAPACITY = 4u;
+
+struct OceanSurfaceDisplacement
 {
-    displacement: vec3<f32>,
-    tangent: vec3<f32>,
-    bitangent: vec3<f32>,
-	foam_strength: f32,
+	displacement: vec3<f32>,
 }
 
-fn sampleGerstner(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distance: f32) -> WaveDisplacementResult
+fn sampleGerstner(
+	wave: PlaneWave,
+	time: f32,
+	coords: vec2<f32>,
+	falloff_distance: f32
+) -> OceanSurfaceDisplacement
 {
     let wave_amplitude = (1.0 - smoothstep(0.0, falloff_distance, length(coords))) * wave.amplitude;
     let wave_direction = normalize(wave.direction);
@@ -75,97 +77,29 @@ fn sampleGerstner(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distanc
     let sin_theta = sin(theta);
     let cos_theta = cos(theta);
 
-    var output: WaveDisplacementResult;
+    var result: OceanSurfaceDisplacement;
 
-    let output_xz = -wave_direction * wave_amplitude * sin_theta;
-    let output_y = wave_amplitude * cos_theta;
-    output.displacement = vec3<f32>(output_xz.x, output_y, output_xz.y);
+    let result_xz = -wave_direction * wave_amplitude * sin_theta;
+    let result_y = wave_amplitude * cos_theta;
+    result.displacement = vec3<f32>(result_xz.x, result_y, result_xz.y);
 
-    // partial derivatives computed exactly via the above formula
-    // Note these vectors are parallel, since wave only displaces in travel direction
-    output.tangent = vec3<f32>(
-        - wave_amplitude * wave_direction.x * cos_theta * wave_vector.x,
-        - wave_amplitude * sin_theta * wave_vector.x,
-        - wave_amplitude * wave_direction.y * cos_theta * wave_vector.x,
-    );
-    output.bitangent = vec3<f32>(
-        - wave_amplitude * wave_direction.x * cos_theta * wave_vector.y,
-        - wave_amplitude * sin_theta * wave_vector.y,
-        - wave_amplitude * wave_direction.y * cos_theta * wave_vector.y,
-    );
-	output.foam_strength = 0.0;
-
-    return output;
-}
-
-fn sampleCosine(wave: PlaneWave, time: f32, coords: vec2<f32>, falloff_distance: f32) -> WaveDisplacementResult
-{
-    let wave_amplitude = (1.0 - smoothstep(0.0, falloff_distance, length(coords))) * wave.amplitude;
-    let wave_direction = normalize(wave.direction);
-    let wavelength = wave.wavelength;
-
-    let wave_number = 2.0 * 3.141592653589793 / wavelength;
-
-    let gravity = 9.8;
-
-    // Dispersion relationship for deep ocean waves
-    // wave_speed = sqrt(gravity / wave_number)
-    // angular_frequency = wave_speed * wave_number
-    let angular_frequency = sqrt(gravity * wave_number);
-
-    let wave_vector = wave_direction * wave_number;
-
-    let theta = dot(coords, wave_vector) - angular_frequency * time;
-    let sin_theta = sin(theta);
-    let cos_theta = cos(theta);
-
-    var output: WaveDisplacementResult;
-
-    output.displacement = vec3<f32>(
-        0.0,
-        wave_amplitude * cos_theta,
-        0.0
-    );
-
-    // partial derivatives computed exactly via the above formula
-    // Note these vectors are parallel, since wave only displaces in travel direction
-    output.tangent = vec3<f32>(
-        0.0,
-        - wave_amplitude * sin_theta * wave_vector.x,
-        0.0,
-    );
-    output.bitangent = vec3<f32>(
-        0.0,
-        - wave_amplitude * sin_theta * wave_vector.y,
-        0.0,
-    );
-	output.foam_strength = 0.0;
-
-    return output;
+    return result;
 }
 
 fn sampleMap(
 	global_uv: vec2<f32>,
-	cascade_weights: array<vec2<f32>,10u>,
+	cascade_position_weights: array<f32,CASCADE_CAPACITY>,
 	gerstner: bool,
-) -> WaveDisplacementResult
+) -> OceanSurfaceDisplacement
 {
-	let delta = 0.5 / vec2<f32>(textureDimensions(Dx_Dy_Dz_Dxdz_spatial));
-
-    var output: WaveDisplacementResult;
-	output.displacement = vec3<f32>(0.0);
-	output.tangent = vec3<f32>(0.0);
-	output.bitangent = vec3<f32>(0.0);
-	output.foam_strength = 0.0;
+    var result: OceanSurfaceDisplacement;
+	result.displacement = vec3<f32>(0.0);
 
 	const WAVE_PATCH_SIZES = array<f32,3>(200.0, 50.0, 10.0);
 
-	var turbulence_accumulated = 0.0;
-	var turbulence_max = 0.0;
 	for(var array_layer = 0u; array_layer <= 3u; array_layer++)
 	{
-		let position_lambda = cascade_weights[array_layer].x;
-		let normal_lambda = cascade_weights[array_layer].y;
+		let position_lambda = cascade_position_weights[array_layer];
 
 		let patch_uv = global_uv / WAVE_PATCH_SIZES[array_layer];
 
@@ -180,111 +114,48 @@ fn sampleMap(
 		var delta_displacement = Dx_Dy_Dz_Dxdz.xyz;
 		if(!gerstner)
 		{
-			output.displacement.x = 0.0;
-			output.displacement.z = 0.0;
+			delta_displacement.x = 0.0;
+			delta_displacement.z = 0.0;
 		}
 
-		output.displacement += position_lambda * delta_displacement;
-
-		let Dydx_Dydz_Dxdx_Dzdz = textureSampleLevel(
-			Dydx_Dydz_Dxdx_Dzdz_spatial,
-			displacement_map_sampler,
-			patch_uv,
-			array_layer,
-			0.0
-		);
-
-		let Dydx = Dydx_Dydz_Dxdx_Dzdz.x;
-		let Dydz = Dydx_Dydz_Dxdx_Dzdz.y;
-
-		let Dxdz = Dx_Dy_Dz_Dxdz.w * f32(gerstner);
-		let Dzdx = Dxdz;
-
-		var Dxdx = Dydx_Dydz_Dxdx_Dzdz.z * f32(gerstner);
-		var Dzdz = Dydx_Dydz_Dxdx_Dzdz.w * f32(gerstner);
-
-		output.tangent += normal_lambda * vec3<f32>(Dxdx, Dydx, Dzdx);
-		output.bitangent += normal_lambda * vec3<f32>(Dxdz, Dydz, Dzdz);
-
-		let turbulence = textureSampleLevel(
-			turbulence_jacobian,
-			displacement_map_sampler,
-			patch_uv,
-			array_layer,
-			0.0
-		).x;
-		turbulence_accumulated += normal_lambda * turbulence;
-		turbulence_max += normal_lambda;
+		result.displacement += position_lambda * delta_displacement;
 	}
 
-	// Weaken foam at lower detail levels
-	// TODO: this could use more rigour
-	output.foam_strength = clamp(
-		u_settings.foam_scale * (1.0 - turbulence_accumulated / turbulence_max - u_settings.foam_bias),
-		0.0,
-		1.0
-	);
-
-	return output;
+	return result;
 }
 
-struct DisplacementResult
+fn getOceanSurfaceDisplacement(
+	global_uv: vec2<f32>,
+	cascade_position_weights: array<f32,CASCADE_CAPACITY>,
+) -> OceanSurfaceDisplacement
 {
-	world_position: vec3<f32>,
-	world_normal: vec3<f32>,
-	foam_strength: f32,
-}
-
-fn computeDisplacement(
-	in_world_position: vec3<f32>,
-	cascade_weights: array<vec2<f32>,10u>,
-	time: f32,
-) -> DisplacementResult
-{
-	var displacement = vec3<f32>(0.0);
-    var tangent = vec3<f32>(1.0, 0.0, 0.0);
-    var bitangent = vec3<f32>(0.0, 0.0, 1.0);
-	var foam_strength = 0.0;
+	var result: OceanSurfaceDisplacement;
+	result.displacement = vec3<f32>(0.0);
 
 	if(u_settings.b_displacement_map == 1u)
 	{
-    	let uv = (in_world_position.xz + vec2<f32>(0.5,0.5));
+    	let uv = (global_uv + vec2<f32>(0.5,0.5));
 		let gerstner = u_settings.b_gerstner == 1u;
-		let result: WaveDisplacementResult = sampleMap(uv, cascade_weights, gerstner);
+		let sample = sampleMap(uv, cascade_position_weights, gerstner);
 
-		displacement += result.displacement;
-		tangent += result.tangent;
-		bitangent += result.bitangent;
-		foam_strength += result.foam_strength;
+		result.displacement += sample.displacement;
 	}
 	else
 	{
-		var result: WaveDisplacementResult;
+		var sample: OceanSurfaceDisplacement;
 
 		for (var i = 0u; i < WAVE_COUNT; i++)
 		{
-			if(u_settings.b_gerstner == 1u)
-			{
-				result = sampleGerstner(u_waves[i], time, in_world_position.xz, u_settings.patch_world_half_extent);
-			}
-			else
-			{
-				result = sampleCosine(u_waves[i], time, in_world_position.xz, u_settings.patch_world_half_extent);
-			}
+			sample = sampleGerstner(
+				u_waves[i],
+				u_global.time.time_seconds,
+				global_uv,
+				u_settings.patch_world_half_extent
+			);
 
-			displacement += result.displacement;
-			tangent += result.tangent;
-			bitangent += result.bitangent;
-			foam_strength += result.foam_strength;
+			result.displacement += result.displacement;
 		}
 	}
-
-	var result: DisplacementResult;
-
-	result.world_position = in_world_position + displacement;
-	// our system is right-handed, so negate WGSL left-handed cross
-	result.world_normal = normalize(-cross(tangent, bitangent));
-	result.foam_strength = clamp(foam_strength, 0.0, 1.0);
 
 	return result;
 }
@@ -308,14 +179,6 @@ fn rayPlaneIntersection(
 	result.hit = (abs(perp) > 0.00001) && (result.t > 0.0);
 
 	return result;
-}
-
-struct VertexOut {
-    @builtin(position) position : vec4<f32>,
-    @location(1) world_normal : vec3<f32>,
-    @location(2) color : vec3<f32>,
-    @location(3) camera_distance : f32,
-	@location(4) foam_strength : f32,
 }
 
 fn projectNDCToOceanSurface(
@@ -343,6 +206,14 @@ fn projectNDCToOceanSurface(
 	world_position.y = ocean_origin.y;
 
 	return world_position;
+}
+
+struct VertexOut {
+    @builtin(position) position : vec4<f32>,
+    @location(1) color : vec3<f32>,
+    @location(2) camera_distance : f32,
+	@location(3) cascade_1234_normal_weights: vec4<f32>,
+	@location(5) global_uv: vec2<f32>,
 }
 
 /*
@@ -409,21 +280,22 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 
 	/*
 	 * When projecting this grid of screen-space triangles to the ocean, each
-	 * vertex is a sample of our ocean wave data. We don't want to sample waves
-	 * outside the nyquist limit for a given cell/pixel.
+	 * vertex and fragment is a sample of our ocean wave data. We don't want to
+	 * sample waves outside the nyquist limit for a given cell/pixel.
 	 *
 	 * We filter cascades' effect on POSITION by the sample rate of the entire
-	 * triangle/cell.
+	 * triangle/cell, i.e. per vertex.
 	 *
-	 * We filter cascades' effect on NORMAL by the sample rate of each pixel.
+	 * We filter cascades' effect on NORMAL by the sample rate of each pixel,
+	 * i.e. per fragment.
 	 *
-	 * These criteria are separated since normals are per pixel, while
+	 * These criteria are distinct since normals are per pixel, while
 	 * displacement visually relies on triangle rasterization and visible
 	 * feature detail is bounded by the final distance of vertices.
 	 */
 
-	const CASCADE_CAPACITY = 10u;
-	var cascade_weights = array<vec2<f32>, CASCADE_CAPACITY>();
+	var cascade_position_weights = array<f32, CASCADE_CAPACITY>();
+	var cascade_normal_weights = array<f32, CASCADE_CAPACITY>();
 
 	const NYQUIST_MIN = 1.0;
 	const NYQUIST_MAX = 2.5;
@@ -446,41 +318,52 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 		let wave_number_min = WAVE_NUMBER_FENCE_POSTS[cascade];
 		let wave_number_max = WAVE_NUMBER_FENCE_POSTS[cascade + 1u];
 
-		let wave_number_concentration = mix(wave_number_min, wave_number_max, 0.1);
+		let wave_number_concentration = mix(wave_number_min, wave_number_max, 0.15);
 
 		const MIN_SCALE = 1.0;
 		const MAX_SCALE = 2.5;
 
-		let position_scale = 1.0 - smoothstep(
-			cell_nyquist_wavenumber * MIN_SCALE,
-			cell_nyquist_wavenumber * MAX_SCALE,
+		let position_weight = 1.0 - smoothstep(
+			cell_nyquist_wavenumber * 2.0,
+			cell_nyquist_wavenumber * 2.5,
 			wave_number_concentration
 		);
-		let normal_scale = 1.0 - smoothstep(
-			pixel_nyquist_wavenumber * MIN_SCALE,
-			pixel_nyquist_wavenumber * MAX_SCALE,
+		let normal_weight = 1.0 - smoothstep(
+			pixel_nyquist_wavenumber * 1.0,
+			pixel_nyquist_wavenumber * 4.0,
 			wave_number_concentration
 		);
 
-		cascade_weights[cascade] = vec2<f32>(position_scale, normal_scale);
+		cascade_position_weights[cascade] = position_weight;
+		cascade_normal_weights[cascade] = normal_weight;
 	}
 
-	let displacement_result = computeDisplacement(cell_world_position, cascade_weights, u_global.time.time_seconds);
+	let global_uv = cell_world_position.xz;
+	let displacement_result = getOceanSurfaceDisplacement(
+		global_uv,
+		cascade_position_weights
+	);
+	let world_position = cell_world_position + displacement_result.displacement;
 
-	let world_position = displacement_result.world_position;
-
+	output.global_uv = global_uv;
     output.position = u_global.camera.proj_view * vec4<f32>(world_position, 1.0);
 	// Unclipped depth didn't work (and requires a feature) so this is a workaround
 	output.position.z /= 1.001;
-	output.world_normal = displacement_result.world_normal;
+
 	output.color = vec3<f32>(WATER_COLOR);
-	output.foam_strength = displacement_result.foam_strength;
 
 	// Test screen-space density of vertices
 	// output.color = vec3<f32>(step(fract(50 * ndc_space_coord), vec2<f32>(0.1)),0.0);
  	// output.color = vec3<f32>(step(fract(1.0 * world_position.x), 0.05),0.0,0.0);
 
     output.camera_distance = distance(u_global.camera.position.xyz, world_position);
+
+	output.cascade_1234_normal_weights = vec4<f32>(
+		cascade_normal_weights[0],
+		cascade_normal_weights[1],
+		cascade_normal_weights[2],
+		cascade_normal_weights[3],
+	);
 
     return output;
 }
@@ -491,13 +374,220 @@ struct FragmentOut
     @location(1) world_normal_with_surface_foam_strength_in_alpha: vec4<f32>,
 }
 
+struct OceanSurfaceTangents
+{
+	tangent: vec3<f32>,
+	bitangent: vec3<f32>,
+	foam_strength: f32,
+}
+
+fn sampleOceanSurfaceTangentDifferentialFromMap(
+	global_uv: vec2<f32>,
+	cascade_normal_weights: array<f32,CASCADE_CAPACITY>,
+	gerstner: bool,
+) -> OceanSurfaceTangents
+{
+    var result: OceanSurfaceTangents;
+	result.tangent = vec3<f32>(0.0);
+	result.bitangent = vec3<f32>(0.0);
+
+	const WAVE_PATCH_SIZES = array<f32,3>(200.0, 50.0, 10.0);
+
+	var turbulence_accumulated = 0.0;
+	var turbulence_max = 0.0;
+	for(var array_layer = 0u; array_layer < textureNumLayers(Dx_Dy_Dz_Dxdz_spatial); array_layer++)
+	{
+		let normal_lambda = cascade_normal_weights[array_layer];
+
+		let patch_uv = global_uv / WAVE_PATCH_SIZES[array_layer];
+
+		let Dx_Dy_Dz_Dxdz = textureSampleLevel(
+			Dx_Dy_Dz_Dxdz_spatial,
+			displacement_map_sampler,
+			patch_uv,
+			array_layer,
+			0.0
+		);
+
+		let Dydx_Dydz_Dxdx_Dzdz = textureSampleLevel(
+			Dydx_Dydz_Dxdx_Dzdz_spatial,
+			displacement_map_sampler,
+			patch_uv,
+			array_layer,
+			0.0
+		);
+
+		let Dydx = Dydx_Dydz_Dxdx_Dzdz.x;
+		let Dydz = Dydx_Dydz_Dxdx_Dzdz.y;
+
+		let Dxdz = Dx_Dy_Dz_Dxdz.w * f32(gerstner);
+		let Dzdx = Dxdz;
+
+		var Dxdx = Dydx_Dydz_Dxdx_Dzdz.z * f32(gerstner);
+		var Dzdz = Dydx_Dydz_Dxdx_Dzdz.w * f32(gerstner);
+
+		result.tangent += normal_lambda * vec3<f32>(Dxdx, Dydx, Dzdx);
+		result.bitangent += normal_lambda * vec3<f32>(Dxdz, Dydz, Dzdz);
+
+		let turbulence = textureSampleLevel(
+			turbulence_jacobian,
+			displacement_map_sampler,
+			patch_uv,
+			array_layer,
+			0.0, //with_mipmaps * (1.0 - normal_lambda) * f32(textureNumLevels(turbulence_jacobian))
+		).x;
+		turbulence_accumulated += normal_lambda * clamp(1.0 - turbulence, 0.0, 1.0);
+		turbulence_max += max(normal_lambda, 0.1);
+	}
+
+	// TODO: this could use more rigour
+	result.foam_strength = clamp(
+		u_settings.foam_scale * (turbulence_accumulated / turbulence_max - u_settings.foam_bias),
+		0.0,
+		1.0
+	);
+
+	return result;
+}
+
+fn sampleOceanSurfaceTangentDifferentialFromWave(
+	global_uv: vec2<f32>,
+	wave: PlaneWave,
+	time: f32,
+	falloff_distance: f32,
+	gerstner: bool,
+) -> OceanSurfaceTangents
+{
+	let falloff_factor = (1.0 - smoothstep(0.0, falloff_distance, length(global_uv)));
+    let wave_amplitude = falloff_factor * wave.amplitude;
+    let wave_direction = normalize(wave.direction);
+    let wavelength = wave.wavelength;
+
+    let wave_number = 2.0 * 3.141592653589793 / wavelength;
+
+	// TODO: parameterize this in ubo (like how the FFT waves do it)
+    let gravity = 9.8;
+
+    // Dispersion relationship for deep ocean waves
+    // wave_speed = sqrt(gravity / wave_number)
+    // angular_frequency = wave_speed * wave_number
+    let angular_frequency = sqrt(gravity * wave_number);
+
+    let wave_vector = wave_direction * wave_number;
+
+    let theta = dot(global_uv, wave_vector) - angular_frequency * time;
+    let sin_theta = sin(theta);
+    let cos_theta = cos(theta);
+
+    var result: OceanSurfaceTangents;
+
+    // partial derivatives computed exactly via the above formula
+    // Note these vectors are parallel, since wave only displaces in travel direction
+    result.tangent = vec3<f32>(
+        - wave_amplitude * wave_direction.x * cos_theta * wave_vector.x,
+        - wave_amplitude * sin_theta * wave_vector.x,
+        - wave_amplitude * wave_direction.y * cos_theta * wave_vector.x,
+    );
+    result.bitangent = vec3<f32>(
+        - wave_amplitude * wave_direction.x * cos_theta * wave_vector.y,
+        - wave_amplitude * sin_theta * wave_vector.y,
+        - wave_amplitude * wave_direction.y * cos_theta * wave_vector.y,
+    );
+	result.foam_strength = 0.0;
+
+	if(!gerstner)
+	{
+		result.tangent.x = 0.0;
+		result.tangent.z = 0.0;
+
+		result.bitangent.x = 0.0;
+		result.bitangent.z = 0.0;
+	}
+
+    return result;
+}
+
+fn getOceanSurfaceTangents(
+	global_uv: vec2<f32>,
+	cascade_normal_weights: array<f32,CASCADE_CAPACITY>,
+) -> OceanSurfaceTangents
+{
+	var result: OceanSurfaceTangents;
+	/*
+	 * The derivative of the sum of all waves is the sum of the derivatives.
+	 * Thus, the unperturbed tangent T=(1,0,0) (which comes from d/dx(x,y,z))
+	 * is summed with the tangent differentials dT=d/dx(Dx,Dy,Dz) for each
+	 * contribution, where (Dx,Dy,Dz) is the displacement due to the wave as a
+	 * function of (x,y,z).
+	 * Same for bitangent, just replace d/dx with d/dz
+	 */
+    result.tangent = vec3<f32>(1.0, 0.0, 0.0);
+    result.bitangent = vec3<f32>(0.0, 0.0, 1.0);
+	result.foam_strength = 0.0;
+
+	let gerstner = u_settings.b_gerstner == 1u;
+	if(u_settings.b_displacement_map == 1u)
+	{
+		let sample: OceanSurfaceTangents = sampleOceanSurfaceTangentDifferentialFromMap(
+			global_uv,
+			cascade_normal_weights,
+			gerstner
+		);
+
+		result.tangent += sample.tangent;
+		result.bitangent += sample.bitangent;
+		result.foam_strength += sample.foam_strength;
+	}
+	else
+	{
+		var sample: OceanSurfaceTangents;
+
+		for (var i = 0u; i < WAVE_COUNT; i++)
+		{
+			sample = sampleOceanSurfaceTangentDifferentialFromWave(
+				global_uv,
+				u_waves[i],
+				u_global.time.time_seconds,
+				u_settings.patch_world_half_extent,
+				gerstner
+			);
+
+			result.tangent += sample.tangent;
+			result.bitangent += sample.bitangent;
+			result.foam_strength += sample.foam_strength / f32(WAVE_COUNT);
+		}
+	}
+
+	result.tangent = normalize(result.tangent);
+	result.bitangent = normalize(result.bitangent);
+
+	return result;
+}
+
 @fragment
 fn rasterizationFragment(frag_interpolated: VertexOut) -> FragmentOut
 {
     var output : FragmentOut;
 
-    output.color_with_surface_world_depth_in_alpha = vec4<f32>(frag_interpolated.color, frag_interpolated.camera_distance);
-    output.world_normal_with_surface_foam_strength_in_alpha = vec4<f32>(frag_interpolated.world_normal,frag_interpolated.foam_strength);
+    output.color_with_surface_world_depth_in_alpha = vec4<f32>(
+		frag_interpolated.color,
+		frag_interpolated.camera_distance
+	);
 
+	var cascade_normal_weights = array<f32, CASCADE_CAPACITY>();
+	cascade_normal_weights[0] = frag_interpolated.cascade_1234_normal_weights.x;
+	cascade_normal_weights[1] = frag_interpolated.cascade_1234_normal_weights.y;
+	cascade_normal_weights[2] = frag_interpolated.cascade_1234_normal_weights.z;
+	cascade_normal_weights[3] = frag_interpolated.cascade_1234_normal_weights.w;
+
+	let surface = getOceanSurfaceTangents(
+		frag_interpolated.global_uv,
+		cascade_normal_weights,
+	);
+
+	// reverse left-handed WGSL coordinates
+	let normal = normalize(-cross(surface.tangent, surface.bitangent));
+
+    output.world_normal_with_surface_foam_strength_in_alpha = vec4<f32>(normal, surface.foam_strength);
     return output;
 }

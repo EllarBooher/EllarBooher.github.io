@@ -226,8 +226,8 @@ class SkySeaApp implements RendererApp {
 		oceanFolder
 			.add(this.settings.oceanSurfaceSettings, "foamScale")
 			.name("Foam Scale")
-			.min(-10.0)
-			.max(10.0);
+			.min(-30.0)
+			.max(30.0);
 		oceanFolder
 			.add(this.settings.oceanSurfaceSettings, "foamBias")
 			.name("Foam Bias")
@@ -457,13 +457,13 @@ class SkySeaApp implements RendererApp {
 			oceanSurfaceSettings: {
 				gerstner: true,
 				fft: true,
-				foamScale: 5,
+				foamScale: 15,
 				foamBias: 0.25,
 			},
 			fourierWavesSettings: {
 				gravity: 9.8,
-				windSpeedMetersPerSeconds: 10.0,
-				windFetchMeters: 10.0 * 1000.0,
+				windSpeedMetersPerSeconds: 15.0,
+				windFetchMeters: 40.0 * 1000.0,
 				waveSwell: 0.3,
 			},
 			renderOutputTransforms: new Map<
@@ -473,7 +473,7 @@ class SkySeaApp implements RendererApp {
 			pauseGlobalTime: false,
 			currentRenderOutputTransform: new RenderOutputTransform(),
 			orbit: {
-				timeHours: 5.6,
+				timeHours: 5.7,
 				timeSpeedupFactor: 400.0,
 				paused: false,
 				reversed: false,

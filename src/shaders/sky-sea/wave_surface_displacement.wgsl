@@ -33,7 +33,6 @@ struct WaveSurfaceDisplacementUBO
 
 const PI = 3.141592653589793;
 
-// Extra 1 for tiling
 const VERTEX_DIMENSION = 1000u;
 const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 // const TRIANGLE_COUNT = 2u * (VERTEX_DIMENSION - 1u) * (VERTEX_DIMENSION - 1u);
@@ -41,7 +40,7 @@ const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
 
 const WAVE_COUNT = 12u;
 
-const WATER_COLOR = vec3<f32>(1.0 / 255.0, 123.0 / 255.0, 146.0 / 255.0);
+const WATER_COLOR = 0.3 * vec3<f32>(16.0 / 255.0, 97.0 / 255.0, 171.0 / 255.0);
 const WAVE_NEUTRAL_PLANE = 1.0;
 
 const CASCADE_CAPACITY = 4u;

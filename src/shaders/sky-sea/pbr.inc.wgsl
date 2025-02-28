@@ -16,27 +16,43 @@ struct PBRTexel
 
 fn convertPBRPropertiesWater(color: vec3<f32>, normal: vec3<f32>, foam: f32) -> PBRTexel
 {
-    let metallic = 1.0;
+    const METALLIC_WATER = 0.8;
 
-	let foam_intensity = foam;
+	const SPECULAR_POWER = 160.0;
+	const ROUGHNESS_WATER = 0.05;
+	const ROUGHNESS_FOAM = 0.3;
 
-	let specular_power = 160.0;
-    let roughness = mix(0.05, 1.0, foam_intensity);
+    let roughness = mix(
+		ROUGHNESS_WATER,
+		ROUGHNESS_FOAM,
+		foam
+	);
 
-    let WATER_DEEP_COLOR = 0.2 * vec3<f32>(16.0 / 255.0, 97.0 / 255.0, 171.0 / 255.0);
-	let albedo = mix(WATER_DEEP_COLOR, vec3<f32>(1.0), foam_intensity);
+	const FOAM_COLOR = vec3<f32>(1.0);
+	let albedo = mix(color, FOAM_COLOR, foam);
 
-    let dielectric_reflectance = vec3<f32>(0.04);
-    let metallic_reflectance = vec3<f32>(0.5) * color / max3(color);
+    const DIELECTRIC_REFLECTANCE = vec3<f32>(0.04);
+    const METALLIC_REFLECTANCE = vec3<f32>(0.5);
 
-    let normal_reflectance = mix(mix(dielectric_reflectance, metallic_reflectance, metallic), vec3<f32>(1.0), foam_intensity);
+	// Foam should probably use a different shading model, but this works
+	const FOAM_REFLECTANCE = vec3<f32>(0.8);
+
+    let normal_reflectance = mix(
+		mix(
+			DIELECTRIC_REFLECTANCE,
+			METALLIC_REFLECTANCE * color / max3(color),
+			METALLIC_WATER
+		),
+		FOAM_REFLECTANCE,
+		foam
+	);
 
     var texel = PBRTexel();
     texel.normal = normal;
     texel.subscattering_albedo = albedo;
     texel.normal_reflectance = normal_reflectance;
-    texel.specular_power = pow(specular_power, 1.0 - roughness);
-    texel.metallic = metallic;
+    texel.specular_power = pow(SPECULAR_POWER, 1.0 - roughness);
+    texel.metallic = METALLIC_WATER;
 
     return texel;
 }

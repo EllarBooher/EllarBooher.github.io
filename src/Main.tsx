@@ -13,10 +13,25 @@ createRoot(root).render(
 	<StrictMode>
 		<HashRouter>
 			{!import.meta.env.PROD && <Axe />}
-			<NavigationHeader />
 			<Routes>
-				<Route index element={<App />} />
-				<Route path="webgpu-samples" element={<RendererComponent />} />
+				<Route
+					index
+					element={
+						<>
+							<NavigationHeader />
+							<App />
+						</>
+					}
+				/>
+				<Route
+					path="webgpu-samples"
+					element={
+						<div className="sample-container">
+							<NavigationHeader />
+							<RendererComponent />
+						</div>
+					}
+				/>
 				<Route path="*" element={<Navigate to="/" replace />} />
 			</Routes>
 		</HashRouter>

@@ -98,10 +98,12 @@ const RenderingCanvas = function RenderingCanvas({
 	}, [animate, app]);
 
 	return (
-		<div className="canvas-container">
-			<canvas className="sample-canvas" ref={canvasRef} />
+		<>
+			<div className="canvas-container">
+				<canvas className="sample-canvas" ref={canvasRef} />
+			</div>
 			<div className="gui-pane" ref={guiPaneRef} />
-		</div>
+		</>
 	);
 };
 

@@ -35,13 +35,13 @@
 }
 
 .gui-pane {
-	position: absolute;
-	top: 0;
-	right: 0;
+	overflow-y: scroll;
 }
 
-main.sample {
+.sample {
 	display: flex;
+	flex: 1;
+	min-height: 0; /* ensure that sample body (sidebars + canvas) don't exceed height of parent */
 }
 
 .sample-text {

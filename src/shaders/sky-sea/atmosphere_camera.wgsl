@@ -273,8 +273,8 @@ fn sampleGeometryLuminance(
 
 	// Scattered luminance from below the sea (mostly near-surface interactions)
 	let sky_visible_solid_angle = mix(0.0, 2.0 * PI, 0.5 * dot(vec3<f32>(0.0, 1.0, 0.0), material.normal) + 0.5);
-	let sky_indirect_radiance = sampleSkyViewLUT(atmosphere, surface_position, reflect(-light_direction, vec3<f32>(0.0,1.0,0.0)));
-	let sea_luminance = diffuseBRDF(material) * sky_visible_solid_angle * sky_indirect_radiance;
+	let sky_indirect_luminance = sampleSkyViewLUT(atmosphere, surface_position, reflect(-light_direction, vec3<f32>(0.0,1.0,0.0)));
+	let sea_luminance = diffuseBRDF(material) * sky_visible_solid_angle * sky_indirect_luminance;
 	light_luminance_transfer += transmittance_to_surface * sea_luminance;
 
 	/*

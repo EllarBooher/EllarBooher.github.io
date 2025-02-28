@@ -21,6 +21,7 @@ const RenderingCanvas = function RenderingCanvas({
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const guiPaneRef = useRef<HTMLDivElement>(null);
 	const guiRef = useRef<GUI>();
+	const [guiDocked, setGUIDocked] = useState<boolean>(false);
 	const lastTimeRef = useRef<number>();
 
 	const resizeCanvas = useCallback(() => {
@@ -78,6 +79,12 @@ const RenderingCanvas = function RenderingCanvas({
 		}
 		if (app.setupUI) {
 			guiRef.current = new GUI({ container: guiPaneRef.current! });
+			guiRef.current.close();
+			guiRef.current.onOpenClose((gui) => {
+				if (gui == guiRef.current) {
+					setGUIDocked(!gui._closed);
+				}
+			});
 			app.setupUI(guiRef.current);
 		}
 
@@ -95,14 +102,23 @@ const RenderingCanvas = function RenderingCanvas({
 				cancelAnimationFrame(animateRequestRef.current);
 			}
 		};
-	}, [animate, app]);
+	}, [animate, app, setGUIDocked]);
+
+	useEffect(() => {
+		// Need to respond to canvas html element resizing on redraw, so this is an effect
+		// As opposed to calling resizeCanvas() in the onOpenClose callback above
+		resizeCanvas();
+	}, [resizeCanvas, guiDocked]);
 
 	return (
 		<>
 			<div className="canvas-container">
 				<canvas className="sample-canvas" ref={canvasRef} />
 			</div>
-			<div className="gui-pane" ref={guiPaneRef} />
+			<div
+				className={guiDocked ? undefined : "gui-pane-floating"}
+				ref={guiPaneRef}
+			/>
 		</>
 	);
 };

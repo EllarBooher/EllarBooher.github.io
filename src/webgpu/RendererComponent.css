@@ -10,8 +10,20 @@
 	--string-color: white;
 }
 
+.lil-gui.root {
+	max-height: 100%;
+}
+
+.lil-gui.root > .children {
+	overflow-y: scroll;
+}
+
 .lil-gui option {
 	color: black;
+}
+
+.lil-gui.transition.root > .children {
+	overflow-y: scroll;
 }
 
 .canvas-container {
@@ -34,8 +46,10 @@
 	height: 100%;
 }
 
-.gui-pane {
-	overflow-y: scroll;
+.gui-pane-floating {
+	position: absolute;
+	height: 10vh; /* stop lil-gui from exceeding height when transitioning to closed */
+	right: 0;
 }
 
 .sample {

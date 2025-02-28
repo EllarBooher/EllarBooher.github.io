@@ -45,20 +45,58 @@ const WATER_COLOR = vec3<f32>(1.0 / 255.0, 123.0 / 255.0, 146.0 / 255.0);
 const WAVE_NEUTRAL_PLANE = 1.0;
 
 const CASCADE_CAPACITY = 4u;
+const WAVE_CASCADE_SIZES = array<f32,3>(200.0, 50.0, 10.0);
 
 struct OceanSurfaceDisplacement
 {
 	displacement: vec3<f32>,
 }
 
-fn sampleGerstner(
+fn sampleOceanSurfaceDisplacementFromMap(
+	global_uv: vec2<f32>,
+	cascade_position_weights: array<f32,CASCADE_CAPACITY>,
+	gerstner: bool,
+) -> OceanSurfaceDisplacement
+{
+    var result: OceanSurfaceDisplacement;
+	result.displacement = vec3<f32>(0.0);
+
+	for(var array_layer = 0u; array_layer <= 3u; array_layer++)
+	{
+		let position_lambda = cascade_position_weights[array_layer];
+
+		let patch_uv = global_uv / WAVE_CASCADE_SIZES[array_layer];
+
+		let Dx_Dy_Dz_Dxdz = textureSampleLevel(
+			Dx_Dy_Dz_Dxdz_spatial,
+			displacement_map_sampler,
+			patch_uv,
+			array_layer,
+			0.0
+		);
+
+		var delta_displacement = Dx_Dy_Dz_Dxdz.xyz;
+		if(!gerstner)
+		{
+			delta_displacement.x = 0.0;
+			delta_displacement.z = 0.0;
+		}
+
+		result.displacement += position_lambda * delta_displacement;
+	}
+
+	return result;
+}
+
+fn sampleOceanSurfaceDisplacementFromWave(
 	wave: PlaneWave,
 	time: f32,
 	coords: vec2<f32>,
 	falloff_distance: f32
 ) -> OceanSurfaceDisplacement
 {
-    let wave_amplitude = (1.0 - smoothstep(0.0, falloff_distance, length(coords))) * wave.amplitude;
+	let falloff_factor = (1.0 - smoothstep(0.0, falloff_distance, length(coords)));
+    let wave_amplitude = falloff_factor * wave.amplitude;
     let wave_direction = normalize(wave.direction);
     let wavelength = wave.wavelength;
 
@@ -86,44 +124,6 @@ fn sampleGerstner(
     return result;
 }
 
-fn sampleMap(
-	global_uv: vec2<f32>,
-	cascade_position_weights: array<f32,CASCADE_CAPACITY>,
-	gerstner: bool,
-) -> OceanSurfaceDisplacement
-{
-    var result: OceanSurfaceDisplacement;
-	result.displacement = vec3<f32>(0.0);
-
-	const WAVE_PATCH_SIZES = array<f32,3>(200.0, 50.0, 10.0);
-
-	for(var array_layer = 0u; array_layer <= 3u; array_layer++)
-	{
-		let position_lambda = cascade_position_weights[array_layer];
-
-		let patch_uv = global_uv / WAVE_PATCH_SIZES[array_layer];
-
-		let Dx_Dy_Dz_Dxdz = textureSampleLevel(
-			Dx_Dy_Dz_Dxdz_spatial,
-			displacement_map_sampler,
-			patch_uv,
-			array_layer,
-			0.0
-		);
-
-		var delta_displacement = Dx_Dy_Dz_Dxdz.xyz;
-		if(!gerstner)
-		{
-			delta_displacement.x = 0.0;
-			delta_displacement.z = 0.0;
-		}
-
-		result.displacement += position_lambda * delta_displacement;
-	}
-
-	return result;
-}
-
 fn getOceanSurfaceDisplacement(
 	global_uv: vec2<f32>,
 	cascade_position_weights: array<f32,CASCADE_CAPACITY>,
@@ -136,7 +136,7 @@ fn getOceanSurfaceDisplacement(
 	{
     	let uv = (global_uv + vec2<f32>(0.5,0.5));
 		let gerstner = u_settings.b_gerstner == 1u;
-		let sample = sampleMap(uv, cascade_position_weights, gerstner);
+		let sample = sampleOceanSurfaceDisplacementFromMap(uv, cascade_position_weights, gerstner);
 
 		result.displacement += sample.displacement;
 	}
@@ -146,7 +146,7 @@ fn getOceanSurfaceDisplacement(
 
 		for (var i = 0u; i < WAVE_COUNT; i++)
 		{
-			sample = sampleGerstner(
+			sample = sampleOceanSurfaceDisplacementFromWave(
 				u_waves[i],
 				u_global.time.time_seconds,
 				global_uv,
@@ -278,64 +278,68 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 		WAVE_NEUTRAL_PLANE
 	);
 
+	var cascade_position_weights = array<f32, CASCADE_CAPACITY>(1,1,1,1);
+	var cascade_normal_weights = array<f32, CASCADE_CAPACITY>(1,1,1,1);
+
 	/*
-	 * When projecting this grid of screen-space triangles to the ocean, each
-	 * vertex and fragment is a sample of our ocean wave data. We don't want to
-	 * sample waves outside the nyquist limit for a given cell/pixel.
-	 *
-	 * We filter cascades' effect on POSITION by the sample rate of the entire
-	 * triangle/cell, i.e. per vertex.
-	 *
-	 * We filter cascades' effect on NORMAL by the sample rate of each pixel,
-	 * i.e. per fragment.
-	 *
-	 * These criteria are distinct since normals are per pixel, while
-	 * displacement visually relies on triangle rasterization and visible
-	 * feature detail is bounded by the final distance of vertices.
+	 * Disable this since mipmapping is good enough.
+	 * The eventual goal to enable this would be to transition to a
+	 * distant ocean BRDF in order to replace the normal perturbations we filter
+	 * out.
 	 */
-
-	var cascade_position_weights = array<f32, CASCADE_CAPACITY>();
-	var cascade_normal_weights = array<f32, CASCADE_CAPACITY>();
-
-	const NYQUIST_MIN = 1.0;
-	const NYQUIST_MAX = 2.5;
-
-	// TODO: this is hardcoded right now, but should be updated as wave initial amplitudes are changed
-	const WAVE_NUMBER_FENCE_POSTS = array<f32, 5>(
-		0.001,
-		8.042477193189871,
-		32.169908772759484,
-		160.8495438637974,
-		1000
-	);
-
-	// Any wave with wavenumber greater than this should NOT be sampled
-	let cell_nyquist_wavenumber = (2.0 * PI) / (distance(neighbor_world_position, cell_world_position) * 2.0);
-	let pixel_nyquist_wavenumber = (2.0 * PI) / (distance(pixel_neighbor_world_position, cell_world_position) * 2.0);
-
-	for(var cascade = 0u; cascade < textureNumLayers(Dx_Dy_Dz_Dxdz_spatial); cascade++)
+	const WITH_NYQUIST_FILTERING = false;
+	if(WITH_NYQUIST_FILTERING)
 	{
-		let wave_number_min = WAVE_NUMBER_FENCE_POSTS[cascade];
-		let wave_number_max = WAVE_NUMBER_FENCE_POSTS[cascade + 1u];
+		/*
+		* When projecting this grid of screen-space triangles to the ocean, each
+		* vertex and fragment is a sample of our ocean wave data. We don't want to
+		* sample waves outside the nyquist limit for a given cell/pixel.
+		*
+		* We filter cascades' effect on POSITION by the sample rate of the entire
+		* triangle/cell, i.e. per vertex.
+		*
+		* We filter cascades' effect on NORMAL by the sample rate of each pixel,
+		* i.e. per fragment.
+		*
+		* These criteria are distinct since normals are per pixel, while
+		* displacement visually relies on triangle rasterization and visible
+		* feature detail is bounded by the final distance of vertices.
+		*/
 
-		let wave_number_concentration = mix(wave_number_min, wave_number_max, 0.15);
-
-		const MIN_SCALE = 1.0;
-		const MAX_SCALE = 2.5;
-
-		let position_weight = 1.0 - smoothstep(
-			cell_nyquist_wavenumber * 2.0,
-			cell_nyquist_wavenumber * 2.5,
-			wave_number_concentration
+		// TODO: this is hardcoded right now, but should be updated as wave initial amplitudes are changed
+		const WAVE_NUMBER_FENCE_POSTS = array<f32, 5>(
+			0.001,
+			8.042477193189871,
+			32.169908772759484,
+			160.8495438637974,
+			1000
 		);
-		let normal_weight = 1.0 - smoothstep(
-			pixel_nyquist_wavenumber * 1.0,
-			pixel_nyquist_wavenumber * 4.0,
-			wave_number_concentration
-		);
 
-		cascade_position_weights[cascade] = position_weight;
-		cascade_normal_weights[cascade] = normal_weight;
+		// Any wave with wavenumber greater than this should NOT be sampled
+		let cell_nyquist_wavenumber = (2.0 * PI) / (distance(neighbor_world_position, cell_world_position) * 2.0);
+		let pixel_nyquist_wavenumber = (2.0 * PI) / (distance(pixel_neighbor_world_position, cell_world_position) * 2.0);
+
+		for(var cascade = 0u; cascade < textureNumLayers(Dx_Dy_Dz_Dxdz_spatial); cascade++)
+		{
+			let wave_number_min = WAVE_NUMBER_FENCE_POSTS[cascade];
+			let wave_number_max = WAVE_NUMBER_FENCE_POSTS[cascade + 1u];
+
+			let wave_number_concentration = mix(wave_number_min, wave_number_max, 0.15);
+
+			let position_weight = 1.0 - smoothstep(
+				cell_nyquist_wavenumber * 1.0,
+				cell_nyquist_wavenumber * 2.5,
+				wave_number_concentration
+			);
+			let normal_weight = 1.0 - smoothstep(
+				pixel_nyquist_wavenumber * 1.0,
+				pixel_nyquist_wavenumber * 3.0,
+				wave_number_concentration
+			);
+
+			cascade_position_weights[cascade] = position_weight;
+			cascade_normal_weights[cascade] = normal_weight;
+		}
 	}
 
 	let global_uv = cell_world_position.xz;
@@ -391,30 +395,26 @@ fn sampleOceanSurfaceTangentDifferentialFromMap(
 	result.tangent = vec3<f32>(0.0);
 	result.bitangent = vec3<f32>(0.0);
 
-	const WAVE_PATCH_SIZES = array<f32,3>(200.0, 50.0, 10.0);
-
 	var turbulence_accumulated = 0.0;
 	var turbulence_max = 0.0;
 	for(var array_layer = 0u; array_layer < textureNumLayers(Dx_Dy_Dz_Dxdz_spatial); array_layer++)
 	{
 		let normal_lambda = cascade_normal_weights[array_layer];
 
-		let patch_uv = global_uv / WAVE_PATCH_SIZES[array_layer];
+		let patch_uv = global_uv / WAVE_CASCADE_SIZES[array_layer];
 
-		let Dx_Dy_Dz_Dxdz = textureSampleLevel(
+		let Dx_Dy_Dz_Dxdz = textureSample(
 			Dx_Dy_Dz_Dxdz_spatial,
 			displacement_map_sampler,
 			patch_uv,
-			array_layer,
-			0.0
+			array_layer
 		);
 
-		let Dydx_Dydz_Dxdx_Dzdz = textureSampleLevel(
+		let Dydx_Dydz_Dxdx_Dzdz = textureSample(
 			Dydx_Dydz_Dxdx_Dzdz_spatial,
 			displacement_map_sampler,
 			patch_uv,
-			array_layer,
-			0.0
+			array_layer
 		);
 
 		let Dydx = Dydx_Dydz_Dxdx_Dzdz.x;
@@ -429,12 +429,11 @@ fn sampleOceanSurfaceTangentDifferentialFromMap(
 		result.tangent += normal_lambda * vec3<f32>(Dxdx, Dydx, Dzdx);
 		result.bitangent += normal_lambda * vec3<f32>(Dxdz, Dydz, Dzdz);
 
-		let turbulence = textureSampleLevel(
+		let turbulence = textureSample(
 			turbulence_jacobian,
 			displacement_map_sampler,
 			patch_uv,
-			array_layer,
-			0.0, //with_mipmaps * (1.0 - normal_lambda) * f32(textureNumLevels(turbulence_jacobian))
+			array_layer
 		).x;
 		turbulence_accumulated += normal_lambda * clamp(1.0 - turbulence, 0.0, 1.0);
 		turbulence_max += max(normal_lambda, 0.1);

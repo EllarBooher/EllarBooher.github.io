@@ -205,6 +205,7 @@ export interface FFTWaveCascade {
 interface TurbulenceJacobianEntry {
 	textureArray: GPUTexture;
 	bindGroup: GPUBindGroup;
+	mipMapBindings: MipMapGenerationTextureBindings;
 }
 
 export class FFTWaveSpectrumResources {
@@ -684,10 +685,11 @@ export class FFTWaveSpectrumResources {
 						depthOrArrayLayers:
 							this.Dx_Dy_Dz_Dxdz_SpatialArray.depthOrArrayLayers,
 					},
-					mipLevelCount: 1,
+					mipLevelCount: LOG_2_GRID_SIZE,
 					usage:
 						GPUTextureUsage.STORAGE_BINDING | // write to
 						GPUTextureUsage.TEXTURE_BINDING | // read from to accumulate turbulence
+						GPUTextureUsage.COPY_SRC | // mip map generation
 						GPUTextureUsage.COPY_DST, // initialize/wipe turbulence to 0
 				});
 			})
@@ -718,7 +720,9 @@ export class FFTWaveSpectrumResources {
 						entries: [
 							{
 								binding: 0,
-								resource: texture.createView({}),
+								resource: texture.createView({
+									mipLevelCount: 1,
+								}),
 							},
 							{
 								binding: 1,
@@ -750,6 +754,10 @@ export class FFTWaveSpectrumResources {
 					return accumulatedEntries.concat({
 						textureArray: texture,
 						bindGroup: bindGroup,
+						mipMapBindings: this.mipMapGenerator.createBindGroups(
+							device,
+							texture
+						),
 					});
 				},
 				[]
@@ -921,10 +929,9 @@ export class FFTWaveSpectrumResources {
 		accumulateTurbulencePass.setPipeline(this.accumulateTurbulenceKernel);
 		accumulateTurbulencePass.setBindGroup(
 			0,
-			this.turbulenceJacobianArrays[this.turbulenceJacobianIndex++]
+			this.turbulenceJacobianArrays[this.turbulenceJacobianIndex]
 				.bindGroup
 		);
-		this.turbulenceJacobianIndex %= this.turbulenceJacobianArrays.length;
 
 		accumulateTurbulencePass.dispatchWorkgroups(
 			this.gridSize / 16,
@@ -953,6 +960,14 @@ export class FFTWaveSpectrumResources {
 			fillMipMapsPass,
 			this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray_MipMapBindings
 		);
+
+		this.mipMapGenerator.updateMipMaps(
+			fillMipMapsPass,
+			this.turbulenceJacobianArrays[this.turbulenceJacobianIndex]
+				.mipMapBindings
+		);
+		this.turbulenceJacobianIndex += 1;
+		this.turbulenceJacobianIndex %= this.turbulenceJacobianArrays.length;
 
 		fillMipMapsPass.end();
 	}

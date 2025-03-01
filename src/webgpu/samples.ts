@@ -1,5 +1,3 @@
-import { HelloCubeAppConstructor as HelloCube } from "./HelloCube";
-import { SkySeaAppConstructor as SkySea } from "./sky-sea/SkySea";
 import { RendererAppConstructor } from "./RendererApp";
 
 export interface SampleEntry {
@@ -9,7 +7,7 @@ export interface SampleEntry {
 	requiredFeatures: ReadonlySet<GPUFeatureName>;
 	optionalFeatures: ReadonlySet<GPUFeatureName>;
 	description: string;
-	create: RendererAppConstructor;
+	import: () => Promise<RendererAppConstructor>;
 }
 export const defaultSampleQueryParam = "hello-cube";
 export const defaultSample = {
@@ -35,7 +33,10 @@ export const defaultSample = {
 		"dual-source-blending",
 	]),
 	description: "Tests WebGPU functionality with a simple spinning cube.",
-	create: HelloCube,
+	import: () =>
+		import("./HelloCube").then((value) => {
+			return value.HelloCubeAppConstructor;
+		}),
 } satisfies SampleEntry;
 export const samplesByQueryParam = new Map<string, SampleEntry>([
 	[defaultSampleQueryParam, defaultSample],
@@ -51,7 +52,10 @@ export const samplesByQueryParam = new Map<string, SampleEntry>([
 				"timestamp-query",
 				"float32-filterable",
 			]),
-			create: SkySea,
+			import: () =>
+				import("./sky-sea/SkySea").then((value) => {
+					return value.SkySeaAppConstructor;
+				}),
 		},
 	],
 ]);

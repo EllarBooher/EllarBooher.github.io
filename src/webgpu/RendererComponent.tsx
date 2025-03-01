@@ -8,7 +8,7 @@ import {
 } from "react";
 import { Link, useSearchParams } from "react-router";
 import { SampleEntry, samplesByQueryParam } from "./Samples";
-import { RendererApp, getDevice } from "./RendererApp";
+import { RendererApp, RendererAppConstructor, getDevice } from "./RendererApp";
 import { GUI } from "lil-gui";
 import "./RendererComponent.css";
 
@@ -137,7 +137,11 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 	}, []);
 
 	const createApp = useCallback(
-		(_adapter: GPUAdapter, device: GPUDevice) => {
+		(
+			_adapter: GPUAdapter,
+			device: GPUDevice,
+			sampleConstructor: RendererAppConstructor
+		) => {
 			if (appRef.current) {
 				quitApp();
 			}
@@ -165,11 +169,14 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 			};
 
 			const presentFormat = navigator.gpu.getPreferredCanvasFormat();
-			appRef.current = sample.create(device, presentFormat, performance.now());
-
+			appRef.current = sampleConstructor(
+				device,
+				presentFormat,
+				performance.now()
+			);
 			console.log("Finished initializing app.");
 		},
-		[sample, quitApp]
+		[quitApp]
 	);
 
 	useEffect(() => {
@@ -180,13 +187,18 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 		setInitialized(false);
 		setErrors(undefined);
 		// Adapter is one-time, and samples can have different feature requirements, so we need to create everything from scratch
-		appLoadingPromiseRef.current = getDevice(
-			sample.requiredFeatures,
-			sample.optionalFeatures,
-			sample.requiredLimits
-		)
+		appLoadingPromiseRef.current = Promise.all([
+			sample.import(),
+			getDevice(
+				sample.requiredFeatures,
+				sample.optionalFeatures,
+				sample.requiredLimits
+			),
+		])
 			.then(
-				({ adapter, device }) => createApp(adapter, device),
+				([sampleConstructor, { adapter, device }]) => {
+					createApp(adapter, device, sampleConstructor);
+				},
 				(err: Error) => {
 					console.error(err);
 					setErrors([err.message, err.cause?.toString?.() ?? "Unknown Cause"]);

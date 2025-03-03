@@ -339,7 +339,7 @@ class SkySeaApp implements RendererApp {
 			.add({ gain: 0.0 }, "gain")
 			.name("RGB")
 			.min(0.0)
-			.max(100.0)
+			.max(10000.0)
 			.onChange((v: number) => {
 				this.settings.currentRenderOutputTransform.colorGain.r = v;
 				this.settings.currentRenderOutputTransform.colorGain.g = v;
@@ -349,19 +349,19 @@ class SkySeaApp implements RendererApp {
 			.add(this.settings.currentRenderOutputTransform.colorGain, "r")
 			.name("R")
 			.min(0.0)
-			.max(100.0)
+			.max(10000.0)
 			.listen();
 		const gController = outputTextureFolder
 			.add(this.settings.currentRenderOutputTransform.colorGain, "g")
 			.name("G")
 			.min(0.0)
-			.max(100.0)
+			.max(10000.0)
 			.listen();
 		const bController = outputTextureFolder
 			.add(this.settings.currentRenderOutputTransform.colorGain, "b")
 			.name("B")
 			.min(0.0)
-			.max(100.0)
+			.max(10000.0)
 			.listen();
 
 		outputTextureController.onChange((newValue: RenderOutput) => {

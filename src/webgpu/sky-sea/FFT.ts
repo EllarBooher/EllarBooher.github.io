@@ -29,11 +29,20 @@ class DFFTParametersUBO extends UBO {
 	}
 }
 
+// We store complex numbers as vec4<f32>
+const BYTES_PER_COMPLEX_BUFFER_ELEMENT = 16;
 const REQUIRED_OUTPUT_FORMAT: GPUTextureFormat = "rgba16float";
 
 export class DFFTResources {
 	private parametersUBO: DFFTParametersUBO;
 	private intermediateDFTs: GPUBuffer;
+
+	private gridSize3D: {
+		width: number;
+		height: number;
+		depthOrArrayLayers: number;
+	};
+
 	// Work with buffers instead of textures, since webgpu is restrictive on which storage textures can be read_write
 	// A possible workaround is using two functions for the perform kernel, identical up to swapping source/destination buffer. This would save copying during IO, but might not be necessary.
 	private complexBuffer0: GPUBuffer;
@@ -73,11 +82,24 @@ export class DFFTResources {
 	 * @param {number} log2GridSize - The exponent used to calculate the grid size. Must be greater than 4.
 	 * @memberof DFFTResources
 	 */
-	constructor(device: GPUDevice, log2GridSize: number) {
+	constructor(device: GPUDevice, log2GridSize: number, layerCount: number) {
 		if (log2GridSize < 5) {
 			throw new RangeError("gridSizeExponent must be greater than 4.");
 		}
+		if (!Number.isFinite(layerCount) || layerCount < 1) {
+			throw new RangeError(`layerCount of ${layerCount} is invalid`);
+		}
 		const gridSize = Math.pow(2, log2GridSize);
+
+		this.gridSize3D = {
+			width: gridSize,
+			height: gridSize,
+			depthOrArrayLayers: layerCount,
+		};
+		const textureTexelCount =
+			this.gridSize3D.width *
+			this.gridSize3D.height *
+			this.gridSize3D.depthOrArrayLayers;
 
 		this.parametersUBO = new DFFTParametersUBO(device);
 		this.parametersUBO.data.log_2_size = log2GridSize;
@@ -178,18 +200,16 @@ export class DFFTResources {
 					visibility: GPUShaderStage.COMPUTE,
 					storageTexture: {
 						format: REQUIRED_OUTPUT_FORMAT,
+						viewDimension: "2d-array",
 						access: "write-only",
 					},
 				},
 			],
 		});
 
-		// We store complex numbers as vec4<f32>
-		const BYTES_PER_COMPLEX_BUFFER_ELEMENT = 16;
-
 		this.complexBuffer0 = device.createBuffer({
 			label: "DFFT Buffer 0",
-			size: gridSize * gridSize * BYTES_PER_COMPLEX_BUFFER_ELEMENT,
+			size: textureTexelCount * BYTES_PER_COMPLEX_BUFFER_ELEMENT,
 			usage:
 				GPUBufferUsage.STORAGE |
 				GPUBufferUsage.COPY_SRC |
@@ -202,9 +222,10 @@ export class DFFTResources {
 			usage: this.complexBuffer0.usage,
 		});
 
+		const STEP_COUNTER_BUFFER_SIZE = 4;
 		this.stepCounterBuffer = device.createBuffer({
 			label: "DFFT Step Counter",
-			size: 4,
+			size: STEP_COUNTER_BUFFER_SIZE,
 			usage:
 				GPUBufferUsage.COPY_DST |
 				GPUBufferUsage.STORAGE |
@@ -217,7 +238,7 @@ export class DFFTResources {
 		this.outputTexture = device.createTexture({
 			label: "DFFT Output Texture",
 			format: REQUIRED_OUTPUT_FORMAT,
-			size: { width: gridSize, height: gridSize, depthOrArrayLayers: 1 },
+			size: this.gridSize3D,
 			usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
 		});
 
@@ -344,15 +365,14 @@ export class DFFTResources {
 		commandEncoder: GPUCommandEncoder,
 		endTimestampWrites: GPUComputePassTimestampWrites | undefined
 	) {
-		const gridSize = this.parametersUBO.data.size;
-		const log2GridSize = this.parametersUBO.data.log_2_size;
+		const stepCount = 2 * this.parametersUBO.data.log_2_size;
 
 		const passEncoder = commandEncoder.beginComputePass({
 			label: "DFFT Perform",
 			timestampWrites: endTimestampWrites,
 		});
 
-		for (let step = 0; step < 2 * log2GridSize; step++) {
+		for (let step = 0; step < stepCount; step++) {
 			if (step === 0) {
 				passEncoder.setPipeline(this.resetStepCounterKernel);
 				passEncoder.setBindGroup(0, this.stepCounterBindGroup);
@@ -364,14 +384,22 @@ export class DFFTResources {
 			}
 			passEncoder.setPipeline(this.performKernel);
 			passEncoder.setBindGroup(0, this.performBindGroup);
-			passEncoder.dispatchWorkgroups(gridSize / 16, gridSize / 16);
+			passEncoder.dispatchWorkgroups(
+				this.gridSize3D.width / 16,
+				this.gridSize3D.height / 16,
+				this.gridSize3D.depthOrArrayLayers / 1
+			);
 		}
 
 		passEncoder.setPipeline(
 			this.performSwapEvenSignsAndCopyToHalfPrecisionOutputKernel
 		);
 		passEncoder.setBindGroup(0, this.performBindGroup);
-		passEncoder.dispatchWorkgroups(gridSize / 16, gridSize / 16);
+		passEncoder.dispatchWorkgroups(
+			this.gridSize3D.width / 16,
+			this.gridSize3D.height / 16,
+			this.gridSize3D.depthOrArrayLayers / 1
+		);
 
 		passEncoder.end();
 	}
@@ -381,9 +409,8 @@ export class DFFTResources {
 	 *
 	 * @param {GPUDevice} device
 	 * @param {GPUCommandEncoder} commandEncoder
-	 * @param {GPUTexture} sourceTexture - The texture to copy the input from. Its format should be "rg32float"
-	 * @param {GPUTexture} destinationArray - The texture to copy the output into. Its format should be "rg32float"
-	 * @param {number} destinationArrayLayer - Which layer in the destination array to copy the output into
+	 * @param {GPUTexture} sourceTextureArray - The texture to copy the input from. Its format should be "rg32float"
+	 * @param {GPUTexture} destinationTextureArray - The texture to copy the output into. Its format should be "rg32float"
 	 * @param {boolean} inverse - Whether to perform an inverse transform or not.
 	 * @param {(GPUComputePassTimestampWrites | undefined)} endTimestampWrites
 	 * @memberof DFFTResources
@@ -391,47 +418,46 @@ export class DFFTResources {
 	recordPerform(
 		device: GPUDevice,
 		commandEncoder: GPUCommandEncoder,
-		sourceTexture: GPUTexture,
-		destinationArray: GPUTexture,
-		destinationArrayLayer: number,
+		sourceTextureArray: GPUTexture,
+		destinationTextureArray: GPUTexture,
 		inverse: boolean,
 		endTimestampWrites: GPUComputePassTimestampWrites | undefined
 	) {
 		// We require this format so it maps perfectly to our buffers of complex numbers (WGSL type: vec4<f32>)
 		const REQUIRED_INPUT_FORMAT: GPUTextureFormat = "rgba32float";
-		if (sourceTexture.format != REQUIRED_INPUT_FORMAT) {
+		if (sourceTextureArray.format != REQUIRED_INPUT_FORMAT) {
 			throw RangeError(
-				`sourceTexture (format ${sourceTexture.format}) must be ${REQUIRED_INPUT_FORMAT}`
+				`sourceTexture (format ${sourceTextureArray.format}) must be ${REQUIRED_INPUT_FORMAT}`
 			);
 		}
-		if (destinationArray.format != REQUIRED_OUTPUT_FORMAT) {
+		if (destinationTextureArray.format != REQUIRED_OUTPUT_FORMAT) {
 			throw RangeError(
-				`destinationArray (format ${sourceTexture.format}) must be ${REQUIRED_INPUT_FORMAT}`
+				`destinationArray (format ${sourceTextureArray.format}) must be ${REQUIRED_INPUT_FORMAT}`
 			);
 		}
-		if (sourceTexture.depthOrArrayLayers !== 1) {
-			// TODO: input should maybe also be an array, it would be cleaner
-			console.warn(
-				`Source Texture '${sourceTexture.label}' DepthOrArrayLayers > 1 - will only use the first layer.`
+		if (
+			sourceTextureArray.width != destinationTextureArray.width ||
+			sourceTextureArray.height != destinationTextureArray.height ||
+			sourceTextureArray.depthOrArrayLayers !=
+				destinationTextureArray.depthOrArrayLayers
+		) {
+			throw RangeError(
+				`SourceTexture ${sourceTextureArray.label} does not match destination texture ${destinationTextureArray.label} extent`
 			);
 		}
 
 		this.parametersUBO.data.b_inverse = inverse;
 		this.parametersUBO.writeToGPU(device.queue);
 
-		const gridSize = this.parametersUBO.data.size;
-
 		commandEncoder.copyTextureToBuffer(
-			{ texture: sourceTexture },
+			{ texture: sourceTextureArray },
 			{
 				buffer: this.complexBuffer0,
-				bytesPerRow: this.complexBuffer0.size / gridSize,
+				bytesPerRow:
+					this.gridSize3D.width * BYTES_PER_COMPLEX_BUFFER_ELEMENT,
+				rowsPerImage: this.gridSize3D.height,
 			},
-			{
-				width: sourceTexture.width,
-				height: sourceTexture.height,
-				depthOrArrayLayers: 1,
-			}
+			this.gridSize3D
 		);
 
 		this.recordPerformOnBuffer0(commandEncoder, endTimestampWrites);
@@ -441,14 +467,9 @@ export class DFFTResources {
 				texture: this.outputTexture,
 			},
 			{
-				texture: destinationArray,
-				origin: { x: 0, y: 0, z: destinationArrayLayer },
+				texture: destinationTextureArray,
 			},
-			{
-				width: destinationArray.width,
-				height: destinationArray.height,
-				depthOrArrayLayers: 1,
-			}
+			this.gridSize3D
 		);
 	}
 }

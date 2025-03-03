@@ -30,37 +30,47 @@ export interface FFTWavesSettings {
 	waveSwell: number;
 }
 
+const CASCADE_CAPACITY = 4;
+const SIZEOF_CASCADE_UBO = 4;
+interface CascadeUBO {
+	wave_number_min_max: Vec2;
+	wave_patch_extent_meters: number;
+	padding0: number;
+}
+
 class FourierWavesUBO extends UBO {
 	public readonly data: {
 		fourier_grid_size: number;
 		gravity: number;
-		wave_patch_extent_meters: number;
+		padding0: number;
 		wave_period_seconds: number;
 
 		wind_speed_meters_per_second: number;
 		wind_fetch_meters: number;
 		wave_swell: number;
-		padding0: number;
+		padding1: number;
 
-		wave_number_min_max: Vec2;
-		padding1: Vec2;
+		cascades: CascadeUBO[];
 	} = {
 		fourier_grid_size: GRID_SIZE,
 		gravity: GRAVITY,
-		wave_patch_extent_meters: 50.0,
+		padding0: 0.0,
 		wave_period_seconds: WAVE_PERIOD_SECONDS,
 
 		wind_speed_meters_per_second: 10.0,
 		wind_fetch_meters: 10.0 * 1000.0,
 		wave_swell: 0.3,
-		padding0: 0,
+		padding1: 0,
 
-		wave_number_min_max: vec2.create(0.0, 1000.0),
-		padding1: vec2.create(0, 0),
+		cascades: new Array<CascadeUBO>(4),
 	};
 
 	constructor(device: GPUDevice) {
-		super(device, 12, "Fourier Waves UBO");
+		super(
+			device,
+			8 + CASCADE_CAPACITY * SIZEOF_CASCADE_UBO,
+			"Fourier Waves UBO"
+		);
 	}
 
 	protected override packed(): ArrayBuffer {
@@ -70,16 +80,22 @@ class FourierWavesUBO extends UBO {
 
 		view.setUint32(0, this.data.fourier_grid_size, true);
 		view.setFloat32(4, this.data.gravity, true);
-		view.setFloat32(8, this.data.wave_patch_extent_meters, true);
+		view.setFloat32(8, this.data.padding0, true);
 		view.setFloat32(12, this.data.wave_period_seconds, true);
 
 		view.setFloat32(16, this.data.wind_speed_meters_per_second, true);
 		view.setFloat32(20, this.data.wind_fetch_meters, true);
 		view.setFloat32(24, this.data.wave_swell, true);
-		view.setFloat32(28, this.data.padding0, true);
+		view.setFloat32(28, this.data.padding1, true);
 
-		float32View.set(this.data.wave_number_min_max, 8);
-		float32View.set(this.data.padding1, 10);
+		const CASCADES_FLOAT32_OFFSET = 8;
+		this.data.cascades.forEach((data, index) => {
+			const baseOffset =
+				CASCADES_FLOAT32_OFFSET + index * SIZEOF_CASCADE_UBO;
+			float32View.set(data.wave_number_min_max, baseOffset);
+			float32View[baseOffset + 2] = data.wave_patch_extent_meters;
+			float32View[baseOffset + 3] = 0.0;
+		});
 
 		return buffer;
 	}
@@ -161,17 +177,17 @@ export class FFTWaveDisplacementMaps {
 }
 
 // TODO: Some of these resources could be deduplicated across cascades
-export interface FFTWaveCascade {
+export interface FFTWaveCascades {
 	// A two-channel texture of pairs of gaussian random variables, used to generate the amplitudes of our waves
-	gaussianNoise: GPUTexture;
+	gaussianNoiseArray: GPUTexture;
 	// A fourier grid of wave amplitude that are a function of the wave vector
-	initialAmplitude: GPUTexture;
+	initialAmplitudeArray: GPUTexture;
 
 	waveSettings: FourierWavesUBO;
 
 	/*
-	 * @group(0) @binding(0) var out_initial_amplitude: texture_storage_2d<rg32float, write>;
-	 * @group(0) @binding(1) var in_gaussian_random_pairs: texture_storage_2d<rg32float, read>;
+	 * @group(0) @binding(0) var out_initial_amplitude: texture_storage_2d_array<rg32float, write>;
+	 * @group(0) @binding(1) var in_gaussian_random_pairs: texture_2d_array<f32>;
 	 *
 	 * @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 	 * @group(1) @binding(1) var<uniform> u_fourier_waves: FourierWavesUBO;
@@ -185,15 +201,13 @@ export interface FFTWaveCascade {
 	 * unit.
 	 * Ordered such that the real-valued results are in the component-order consumed by the ocean surface displacement passes.
 	 */
-	packed_Dx_plus_iDy_Dz_iDxdz_Amplitude: GPUTexture;
-	packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude: GPUTexture;
+	packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray: GPUTexture;
+	packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_AmplitudeArray: GPUTexture;
 
 	/*
-	 * @group(0) @binding(0) var out_packed_Dy_plus_iDxdz_amplitude: texture_storage_2d<rg32float, write>;
-	 * @group(0) @binding(1) var out_packed_Dx_plus_iDz_amplitude: texture_storage_2d<rg32float, write>;
-	 * @group(0) @binding(2) var out_packed_Dydx_plus_iDydz_amplitude: texture_storage_2d<rg32float, write>;
-	 * @group(0) @binding(3) var out_packed_Dxdx_plus_iDzdz_amplitude: texture_storage_2d<rg32float, write>;
-	 * @group(0) @binding(4) var in_initial_amplitude: texture_storage_2d<rg32float, read>;
+	 * @group(0) @binding(0) var out_packed_Dx_plus_iDy_Dz_iDxdz_amplitude: texture_storage_2d_array<rgba32float, write>;
+	 * @group(0) @binding(1) var out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitude: texture_storage_2d_array<rgba32float, write>;
+	 * @group(0) @binding(2) var in_initial_amplitude: texture_2d_array<f32>;
 	 *
 	 * @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 	 * @group(1) @binding(1) var<uniform> u_fourier_waves: FourierWavesUBO;
@@ -218,6 +232,14 @@ export class FFTWaveSpectrumResources {
 	 * this grid uniquely identifies a wave with wave vector k = (k_x,k_z)
 	 */
 	private gridSize: number;
+	private cascadeCount: number;
+	private get textureGridSize() {
+		return {
+			width: this.gridSize,
+			height: this.gridSize,
+			depthOrArrayLayers: this.cascadeCount,
+		};
+	}
 
 	private initialAmplitudeKernel: GPUComputePipeline;
 	private realizedAmplitudeKernel: GPUComputePipeline;
@@ -227,11 +249,11 @@ export class FFTWaveSpectrumResources {
 
 	private mipMapGenerator: MipMapGenerationPassResources;
 
-	private cascades: FFTWaveCascade[];
+	private cascades: FFTWaveCascades;
 
 	/*
-	 * Final output maps, organized versions of the FFT outputs above.
-	 * There is one layer for each cascade.
+	 * Final output maps that store the results of the FFT.
+	 * Is mipmapped and has array layers, one layer for each cascade.
 	 */
 	private Dx_Dy_Dz_Dxdz_SpatialArray: GPUTexture;
 	private Dydx_Dydz_Dxdx_Dzdz_SpatialArray: GPUTexture;
@@ -256,21 +278,24 @@ export class FFTWaveSpectrumResources {
 
 	private waveSettings: FFTWavesSettings;
 
-	private createCascade(
+	private createCascades(
 		device: GPUDevice,
 		globalUBO: GlobalUBO,
-		patchExtentMeters: number,
-		waveNumberMinMax: [number, number]
-	): FFTWaveCascade {
-		const textureGridSize: GPUExtent3DStrict = {
-			width: this.gridSize,
-			height: this.gridSize,
-		};
+		cascadeParameters: {
+			patchExtentMeters: number;
+			waveNumberMinMax: [number, number];
+		}[]
+	): FFTWaveCascades {
+		const textureExtent = this.textureGridSize;
+		const textureTexelCount =
+			textureExtent.width *
+			textureExtent.height *
+			textureExtent.depthOrArrayLayers;
 
-		const gaussianNoise = device.createTexture({
+		const gaussianNoiseArray = device.createTexture({
 			label: "FFT Wave Gaussian Noise",
 			format: GAUSSIAN_NOISE_FORMAT,
-			size: textureGridSize,
+			size: textureExtent,
 			usage:
 				GPUTextureUsage.COPY_DST |
 				GPUTextureUsage.STORAGE_BINDING |
@@ -279,38 +304,37 @@ export class FFTWaveSpectrumResources {
 
 		const FLOAT32_PER_GAUSSIAN_NOISE_TEXEL = 2;
 		const BYTES_PER_TEXEL = 8;
-		const BYTES_PER_ROW = BYTES_PER_TEXEL * this.gridSize;
 		const randomNumbers = new Float32Array(
-			this.gridSize * this.gridSize * FLOAT32_PER_GAUSSIAN_NOISE_TEXEL
+			textureTexelCount * FLOAT32_PER_GAUSSIAN_NOISE_TEXEL
 		);
 		for (let i = 0; i < randomNumbers.length; i++) {
 			randomNumbers[i] = randGaussian2DBoxMuller()[0];
 		}
 
 		device.queue.writeTexture(
-			{ texture: gaussianNoise },
+			{ texture: gaussianNoiseArray },
 			randomNumbers,
-			{ bytesPerRow: BYTES_PER_ROW },
 			{
-				width: gaussianNoise.width,
-				height: gaussianNoise.height,
-			}
+				bytesPerRow: BYTES_PER_TEXEL * textureExtent.width,
+				rowsPerImage: textureExtent.height,
+			},
+			textureExtent
 		);
 
 		const waveSettings = new FourierWavesUBO(device);
-
-		waveSettings.data.wave_patch_extent_meters = patchExtentMeters;
-		vec2.set(
-			waveNumberMinMax[0],
-			waveNumberMinMax[1],
-			waveSettings.data.wave_number_min_max
-		);
+		cascadeParameters.forEach((value, index) => {
+			waveSettings.data.cascades[index] = {
+				wave_number_min_max: vec2.create(...value.waveNumberMinMax),
+				wave_patch_extent_meters: value.patchExtentMeters,
+				padding0: 0.0,
+			};
+		});
 		waveSettings.writeToGPU(device.queue);
 
-		const initialAmplitude = device.createTexture({
+		const initialAmplitudeArray = device.createTexture({
 			label: "FFT Wave Fourier Amplitude h_0(k)",
 			format: INITIAL_AMPLITUDE_FORMAT,
-			size: textureGridSize,
+			size: textureExtent,
 			usage:
 				GPUTextureUsage.STORAGE_BINDING |
 				GPUTextureUsage.TEXTURE_BINDING,
@@ -322,11 +346,11 @@ export class FFTWaveSpectrumResources {
 			entries: [
 				{
 					binding: 0,
-					resource: initialAmplitude.createView(),
+					resource: initialAmplitudeArray.createView(),
 				},
 				{
 					binding: 1,
-					resource: gaussianNoise.createView(),
+					resource: gaussianNoiseArray.createView(),
 				},
 			],
 		});
@@ -346,21 +370,23 @@ export class FFTWaveSpectrumResources {
 			],
 		});
 
-		const packed_Dx_plus_iDy_Dz_iDxdz_Amplitude = device.createTexture({
-			label: "FFT Wave Packed (Dx + iDy, Dz + iDxdz) Amplitude",
-			format: FFT_IO_TEXTURE_FORMAT,
-			size: textureGridSize,
-			usage:
-				GPUTextureUsage.STORAGE_BINDING |
-				GPUTextureUsage.TEXTURE_BINDING |
-				GPUTextureUsage.COPY_SRC,
-		});
-		const packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude =
+		const packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray = device.createTexture(
+			{
+				label: "FFT Wave Packed (Dx + iDy, Dz + iDxdz) Amplitude",
+				format: FFT_IO_TEXTURE_FORMAT,
+				size: textureExtent,
+				usage:
+					GPUTextureUsage.STORAGE_BINDING |
+					GPUTextureUsage.TEXTURE_BINDING |
+					GPUTextureUsage.COPY_SRC,
+			}
+		);
+		const packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_AmplitudeArray =
 			device.createTexture({
 				label: "FFT Wave Packed (Dydx + iDydz, Dxdx + iDzdz) Amplitude",
-				format: packed_Dx_plus_iDy_Dz_iDxdz_Amplitude.format,
-				size: textureGridSize,
-				usage: packed_Dx_plus_iDy_Dz_iDxdz_Amplitude.usage,
+				format: packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray.format,
+				size: textureExtent,
+				usage: packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray.usage,
 			});
 
 		const realizedAmplitudeGroup0 = device.createBindGroup({
@@ -370,16 +396,16 @@ export class FFTWaveSpectrumResources {
 				{
 					binding: 0,
 					resource:
-						packed_Dx_plus_iDy_Dz_iDxdz_Amplitude.createView(),
+						packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray.createView(),
 				},
 				{
 					binding: 1,
 					resource:
-						packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude.createView(),
+						packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_AmplitudeArray.createView(),
 				},
 				{
 					binding: 2,
-					resource: initialAmplitude.createView(),
+					resource: initialAmplitudeArray.createView(),
 				},
 			],
 		});
@@ -400,18 +426,18 @@ export class FFTWaveSpectrumResources {
 		});
 
 		return {
-			gaussianNoise: gaussianNoise,
-			initialAmplitude: initialAmplitude,
+			gaussianNoiseArray: gaussianNoiseArray,
+			initialAmplitudeArray: initialAmplitudeArray,
 			waveSettings: waveSettings,
 			initialAmplitudeGroup0: initialAmplitudeGroup0,
 			initialAmplitudeGroup1: initialAmplitudeGroup1,
-			packed_Dx_plus_iDy_Dz_iDxdz_Amplitude:
-				packed_Dx_plus_iDy_Dz_iDxdz_Amplitude,
-			packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude:
-				packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,
+			packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray:
+				packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray,
+			packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_AmplitudeArray:
+				packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_AmplitudeArray,
 			realizedAmplitudeGroup0: realizedAmplitudeGroup0,
 			realizedAmplitudeGroup1: realizedAmplitudeGroup1,
-		} satisfies FFTWaveCascade;
+		};
 	}
 
 	constructor(device: GPUDevice, globalUBO: GlobalUBO) {
@@ -425,15 +451,16 @@ export class FFTWaveSpectrumResources {
 					visibility: GPUShaderStage.COMPUTE,
 					storageTexture: {
 						format: INITIAL_AMPLITUDE_FORMAT,
+						viewDimension: "2d-array",
 						access: "write-only",
 					},
 				},
 				{
 					binding: 1,
 					visibility: GPUShaderStage.COMPUTE,
-					storageTexture: {
-						format: GAUSSIAN_NOISE_FORMAT,
-						access: "read-only",
+					texture: {
+						sampleType: "unfilterable-float",
+						viewDimension: "2d-array",
 					},
 				},
 			],
@@ -458,8 +485,6 @@ export class FFTWaveSpectrumResources {
 				},
 			],
 		});
-
-		this.dfftResources = new DFFTResources(device, LOG_2_GRID_SIZE);
 
 		const shaderModule = device.createShaderModule({
 			label: "FFT Wave",
@@ -491,6 +516,7 @@ export class FFTWaveSpectrumResources {
 					visibility: GPUShaderStage.COMPUTE,
 					storageTexture: {
 						format: FFT_IO_TEXTURE_FORMAT,
+						viewDimension: "2d-array",
 						access: "write-only",
 					},
 				},
@@ -499,15 +525,16 @@ export class FFTWaveSpectrumResources {
 					visibility: GPUShaderStage.COMPUTE,
 					storageTexture: {
 						format: FFT_IO_TEXTURE_FORMAT,
+						viewDimension: "2d-array",
 						access: "write-only",
 					},
 				},
 				{
 					binding: 2,
 					visibility: GPUShaderStage.COMPUTE,
-					storageTexture: {
-						format: INITIAL_AMPLITUDE_FORMAT,
-						access: "read-only",
+					texture: {
+						sampleType: "unfilterable-float",
+						viewDimension: "2d-array",
 					},
 				},
 			],
@@ -626,16 +653,19 @@ export class FFTWaveSpectrumResources {
 			};
 		});
 
-		const CASCADE_COUNT = CASCADE_PARAMETERS.length;
+		this.cascadeCount = CASCADE_PARAMETERS.length;
+
+		this.dfftResources = new DFFTResources(
+			device,
+			LOG_2_GRID_SIZE,
+			this.cascadeCount
+		);
+
 		this.Dx_Dy_Dz_Dxdz_SpatialArray = device.createTexture({
 			label: "FFT Wave Final Displacement Array",
 			format: DISPLACEMENT_FORMAT,
 			dimension: "2d",
-			size: {
-				width: this.gridSize,
-				height: this.gridSize,
-				depthOrArrayLayers: CASCADE_COUNT,
-			},
+			size: this.textureGridSize,
 			mipLevelCount: LOG_2_GRID_SIZE,
 			usage:
 				GPUTextureUsage.STORAGE_BINDING |
@@ -646,32 +676,26 @@ export class FFTWaveSpectrumResources {
 		this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray = device.createTexture({
 			label: "FFT Wave Final Derivatives Array",
 			format: this.Dx_Dy_Dz_Dxdz_SpatialArray.format,
-			size: {
-				width: this.Dx_Dy_Dz_Dxdz_SpatialArray.width,
-				height: this.Dx_Dy_Dz_Dxdz_SpatialArray.height,
-				depthOrArrayLayers:
-					this.Dx_Dy_Dz_Dxdz_SpatialArray.depthOrArrayLayers,
-			},
+			size: this.textureGridSize,
 			mipLevelCount: this.Dx_Dy_Dz_Dxdz_SpatialArray.mipLevelCount,
 			usage: this.Dx_Dy_Dz_Dxdz_SpatialArray.usage,
 		});
 
-		this.cascades = CASCADE_PARAMETERS.map((value) =>
-			this.createCascade(
-				device,
-				globalUBO,
-				value.patchExtentMeters,
-				value.waveNumberMinMax
-			)
+		this.cascades = this.createCascades(
+			device,
+			globalUBO,
+			CASCADE_PARAMETERS
 		);
 
 		// We need to fill rgba16float buffer with 1.0, there may be a better way
 		const ONE_IN_FLOAT16_AS_UINT = 15360;
+		const textureTexelCount =
+			this.textureGridSize.width *
+			this.textureGridSize.height *
+			this.textureGridSize.depthOrArrayLayers;
+
 		const turbulenceJacobianInitialBuffer = new Uint16Array(
-			this.Dx_Dy_Dz_Dxdz_SpatialArray.width *
-				this.Dx_Dy_Dz_Dxdz_SpatialArray.height *
-				this.Dx_Dy_Dz_Dxdz_SpatialArray.depthOrArrayLayers *
-				4
+			textureTexelCount * 4
 		).fill(ONE_IN_FLOAT16_AS_UINT);
 
 		this.turbulenceJacobianArrays = [0, 0]
@@ -679,18 +703,13 @@ export class FFTWaveSpectrumResources {
 				return device.createTexture({
 					label: `FFT Wave (Turbulence,Jacobian) Array ${index}`,
 					format: TURBULENCE_JACOBIAN_FORMAT,
-					size: {
-						width: this.Dx_Dy_Dz_Dxdz_SpatialArray.width,
-						height: this.Dx_Dy_Dz_Dxdz_SpatialArray.height,
-						depthOrArrayLayers:
-							this.Dx_Dy_Dz_Dxdz_SpatialArray.depthOrArrayLayers,
-					},
+					size: this.textureGridSize,
 					mipLevelCount: LOG_2_GRID_SIZE,
 					usage:
 						GPUTextureUsage.STORAGE_BINDING | // write to
 						GPUTextureUsage.TEXTURE_BINDING | // read from to accumulate turbulence
 						GPUTextureUsage.COPY_SRC | // mip map generation
-						GPUTextureUsage.COPY_DST, // initialize/wipe turbulence to 0
+						GPUTextureUsage.COPY_DST, // initialize/wipe turbulence to 1.0
 				});
 			})
 			.reduce<TurbulenceJacobianEntry[]>(
@@ -704,13 +723,7 @@ export class FFTWaveSpectrumResources {
 							rowsPerImage:
 								this.Dx_Dy_Dz_Dxdz_SpatialArray.height,
 						},
-						{
-							width: this.Dx_Dy_Dz_Dxdz_SpatialArray.width,
-							height: this.Dx_Dy_Dz_Dxdz_SpatialArray.height,
-							depthOrArrayLayers:
-								this.Dx_Dy_Dz_Dxdz_SpatialArray
-									.depthOrArrayLayers,
-						}
+						this.textureGridSize
 					);
 
 					const bindGroup = device.createBindGroup({
@@ -789,17 +802,19 @@ export class FFTWaveSpectrumResources {
 	 * @memberof FFTWaveSpectrumResources
 	 */
 	views(): FFTWaveSpectrumRenderables {
-		const cascade = this.cascades[0];
-
 		return {
-			gaussianNoise: new RenderOutputTexture(cascade.gaussianNoise),
-			initialAmplitude: new RenderOutputTexture(cascade.initialAmplitude),
+			gaussianNoise: new RenderOutputTexture(
+				this.cascades.gaussianNoiseArray
+			),
+			initialAmplitude: new RenderOutputTexture(
+				this.cascades.initialAmplitudeArray
+			),
 			packed_Dx_plus_iDy_Dz_iDxdz_Amplitude: new RenderOutputTexture(
-				cascade.packed_Dx_plus_iDy_Dz_iDxdz_Amplitude
+				this.cascades.packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray
 			),
 			packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude:
 				new RenderOutputTexture(
-					cascade.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude
+					this.cascades.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_AmplitudeArray
 				),
 			turbulenceJacobian: new RenderOutputTexture(
 				this.turbulenceJacobianArrays[0].textureArray
@@ -836,92 +851,87 @@ export class FFTWaveSpectrumResources {
 
 		if (settingsChanged) {
 			this.waveSettings = structuredClone(settings);
+
 			const passEncoder = commandEncoder.beginComputePass({
 				label: "FFT Wave Initial Amplitude",
 			});
 
-			this.cascades.forEach((cascade) => {
-				cascade.waveSettings.data.wave_swell =
-					this.waveSettings.waveSwell;
-				cascade.waveSettings.data.wind_fetch_meters =
-					this.waveSettings.windFetchMeters;
-				cascade.waveSettings.data.wind_speed_meters_per_second =
-					this.waveSettings.windSpeedMetersPerSeconds;
-				cascade.waveSettings.data.gravity = this.waveSettings.gravity;
+			const settingsUBO = this.cascades.waveSettings;
 
-				cascade.waveSettings.writeToGPU(device.queue);
+			settingsUBO.data.wave_swell = this.waveSettings.waveSwell;
+			settingsUBO.data.wind_fetch_meters =
+				this.waveSettings.windFetchMeters;
+			settingsUBO.data.wind_speed_meters_per_second =
+				this.waveSettings.windSpeedMetersPerSeconds;
+			settingsUBO.data.gravity = this.waveSettings.gravity;
 
-				passEncoder.setPipeline(this.initialAmplitudeKernel);
-				passEncoder.setBindGroup(0, cascade.initialAmplitudeGroup0);
-				passEncoder.setBindGroup(1, cascade.initialAmplitudeGroup1);
+			settingsUBO.writeToGPU(device.queue);
 
-				const dispatchSize = {
-					width: cascade.initialAmplitude.width,
-					height: cascade.initialAmplitude.height,
-					depth: cascade.initialAmplitude.depthOrArrayLayers,
-				};
+			passEncoder.setPipeline(this.initialAmplitudeKernel);
+			passEncoder.setBindGroup(0, this.cascades.initialAmplitudeGroup0);
+			passEncoder.setBindGroup(1, this.cascades.initialAmplitudeGroup1);
 
-				passEncoder.dispatchWorkgroups(
-					dispatchSize.width / 16,
-					dispatchSize.height / 16,
-					dispatchSize.depth / 1
-				);
-			});
+			const dispatchSize = this.textureGridSize;
+
+			passEncoder.dispatchWorkgroups(
+				dispatchSize.width / 16,
+				dispatchSize.height / 16,
+				dispatchSize.depthOrArrayLayers / 1
+			);
 
 			passEncoder.end();
 		}
 
-		const realizePassEncoder = commandEncoder.beginComputePass({
-			label: "FFT Wave Fourier Amplitude Realization",
-			timestampWrites:
-				timestampInterval !== undefined
-					? {
-							querySet: timestampInterval.querySet,
-							beginningOfPassWriteIndex:
-								timestampInterval.beginWriteIndex,
-					  }
-					: undefined,
-		});
-		this.cascades.forEach((cascade) => {
-			realizePassEncoder.setPipeline(this.realizedAmplitudeKernel);
-			realizePassEncoder.setBindGroup(0, cascade.realizedAmplitudeGroup0);
-			realizePassEncoder.setBindGroup(1, cascade.realizedAmplitudeGroup1);
+		{
+			const realizePassEncoder = commandEncoder.beginComputePass({
+				label: "FFT Wave Fourier Amplitude Realization",
+				timestampWrites:
+					timestampInterval !== undefined
+						? {
+								querySet: timestampInterval.querySet,
+								beginningOfPassWriteIndex:
+									timestampInterval.beginWriteIndex,
+						  }
+						: undefined,
+			});
 
-			const workgroupCounts = {
-				width: cascade.packed_Dx_plus_iDy_Dz_iDxdz_Amplitude.width,
-				height: cascade.packed_Dx_plus_iDy_Dz_iDxdz_Amplitude.height,
-				depth: 1,
-			};
+			realizePassEncoder.setPipeline(this.realizedAmplitudeKernel);
+			realizePassEncoder.setBindGroup(
+				0,
+				this.cascades.realizedAmplitudeGroup0
+			);
+			realizePassEncoder.setBindGroup(
+				1,
+				this.cascades.realizedAmplitudeGroup1
+			);
+
+			const dispatchSize = this.textureGridSize;
 
 			realizePassEncoder.dispatchWorkgroups(
-				workgroupCounts.width / 16,
-				workgroupCounts.height / 16,
-				workgroupCounts.depth / 1
+				dispatchSize.width / 16,
+				dispatchSize.height / 16,
+				dispatchSize.depthOrArrayLayers / 1
 			);
-		});
 
-		realizePassEncoder.end();
+			realizePassEncoder.end();
+		}
 
-		this.cascades.forEach((cascade, index) => {
-			this.dfftResources.recordPerform(
-				device,
-				commandEncoder,
-				cascade.packed_Dx_plus_iDy_Dz_iDxdz_Amplitude,
-				this.Dx_Dy_Dz_Dxdz_SpatialArray,
-				index,
-				true,
-				undefined
-			);
-			this.dfftResources.recordPerform(
-				device,
-				commandEncoder,
-				cascade.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,
-				this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray,
-				index,
-				true,
-				undefined
-			);
-		});
+		this.dfftResources.recordPerform(
+			device,
+			commandEncoder,
+			this.cascades.packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray,
+			this.Dx_Dy_Dz_Dxdz_SpatialArray,
+			true,
+			undefined
+		);
+		this.dfftResources.recordPerform(
+			device,
+			commandEncoder,
+			this.cascades.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_AmplitudeArray,
+			this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray,
+			true,
+			undefined
+		);
 
 		const accumulateTurbulencePass = commandEncoder.beginComputePass({
 			label: "Turbulence Accumulation",

@@ -85,7 +85,7 @@ fn precomputeDFFTInstructions(@builtin(global_invocation_id) global_id: vec3<u32
 @group(0) @binding(2) var<storage, read_write> buffer_0: array<vec4<f32>>;
 @group(0) @binding(3) var<storage, read_write> buffer_1: array<vec4<f32>>;
 @group(0) @binding(4) var<uniform> step_counter: u32;
-@group(0) @binding(5) var out_texture: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(5) var out_texture: texture_storage_2d_array<rgba16float, write>;
 
 fn complexMult(a: vec2<f32>, b: vec2<f32>) -> vec2<f32>
 {
@@ -97,9 +97,10 @@ fn complexMult2(a: vec4<f32>, b: vec4<f32>) -> vec4<f32>
 	return vec4<f32>(complexMult(a.xy, b.xy), complexMult(a.zw, b.zw));
 }
 
-fn bufferIndex(x: u32, y: u32) -> u32
+fn bufferIndex(x: u32, y: u32, z: u32) -> u32
 {
-	return x + y * u_parameters.size;
+	let size = u_parameters.size;
+	return x + y * size + z * size * size;
 }
 
 fn loadTwoPointDFT(major_index: u32) -> TwoPointDFT
@@ -116,7 +117,7 @@ fn loadTwoPointDFT(major_index: u32) -> TwoPointDFT
 * The final output will be in buffer_0 (since vertical + horizontal guarantees an even amount of ping-pongs)
 * Make sure step_counter is updated between steps, incrementing by one until 2 * log2(N)
 */
-@compute @workgroup_size(16, 16)
+@compute @workgroup_size(16, 16, 1)
 fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
 	// We need to bounce between buffers since each cell in each step relies on multiple cells from the previous step
@@ -131,21 +132,21 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 		let two_point_dft = loadTwoPointDFT(global_id.x);
 		if(ping_pong)
 		{
-			let lower_input = buffer_1[bufferIndex(two_point_dft.lower_index, global_id.y)];
-			let upper_input = buffer_1[bufferIndex(two_point_dft.upper_index, global_id.y)];
+			let lower_input = buffer_1[bufferIndex(two_point_dft.lower_index, global_id.y, global_id.z)];
+			let upper_input = buffer_1[bufferIndex(two_point_dft.upper_index, global_id.y, global_id.z)];
 
 			let result = lower_input + complexMult2(vec4<f32>(two_point_dft.twiddle, two_point_dft.twiddle), upper_input);
 
-			buffer_0[bufferIndex(global_id.x, global_id.y)] = result;
+			buffer_0[bufferIndex(global_id.x, global_id.y, global_id.z)] = result;
 		}
 		else
 		{
-			let lower_input = buffer_0[bufferIndex(two_point_dft.lower_index, global_id.y)];
-			let upper_input = buffer_0[bufferIndex(two_point_dft.upper_index, global_id.y)];
+			let lower_input = buffer_0[bufferIndex(two_point_dft.lower_index, global_id.y, global_id.z)];
+			let upper_input = buffer_0[bufferIndex(two_point_dft.upper_index, global_id.y, global_id.z)];
 
 			let result = lower_input + complexMult2(vec4<f32>(two_point_dft.twiddle, two_point_dft.twiddle), upper_input);
 
-			buffer_1[bufferIndex(global_id.x, global_id.y)] = result;
+			buffer_1[bufferIndex(global_id.x, global_id.y, global_id.z)] = result;
 		}
 	}
 	else
@@ -154,21 +155,21 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 		let two_point_dft = loadTwoPointDFT(global_id.y);
 		if(ping_pong)
 		{
-			let lower_input = buffer_1[bufferIndex(global_id.x, two_point_dft.lower_index)];
-			let upper_input = buffer_1[bufferIndex(global_id.x, two_point_dft.upper_index)];
+			let lower_input = buffer_1[bufferIndex(global_id.x, two_point_dft.lower_index, global_id.z)];
+			let upper_input = buffer_1[bufferIndex(global_id.x, two_point_dft.upper_index, global_id.z)];
 
 			let result = lower_input + complexMult2(vec4<f32>(two_point_dft.twiddle, two_point_dft.twiddle), upper_input);
 
-			buffer_0[bufferIndex(global_id.x, global_id.y)] = result;
+			buffer_0[bufferIndex(global_id.x, global_id.y, global_id.z)] = result;
 		}
 		else
 		{
-			let lower_input = buffer_0[bufferIndex(global_id.x, two_point_dft.lower_index)];
-			let upper_input = buffer_0[bufferIndex(global_id.x, two_point_dft.upper_index)];
+			let lower_input = buffer_0[bufferIndex(global_id.x, two_point_dft.lower_index, global_id.z)];
+			let upper_input = buffer_0[bufferIndex(global_id.x, two_point_dft.upper_index, global_id.z)];
 
 			let result = lower_input + complexMult2(vec4<f32>(two_point_dft.twiddle, two_point_dft.twiddle), upper_input);
 
-			buffer_1[bufferIndex(global_id.x, global_id.y)] = result;
+			buffer_1[bufferIndex(global_id.x, global_id.y, global_id.z)] = result;
 		}
 	}
 }
@@ -183,7 +184,7 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
  *
  * This sort of clustering occurs with how we process ocean waves, since our wave "origin" with the longest wavelength, highest frequency/energy waves is at (grid_size/2, grid_size/2)
  */
-@compute @workgroup_size(16, 16)
+@compute @workgroup_size(16, 16, 1)
 fn performSwapEvenSignsAndCopyToHalfPrecisionOutput(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
 	let ping_pong = (step_counter % 2u) == 1u;
@@ -192,11 +193,21 @@ fn performSwapEvenSignsAndCopyToHalfPrecisionOutput(@builtin(global_invocation_i
 
 	if(ping_pong)
 	{
-		textureStore(out_texture, global_id.xy, buffer_0[bufferIndex(global_id.x, global_id.y)] * factor);
+		textureStore(
+			out_texture,
+			global_id.xy,
+			global_id.z,
+			buffer_0[bufferIndex(global_id.x, global_id.y, global_id.z)] * factor
+		);
 	}
 	else
 	{
-		textureStore(out_texture, global_id.xy, buffer_1[bufferIndex(global_id.x, global_id.y)] * factor);
+		textureStore(
+			out_texture,
+			global_id.xy,
+			global_id.z,
+			buffer_1[bufferIndex(global_id.x, global_id.y, global_id.z)] * factor
+		);
 	}
 }
 

@@ -2,21 +2,27 @@
 //// INCLUDE types.inc.wgsl
 
 const PI = 3.141592653589793;
+const CASCADE_CAPACITY = 4u;
 
+struct CascadeUBO
+{
+	wave_number_min_max: vec2<f32>,
+	wave_patch_extent_meters: f32,
+	padding0: f32,
+}
 struct FourierWavesUBO
 {
 	fourier_grid_size: u32,
 	gravity: f32,
-	wave_patch_extent_meters: f32,
+	padding0: f32,
 	wave_period_seconds: f32,
 
 	wind_speed_meters_per_second: f32,
 	wind_fetch_meters: f32,
 	wave_swell: f32,
-	padding0: f32,
+	padding1: f32,
 
-	wave_number_min_max: vec2<f32>,
-	padding1: vec2<f32>,
+	cascades: array<CascadeUBO, CASCADE_CAPACITY>,
 }
 
 // Implementation derived from:
@@ -42,7 +48,11 @@ fn quantizeFrequency(frequency: f32, fundamental_frequency: f32) -> f32
 	return (multiple - fract(multiple)) * fundamental_frequency;
 }
 
-fn waveParameters(settings: ptr<uniform, FourierWavesUBO>, texel_coord: vec2<u32>) -> WaveParameters
+fn waveParameters(
+	settings: ptr<uniform, FourierWavesUBO>,
+	patch_extent_meters: f32,
+	texel_coord: vec2<u32>
+) -> WaveParameters
 {
 	var result: WaveParameters;
 
@@ -55,10 +65,11 @@ fn waveParameters(settings: ptr<uniform, FourierWavesUBO>, texel_coord: vec2<u32
 	if (QUANTIZED_FREQUENCIES)
 	{
 		let frequency_quantization_step = 2.0 * PI / (*settings).wave_period_seconds;
+		let non_quantized_fundamental_wave_number = 2.0 * PI / patch_extent_meters;
 		let fundamental_frequency = quantizeFrequency(
-			sqrt(g * 2.0 * PI / (*settings).wave_patch_extent_meters),
+			sqrt(g * non_quantized_fundamental_wave_number),
 			frequency_quantization_step
-			);
+		);
 		let fundamental_wave_number = fundamental_frequency * fundamental_frequency / g;
 		result.delta_wave_number = fundamental_wave_number;
 
@@ -74,7 +85,7 @@ fn waveParameters(settings: ptr<uniform, FourierWavesUBO>, texel_coord: vec2<u32
 	}
 	else
 	{
-		let fundamental_wave_number = 2.0 * PI / (*settings).wave_patch_extent_meters;
+		let fundamental_wave_number = 2.0 * PI / patch_extent_meters;
 		let fundamental_frequency = sqrt(g * fundamental_wave_number);
 		result.delta_wave_number = fundamental_wave_number;
 
@@ -151,31 +162,41 @@ fn waveDirectionalSpreading(settings: ptr<uniform, FourierWavesUBO>, frequency: 
 	return q * pow(abs(cos(angle / 2.0)), 2.0 * s);
 }
 
-@group(0) @binding(0) var out_initial_amplitude: texture_storage_2d<rg32float, write>;
-@group(0) @binding(1) var in_gaussian_random_pairs: texture_storage_2d<rg32float, read>;
+@group(0) @binding(0) var out_initial_amplitude: texture_storage_2d_array<rg32float, write>;
+@group(0) @binding(1) var in_gaussian_random_pairs: texture_2d_array<f32>;
 
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 @group(1) @binding(1) var<uniform> u_fourier_waves: FourierWavesUBO;
 
-@compute @workgroup_size(16, 16)
+@compute @workgroup_size(16, 16, 1)
 fn computeInitialAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
-    let texel_coord = vec2<u32>(global_id.xy);
+    let texel_coord: vec2<u32> = global_id.xy;
+	let array_layer: u32 = global_id.z;
     let size = textureDimensions(out_initial_amplitude);
-    if texel_coord.x >= size.x || texel_coord.y >= size.y {
+    if texel_coord.x >= size.x
+		|| texel_coord.y >= size.y
+		|| array_layer > textureNumLayers(out_initial_amplitude)
+	{
         return;
     }
 
-	let gaussian_pair = textureLoad(in_gaussian_random_pairs, texel_coord).xy;
-	let wave = waveParameters(&u_fourier_waves, texel_coord);
+	let gaussian_pair = textureLoad(in_gaussian_random_pairs, texel_coord, array_layer, 0).xy;
+	let wave = waveParameters(&u_fourier_waves, u_fourier_waves.cascades[array_layer].wave_patch_extent_meters, texel_coord);
+	let wave_number_min_max = u_fourier_waves.cascades[array_layer].wave_number_min_max;
 
 	if (abs(wave.wave_number) < wave.delta_wave_number
-		|| abs(wave.wave_number) < u_fourier_waves.wave_number_min_max.x
-		|| abs(wave.wave_number) > u_fourier_waves.wave_number_min_max.y
+		|| abs(wave.wave_number) < wave_number_min_max.x
+		|| abs(wave.wave_number) > wave_number_min_max.y
 	)
 	{
 		let amplitude = vec2<f32>(0.0, 0.0);
-		textureStore(out_initial_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));
+		textureStore(
+			out_initial_amplitude,
+			texel_coord,
+			array_layer,
+			vec4<f32>(amplitude, 0.0, 0.0)
+		);
 		return;
 	}
 
@@ -199,7 +220,12 @@ fn computeInitialAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
 		* gaussian_pair
 		* magnitude;
 
-	textureStore(out_initial_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));
+	textureStore(
+		out_initial_amplitude,
+		texel_coord,
+		array_layer,
+		vec4<f32>(amplitude, 0.0, 0.0)
+	);
 }
 
 
@@ -217,9 +243,9 @@ fn computeInitialAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
  *
  * Thus, we can pack two sets of inputs for the FFT into the same two input channels, and avoid a wasted output channel.
  */
-@group(0) @binding(0) var out_packed_Dx_plus_iDy_Dz_iDxdz_amplitude: texture_storage_2d<rgba32float, write>;
-@group(0) @binding(1) var out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitude: texture_storage_2d<rgba32float, write>;
-@group(0) @binding(2) var in_initial_amplitude: texture_storage_2d<rg32float, read>;
+@group(0) @binding(0) var out_packed_Dx_plus_iDy_Dz_iDxdz_amplitudeArray: texture_storage_2d_array<rgba32float, write>;
+@group(0) @binding(1) var out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitudeArray: texture_storage_2d_array<rgba32float, write>;
+@group(0) @binding(2) var in_initial_amplitude: texture_2d_array<f32>;
 
 /* Commented to avoid re-declaration
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
@@ -230,48 +256,57 @@ fn complexMult(a: vec2<f32>, b: vec2<f32>) -> vec2<f32>
 	return vec2<f32>(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x);
 }
 
-@compute @workgroup_size(16, 16)
+@compute @workgroup_size(16, 16, 1)
 fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
-	let texel_coord = vec2<u32>(global_id.xy);
-    let size = textureDimensions(out_packed_Dx_plus_iDy_Dz_iDxdz_amplitude);
-    if texel_coord.x >= size.x || texel_coord.y >= size.y {
+    let texel_coord: vec2<u32> = global_id.xy;
+	let array_layer: u32 = global_id.z;
+    let size = textureDimensions(in_initial_amplitude);
+    if texel_coord.x >= size.x
+		|| texel_coord.y >= size.y
+		|| array_layer > textureNumLayers(in_initial_amplitude)
+	{
         return;
     }
 
-	let wave = waveParameters(&u_fourier_waves, texel_coord);
+	let wave = waveParameters(&u_fourier_waves, u_fourier_waves.cascades[array_layer].wave_patch_extent_meters, texel_coord);
+	let wave_number_min_max = u_fourier_waves.cascades[array_layer].wave_number_min_max;
 
 	if (abs(wave.wave_number) < wave.delta_wave_number
-		|| abs(wave.wave_number) < u_fourier_waves.wave_number_min_max.x
-		|| abs(wave.wave_number) > u_fourier_waves.wave_number_min_max.y)
+		|| abs(wave.wave_number) < wave_number_min_max.x
+		|| abs(wave.wave_number) > wave_number_min_max.y
+	)
 	{
 		textureStore(
-			out_packed_Dx_plus_iDy_Dz_iDxdz_amplitude,
+			out_packed_Dx_plus_iDy_Dz_iDxdz_amplitudeArray,
 			texel_coord,
+			array_layer,
 			vec4<f32>(0.0)
 		);
 		textureStore(
-			out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitude,
+			out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitudeArray,
 			texel_coord,
+			array_layer,
 			vec4<f32>(0.0)
 		);
 		return;
 	}
 
-	let k_amplitude = textureLoad(in_initial_amplitude, texel_coord).xy;
+	let k_amplitude = textureLoad(in_initial_amplitude, texel_coord, array_layer, 0).xy;
 
 	let k_minus_coord = vec2<u32>(
 		(u_fourier_waves.fourier_grid_size - texel_coord.x) % u_fourier_waves.fourier_grid_size,
 		(u_fourier_waves.fourier_grid_size - texel_coord.y) % u_fourier_waves.fourier_grid_size
 	);
-	let k_minus_amplitude = textureLoad(in_initial_amplitude, k_minus_coord).xy;
+	let k_minus_amplitude = textureLoad(in_initial_amplitude, k_minus_coord, array_layer, 0).xy;
 	let k_minus_amplitude_conjugate = vec2<f32>(k_minus_amplitude.x, -k_minus_amplitude.y);
 
 	let phase = wave.frequency * u_global.time.time_seconds;
 	let exponential = vec2<f32>(cos(phase), sin(phase));
 	let exponential_conjugate = vec2<f32>(exponential.x, -exponential.y);
 
-	let Dy_amplitude = complexMult(exponential, k_amplitude) + complexMult(exponential_conjugate, k_minus_amplitude_conjugate);
+	let Dy_amplitude = complexMult(exponential, k_amplitude)
+		+ complexMult(exponential_conjugate, k_minus_amplitude_conjugate);
 
 	/*
 	 * For gerstner waves, displacement in x/z directions is based on the
@@ -314,13 +349,15 @@ fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
 	let iDzdz_amplitude = vec2<f32>(-Dzdz_amplitude.y, Dzdz_amplitude.x);
 
 	textureStore(
-		out_packed_Dx_plus_iDy_Dz_iDxdz_amplitude,
+		out_packed_Dx_plus_iDy_Dz_iDxdz_amplitudeArray,
 		texel_coord,
+		array_layer,
 		vec4<f32>(Dx_amplitude + iDy_amplitude, Dz_amplitude + iDxdz_amplitude)
 	);
 	textureStore(
-		out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitude,
+		out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitudeArray,
 		texel_coord,
+		array_layer,
 		vec4<f32>(Dydx_amplitude + iDydz_amplitude, Dxdx_amplitude + iDzdz_amplitude)
 	);
 }

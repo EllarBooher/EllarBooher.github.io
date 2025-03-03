@@ -129,6 +129,9 @@ class SkySeaApp implements RendererApp {
 			foamScale: number;
 			foamBias: number;
 		};
+		cameraSettings: {
+			renderFromOceanPOV: boolean;
+		};
 		fourierWavesSettings: FFTWavesSettings;
 		pauseGlobalTime: boolean;
 		renderOutputTransforms: Map<RenderOutput, RenderOutputTransform>;
@@ -439,6 +442,11 @@ class SkySeaApp implements RendererApp {
 					.disable()
 			);
 		});
+
+		const debugFolder = gui.addFolder("Debug").close();
+		debugFolder
+			.add(this.settings.cameraSettings, "renderFromOceanPOV")
+			.name("Render from Ocean POV");
 	}
 
 	constructor(
@@ -459,6 +467,9 @@ class SkySeaApp implements RendererApp {
 				fft: true,
 				foamScale: 15,
 				foamBias: 0.25,
+			},
+			cameraSettings: {
+				renderFromOceanPOV: true,
 			},
 			fourierWavesSettings: {
 				gravity: 9.8,
@@ -786,30 +797,59 @@ class SkySeaApp implements RendererApp {
 		const far = 1000;
 		const perspective = mat4.perspective(fov, aspectRatio, near, far);
 
-		const camera_pos = [0, 10, -20, 1];
-		const eye_target = [0, 0, 400, 1];
 		const world_up = [0, 1, 0, 1];
-		const view = mat4.lookAt(camera_pos, eye_target, world_up);
 
-		Object.assign<
-			typeof this.globalUBO.data.camera,
-			typeof this.globalUBO.data.camera
-		>(this.globalUBO.data.camera, {
-			invProj: mat4.inverse(perspective),
-			invView: mat4.inverse(view),
-			projView: mat4.mul(perspective, view),
-			position: vec4.create(...camera_pos),
-			forward: vec4.normalize(
-				vec4.create(...vec4.subtract(eye_target, camera_pos))
-			),
-		});
-		Object.assign<
-			typeof this.globalUBO.data.camera,
-			typeof this.globalUBO.data.camera
-		>(
-			this.globalUBO.data.ocean_camera,
-			structuredClone(this.globalUBO.data.camera)
-		);
+		{
+			const ocean_camera_pos = [0, 10, -20, 1];
+			const ocean_camera_target = [0, 0, 400, 1];
+			const ocean_view = mat4.lookAt(
+				ocean_camera_pos,
+				ocean_camera_target,
+				world_up
+			);
+
+			Object.assign<
+				typeof this.globalUBO.data.ocean_camera,
+				typeof this.globalUBO.data.ocean_camera
+			>(this.globalUBO.data.ocean_camera, {
+				invProj: mat4.inverse(perspective),
+				invView: mat4.inverse(ocean_view),
+				projView: mat4.mul(perspective, ocean_view),
+				position: vec4.create(...ocean_camera_pos),
+				forward: vec4.normalize(
+					vec4.create(
+						...vec4.subtract(ocean_camera_target, ocean_camera_pos)
+					)
+				),
+			});
+		}
+
+		if (this.settings.cameraSettings.renderFromOceanPOV) {
+			Object.assign<
+				typeof this.globalUBO.data.camera,
+				typeof this.globalUBO.data.camera
+			>(
+				this.globalUBO.data.camera,
+				structuredClone(this.globalUBO.data.ocean_camera)
+			);
+		} else {
+			const camera_pos = [40, 20, -40, 1];
+			const camera_target = [0, 0, 0, 1];
+			const view = mat4.lookAt(camera_pos, camera_target, world_up);
+
+			Object.assign<
+				typeof this.globalUBO.data.camera,
+				typeof this.globalUBO.data.camera
+			>(this.globalUBO.data.camera, {
+				invProj: mat4.inverse(perspective),
+				invView: mat4.inverse(view),
+				projView: mat4.mul(perspective, view),
+				position: vec4.create(...camera_pos),
+				forward: vec4.normalize(
+					vec4.create(...vec4.subtract(camera_target, camera_pos))
+				),
+			});
+		}
 	}
 
 	updateTime(deltaTimeMilliseconds: number) {

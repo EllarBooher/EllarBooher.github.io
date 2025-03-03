@@ -223,7 +223,13 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 {
 	var output : VertexOut;
 
-	let camera = u_global.camera;
+	/*
+	 * Note the usage of a separate camera. The camera for ocean surface
+	 * generation is decoupled from the final rendering POV camera. In normal
+	 * use it's the same, but for debugging and illustration it helps to render
+	 * the ocean surface from anywhere.
+	 */
+	let ocean_camera = u_global.ocean_camera;
 
 	let vert_coord = vec2<f32>(
 		f32(index % VERTEX_DIMENSION),
@@ -248,7 +254,14 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	let ndc_horizon_forward = (camera.proj_view * vec4<f32>(camera.forward.x, 0.0, camera.forward.z, 0.0));
 	*/
 
-	let ndc_horizon_forward = (camera.proj_view * vec4<f32>(camera.forward.x, 0.0, camera.forward.z, 0.0));
+	let ndc_horizon_forward =
+		ocean_camera.proj_view
+		* vec4<f32>(
+			ocean_camera.forward.x,
+			0.0,
+			ocean_camera.forward.z,
+			0.0
+		);
 
 	let ndc_min = vec2<f32>(-overlap.x, -overlap.y);
 	let ndc_max = vec2<f32>(overlap.x, ndc_horizon_forward.y / ndc_horizon_forward.w);
@@ -261,19 +274,19 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	let cell_world_position = projectNDCToOceanSurface(
 		ndc_space_coord,
 		vec2<f32>(0.0,0.0),
-		camera,
+		ocean_camera,
 		WAVE_NEUTRAL_PLANE
 	);
 	let neighbor_world_position = projectNDCToOceanSurface(
 		ndc_space_coord,
 		vec2<f32>(1.0) / f32(VERTEX_DIMENSION - 1u),
-		camera,
+		ocean_camera,
 		WAVE_NEUTRAL_PLANE
 	);
 	let pixel_neighbor_world_position = projectNDCToOceanSurface(
 		ndc_space_coord,
 		vec2<f32>(1.0) / u_settings.gbuffer_extent,
-		camera,
+		ocean_camera,
 		WAVE_NEUTRAL_PLANE
 	);
 
@@ -349,7 +362,10 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	let world_position = cell_world_position + displacement_result.displacement;
 
 	output.global_uv = global_uv;
+
     output.position = u_global.camera.proj_view * vec4<f32>(world_position, 1.0);
+    output.camera_distance = distance(u_global.camera.position.xyz, world_position);
+
 	// Unclipped depth didn't work (and requires a feature) so this is a workaround
 	output.position.z /= 1.001;
 
@@ -359,7 +375,6 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	// output.color = vec3<f32>(step(fract(50 * ndc_space_coord), vec2<f32>(0.1)),0.0);
  	// output.color = vec3<f32>(step(fract(1.0 * world_position.x), 0.05),0.0,0.0);
 
-    output.camera_distance = distance(u_global.camera.position.xyz, world_position);
 
 	output.cascade_1234_normal_weights = vec4<f32>(
 		cascade_normal_weights[0],

@@ -63,12 +63,13 @@ struct Time
 
 // All of these uniform values have identical lifetimes: they update before rendering for the frame, and are constant throughout
 // Thus we store everything together to simplify the bindings
-// Sizeof(GlobalUBO) = 128 + 32 + 256 + 16 = 432 (as of writing)
+// Sizeof(GlobalUBO) = 672 + 16 = 688 (as of writing)
 // Alignof(GlobalUBO) = 16
 struct GlobalUBO
 {
-	camera: Camera, // offset 128 + 32
-	atmosphere: Atmosphere, // offset 0
-	light: CelestialLight, // offset 128
-	time: Time, // offset 128 + 32 + 256
+	camera: Camera,           // offsets
+	ocean_camera: Camera,     // 0   + 256 = 256
+	atmosphere: Atmosphere,   // 256 + 256 = 512
+	light: CelestialLight,    // 512 + 128 = 640
+	time: Time,               // 640 + 32  = 672
 }

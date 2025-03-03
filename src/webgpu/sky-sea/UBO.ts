@@ -139,6 +139,7 @@ const SIZEOF_GPU_CAMERA = 256;
 const ALIGNOF_GPU_TIME = 16;
 const SIZEOF_GPU_TIME = 16;
 
+// https://gpuweb.github.io/gpuweb/wgsl/#roundup
 function wgpuRoundUp(k: number, n: number) {
 	return Math.ceil(n / k) * k;
 }
@@ -151,22 +152,31 @@ const ALIGNOF_GPU_GLOBAL_UBO = Math.max(
 );
 const SIZEOF_GPU_GLOBAL_UBO = wgpuRoundUp(
 	ALIGNOF_GPU_GLOBAL_UBO,
-	SIZEOF_GPU_ATMOSPHERE +
-		SIZEOF_GPU_CELESTIALLIGHT +
+	SIZEOF_GPU_CAMERA +
 		SIZEOF_GPU_CAMERA +
+		SIZEOF_GPU_ATMOSPHERE +
+		SIZEOF_GPU_CELESTIALLIGHT +
 		SIZEOF_GPU_TIME
 );
 
 export class GlobalUBO extends UBO {
 	public readonly data: {
+		ocean_camera: Camera;
+		camera: Camera;
 		atmosphere: Atmosphere;
 		light: CelestialLight;
-		camera: Camera;
 		time: Time;
 	} = {
 		atmosphere: atmosphereEarth(),
 		light: lightSun(),
 		camera: {
+			invProj: mat4.identity(),
+			invView: mat4.identity(),
+			projView: mat4.identity(),
+			position: vec4.create(0.0, 0.0, 0.0, 1.0),
+			forward: vec4.create(0.0, 0.0, -1.0, 0.0),
+		},
+		ocean_camera: {
 			invProj: mat4.identity(),
 			invView: mat4.identity(),
 			projView: mat4.identity(),
@@ -230,6 +240,16 @@ export class GlobalUBO extends UBO {
 			...mat2x4_zeroed,
 		]);
 
+		const oceanCamera = this.data.ocean_camera;
+		const oceanCameraPacked = new Float32Array([
+			...oceanCamera.invProj,
+			...oceanCamera.invView,
+			...oceanCamera.projView,
+			...oceanCamera.position,
+			...oceanCamera.forward,
+			...mat2x4_zeroed,
+		]);
+
 		const time = this.data.time;
 		const timePacked = new Float32Array([
 			...vec2_zeroed,
@@ -239,6 +259,7 @@ export class GlobalUBO extends UBO {
 
 		return new Float32Array([
 			...cameraPacked,
+			...oceanCameraPacked,
 			...atmospherePacked,
 			...lightPacked,
 			...timePacked,

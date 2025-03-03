@@ -780,26 +780,36 @@ class SkySeaApp implements RendererApp {
 		}
 	}
 
-	updateCamera(aspectRatio: number) {
+	updateCameras(aspectRatio: number) {
 		const fov = (60 * Math.PI) / 180;
 		const near = 0.1;
 		const far = 1000;
 		const perspective = mat4.perspective(fov, aspectRatio, near, far);
 
-		const camera_pos = [0, 10, -20];
-		const view = mat4.lookAt(camera_pos, [0, 0, 400], [0, 1, 0]);
+		const camera_pos = [0, 10, -20, 1];
+		const eye_target = [0, 0, 400, 1];
+		const world_up = [0, 1, 0, 1];
+		const view = mat4.lookAt(camera_pos, eye_target, world_up);
 
-		Object.assign(this.globalUBO.data.camera, {
+		Object.assign<
+			typeof this.globalUBO.data.camera,
+			typeof this.globalUBO.data.camera
+		>(this.globalUBO.data.camera, {
 			invProj: mat4.inverse(perspective),
 			invView: mat4.inverse(view),
 			projView: mat4.mul(perspective, view),
-			position: vec4.create(
-				camera_pos[0],
-				camera_pos[1],
-				camera_pos[2],
-				1.0
+			position: vec4.create(...camera_pos),
+			forward: vec4.normalize(
+				vec4.create(...vec4.subtract(eye_target, camera_pos))
 			),
 		});
+		Object.assign<
+			typeof this.globalUBO.data.camera,
+			typeof this.globalUBO.data.camera
+		>(
+			this.globalUBO.data.ocean_camera,
+			structuredClone(this.globalUBO.data.camera)
+		);
 	}
 
 	updateTime(deltaTimeMilliseconds: number) {
@@ -872,7 +882,7 @@ class SkySeaApp implements RendererApp {
 			}
 		}
 
-		this.updateCamera(aspectRatio);
+		this.updateCameras(aspectRatio);
 		this.updateTime(deltaTimeMilliseconds);
 		this.updateOrbit(deltaTimeMilliseconds);
 

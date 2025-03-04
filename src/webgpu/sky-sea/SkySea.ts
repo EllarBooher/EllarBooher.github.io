@@ -367,7 +367,7 @@ class SkySeaApp implements RendererApp {
 		oceanFolder
 			.add(this.settings.fourierWavesSettings, "windFetchMeters")
 			.name("Wind Fetch (m)")
-			.min(1000.0)
+			.min(10.0 * 1000.0)
 			.max(100.0 * 1000.0);
 		oceanFolder
 			.add(
@@ -376,7 +376,7 @@ class SkySeaApp implements RendererApp {
 			)
 			.name("Wind Speed (m/s)")
 			.min(0.01)
-			.max(100.0);
+			.max(50.0);
 
 		const outputTextureFolder = gui.addFolder("Output Transform").close();
 		outputTextureFolder

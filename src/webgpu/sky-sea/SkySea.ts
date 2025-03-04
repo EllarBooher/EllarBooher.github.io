@@ -209,25 +209,25 @@ class SkySeaApp implements RendererApp {
 	setupUI(gui: LilGUI) {
 		const outputTextureController = gui
 			.add(this.settings, "outputTexture", {
-				Scene: RenderOutput.Scene,
-				"Transmittance LUT": RenderOutput.TransmittanceLUT,
-				"Multiscatter LUT": RenderOutput.MultiscatterLUT,
-				"Skyview LUT": RenderOutput.SkyviewLUT,
-				"GBuffer Color": RenderOutput.GBufferColor,
-				"GBuffer Normal": RenderOutput.GBufferNormal,
-				"FFT Wave Gaussian Noise":
+				"Final Scene": RenderOutput.Scene,
+				"[GBuffer] Color": RenderOutput.GBufferColor,
+				"[GBuffer] Normal": RenderOutput.GBufferNormal,
+				"[Atmosphere] Transmittance LUT": RenderOutput.TransmittanceLUT,
+				"[Atmosphere] Multiscatter LUT": RenderOutput.MultiscatterLUT,
+				"[Atmosphere] Skyview LUT": RenderOutput.SkyviewLUT,
+				"[FFT Waves] Gaussian Noise":
 					RenderOutput.FFTWaveSpectrumGaussianNoise,
-				"FFT Wave Initial Amplitude":
+				"[FFT Waves] Initial Amplitude":
 					RenderOutput.FFTWaveInitialAmplitude,
-				"FFT Wave Frequency Domain (Dx + i * Dy, Dz + i * Dxdz)":
+				"[FFT Waves] Frequency Domain (Dx + i * Dy, Dz + i * Dxdz)":
 					RenderOutput.FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude,
-				"FFT Wave Frequency Domain (Dydx + i * Dydz, Dxdx + i * Dzdz)":
+				"[FFT Waves] Frequency Domain (Dydx + i * Dydz, Dxdx + i * Dzdz)":
 					RenderOutput.FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,
-				"FFT Wave (Turbulence, Jacobian)":
+				"[FFT Waves] (Turbulence, Jacobian)":
 					RenderOutput.FFTWaveTurbulenceJacobian,
-				"FFT Wave Spatial Domain (Dx, Dy, Dz, Dxdz)":
+				"[FFT Waves] Spatial Domain (Dx, Dy, Dz, Dxdz)":
 					RenderOutput.FFTWaveDx_Dy_Dz_Dxdz_Spatial,
-				"FFT Wave Spatial Domain (Dydx, Dydz, Dxdx, Dzdx)":
+				"[FFT Waves] Spatial Domain (Dydx, Dydz, Dxdx, Dzdx)":
 					RenderOutput.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial,
 			})
 			.name("Render Output")

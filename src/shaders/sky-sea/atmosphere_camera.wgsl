@@ -328,7 +328,13 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
 
     let color_with_surface_world_depth_in_alpha = textureLoad(gbuffer_color_with_surface_world_depth_in_alpha, texel_coord, 0);
     let normal_with_surface_foam_strength_in_alpha = textureLoad(gbuffer_normal_with_surface_foam_strength_in_alpha, texel_coord, 0);
-	let normal = normal_with_surface_foam_strength_in_alpha.xyz;
+	var normal = normal_with_surface_foam_strength_in_alpha.xyz;
+	if(dot(normal, -direction_world) < 0.0)
+	{
+		// Hack to construct a plausible normal from a back-facing normal
+		normal -= 2.0 * dot(normal, -direction_world) * (-direction_world);
+	}
+
 	let foam_strength = normal_with_surface_foam_strength_in_alpha.w;
 
     let depth = color_with_surface_world_depth_in_alpha.a / METERS_PER_MM;
@@ -366,7 +372,15 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
 			normal.xyz,
 			foam_strength
 		);
-        luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, true);
+		luminance_transfer = sampleGeometryLuminance(
+			&atmosphere,
+			&light,
+			material,
+			origin,
+			direction_world,
+			depth,
+			true
+		);
     }
 
     let luminance = light.strength * light.color * luminance_transfer;

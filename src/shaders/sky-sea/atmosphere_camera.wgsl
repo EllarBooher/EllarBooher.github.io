@@ -84,7 +84,7 @@ fn sampleSkyViewLUT(
 	// The artifacts are caused by aliasing in the the ray-sphere intersection with the planet
 	// The horizon will be rounded, and when the edges step it reveals gaps where texels below the horizon can be sampled from the skyview LUT, leading to patches of black.
 	// This offset may require tweaking depending on the various resolutions
-	const V_SAFE_OFFSET = 1.5;
+	const V_SAFE_OFFSET = 2.5;
 	let v_safe = (0.5 * f32(SKYVIEW_LUT_HEIGHT) - V_SAFE_OFFSET) / f32(SKYVIEW_LUT_HEIGHT);
 	v = min(v, v_safe);
 

@@ -131,6 +131,24 @@ class SkySeaApp implements RendererApp {
 		};
 		cameraSettings: {
 			renderFromOceanPOV: boolean;
+			oceanCamera: {
+				translationX: number;
+				translationY: number;
+				translationZ: number;
+				// Applied in order Y * X * Z
+				// Z first, X second, Y third
+				eulerAnglesX: number;
+				eulerAnglesY: number;
+				eulerAnglesZ: number;
+			};
+			debugCamera: {
+				translationX: number;
+				translationY: number;
+				translationZ: number;
+				eulerAnglesX: number;
+				eulerAnglesY: number;
+				eulerAnglesZ: number;
+			};
 		};
 		fourierWavesSettings: FFTWavesSettings;
 		pauseGlobalTime: boolean;
@@ -217,8 +235,43 @@ class SkySeaApp implements RendererApp {
 			.name("Average FPS")
 			.listen();
 
-		const oceanFolder = gui.addFolder("Ocean Parameters").open();
+		const cameraParameters = gui.addFolder("Camera").close();
+		cameraParameters
+			.add(this.settings.cameraSettings.oceanCamera, "translationX")
+			.name("Camera X")
+			.min(-100.0)
+			.max(100.0);
+		cameraParameters
+			.add(this.settings.cameraSettings.oceanCamera, "translationY")
+			.name("Camera Y")
+			.min(10.0)
+			.max(5000.0);
+		cameraParameters
+			.add(this.settings.cameraSettings.oceanCamera, "translationZ")
+			.name("Camera Z")
+			.min(-100.0)
+			.max(100.0);
 
+		const EULER_ANGLES_X_SAFETY_MARGIN = 0.01;
+		cameraParameters
+			.add(this.settings.cameraSettings.oceanCamera, "eulerAnglesX")
+			.name("Camera Pitch")
+			.min(-Math.PI / 2.0 + EULER_ANGLES_X_SAFETY_MARGIN)
+			.max(Math.PI / 2.0 - EULER_ANGLES_X_SAFETY_MARGIN);
+		cameraParameters
+			.add(this.settings.cameraSettings.oceanCamera, "eulerAnglesY")
+			.name("Camera Yaw")
+			.min(-Math.PI)
+			.max(Math.PI);
+		/* Non-zero camera roll breaks certain horizon calculations in shaders
+		cameraParameters
+			.add(this.settings.cameraSettings, "eulerAnglesZ")
+			.name("Camera Roll")
+			.min(-Math.PI)
+			.max(Math.PI);
+		*/
+
+		const oceanFolder = gui.addFolder("Ocean").close();
 		oceanFolder
 			.add(this.settings.oceanSurfaceSettings, "gerstner")
 			.name("Gerstner Waves");
@@ -261,7 +314,7 @@ class SkySeaApp implements RendererApp {
 			.min(0.01)
 			.max(100.0);
 
-		const sunFolder = gui.addFolder("Sun Parameters").open();
+		const sunFolder = gui.addFolder("Sun").close();
 
 		sunFolder
 			.add(this.settings.orbit, "timeHours")
@@ -447,6 +500,40 @@ class SkySeaApp implements RendererApp {
 		debugFolder
 			.add(this.settings.cameraSettings, "renderFromOceanPOV")
 			.name("Render from Ocean POV");
+
+		debugFolder
+			.add(this.settings.cameraSettings.debugCamera, "translationX")
+			.name("Camera X")
+			.min(-100.0)
+			.max(100.0);
+		debugFolder
+			.add(this.settings.cameraSettings.debugCamera, "translationY")
+			.name("Camera Y")
+			.min(-100.0)
+			.max(100.0);
+		debugFolder
+			.add(this.settings.cameraSettings.debugCamera, "translationZ")
+			.name("Camera Z")
+			.min(-100.0)
+			.max(100.0);
+
+		debugFolder
+			.add(this.settings.cameraSettings.debugCamera, "eulerAnglesX")
+			.name("Camera Pitch")
+			.min(-Math.PI / 2.0 + EULER_ANGLES_X_SAFETY_MARGIN)
+			.max(Math.PI / 2.0 - EULER_ANGLES_X_SAFETY_MARGIN);
+		debugFolder
+			.add(this.settings.cameraSettings.debugCamera, "eulerAnglesY")
+			.name("Camera Yaw")
+			.min(-Math.PI)
+			.max(Math.PI);
+		/* Non-zero camera roll breaks certain horizon calculations in shaders
+		debugFolder
+			.add(this.settings.cameraSettings.debugCamera, "eulerAnglesZ")
+			.name("Camera Roll")
+			.min(-Math.PI)
+			.max(Math.PI);
+		*/
 	}
 
 	constructor(
@@ -470,6 +557,22 @@ class SkySeaApp implements RendererApp {
 			},
 			cameraSettings: {
 				renderFromOceanPOV: true,
+				oceanCamera: {
+					translationX: 0.0,
+					translationY: 20.0,
+					translationZ: 0.0,
+					eulerAnglesX: -0.2,
+					eulerAnglesY: 0.0,
+					eulerAnglesZ: 0.0,
+				},
+				debugCamera: {
+					translationX: 0.0,
+					translationY: 40.0,
+					translationZ: -20.0,
+					eulerAnglesX: -0.4,
+					eulerAnglesY: 0.0,
+					eulerAnglesZ: 0.0,
+				},
 			},
 			fourierWavesSettings: {
 				gravity: 9.8,
@@ -489,7 +592,7 @@ class SkySeaApp implements RendererApp {
 				paused: false,
 				reversed: false,
 				inclinationRadians: Math.PI / 2,
-				sunsetAzimuthRadians: 0.0,
+				sunsetAzimuthRadians: Math.PI,
 			},
 			renderScale: 1.5,
 		};
@@ -797,28 +900,37 @@ class SkySeaApp implements RendererApp {
 		const far = 1000;
 		const perspective = mat4.perspective(fov, aspectRatio, near, far);
 
-		const world_up = [0, 1, 0, 1];
-
 		{
-			const ocean_camera_pos = [0, 10, -20, 1];
-			const ocean_camera_target = [0, 0, 400, 1];
-			const ocean_view = mat4.lookAt(
-				ocean_camera_pos,
-				ocean_camera_target,
-				world_up
+			const oceanCameraSettings =
+				this.settings.cameraSettings.oceanCamera;
+			const oceanCameraPos = [
+				oceanCameraSettings.translationX,
+				oceanCameraSettings.translationY,
+				oceanCameraSettings.translationZ,
+				1,
+			];
+			const rotationX = mat4.rotationX(oceanCameraSettings.eulerAnglesX);
+			const rotationY = mat4.rotationY(oceanCameraSettings.eulerAnglesY);
+			const rotationZ = mat4.rotationZ(oceanCameraSettings.eulerAnglesZ);
+
+			const oceanTransform = mat4.mul(
+				mat4.translation(vec4.create(...oceanCameraPos)),
+				mat4.mul(rotationY, mat4.mul(rotationX, rotationZ))
 			);
+			const oceanView = mat4.inverse(oceanTransform);
 
 			Object.assign<
 				typeof this.globalUBO.data.ocean_camera,
 				typeof this.globalUBO.data.ocean_camera
 			>(this.globalUBO.data.ocean_camera, {
 				invProj: mat4.inverse(perspective),
-				invView: mat4.inverse(ocean_view),
-				projView: mat4.mul(perspective, ocean_view),
-				position: vec4.create(...ocean_camera_pos),
-				forward: vec4.normalize(
-					vec4.create(
-						...vec4.subtract(ocean_camera_target, ocean_camera_pos)
+				invView: oceanTransform,
+				projView: mat4.mul(perspective, oceanView),
+				position: vec4.create(...oceanCameraPos),
+				forward: vec4.create(
+					...mat4.multiply(
+						oceanTransform,
+						vec4.create(0.0, 0.0, -1.0, 0.0)
 					)
 				),
 			});
@@ -833,20 +945,38 @@ class SkySeaApp implements RendererApp {
 				structuredClone(this.globalUBO.data.ocean_camera)
 			);
 		} else {
-			const camera_pos = [40, 20, -40, 1];
-			const camera_target = [0, 0, 0, 1];
-			const view = mat4.lookAt(camera_pos, camera_target, world_up);
+			const debugCameraSettings =
+				this.settings.cameraSettings.debugCamera;
+			const debugCameraPos = [
+				debugCameraSettings.translationX,
+				debugCameraSettings.translationY,
+				debugCameraSettings.translationZ,
+				1,
+			];
+			const rotationX = mat4.rotationX(debugCameraSettings.eulerAnglesX);
+			const rotationY = mat4.rotationY(debugCameraSettings.eulerAnglesY);
+			const rotationZ = mat4.rotationZ(debugCameraSettings.eulerAnglesZ);
+
+			const debugTransform = mat4.mul(
+				mat4.translation(vec4.create(...debugCameraPos)),
+				mat4.mul(rotationY, mat4.mul(rotationX, rotationZ))
+			);
+
+			const view = mat4.inverse(debugTransform);
 
 			Object.assign<
 				typeof this.globalUBO.data.camera,
 				typeof this.globalUBO.data.camera
 			>(this.globalUBO.data.camera, {
 				invProj: mat4.inverse(perspective),
-				invView: mat4.inverse(view),
+				invView: debugTransform,
 				projView: mat4.mul(perspective, view),
-				position: vec4.create(...camera_pos),
-				forward: vec4.normalize(
-					vec4.create(...vec4.subtract(camera_target, camera_pos))
+				position: vec4.create(...debugCameraPos),
+				forward: vec4.create(
+					...mat4.multiply(
+						debugTransform,
+						vec4.create(0.0, 0.0, -1.0, 0.0)
+					)
 				),
 			});
 		}

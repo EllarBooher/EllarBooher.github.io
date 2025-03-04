@@ -204,7 +204,8 @@ fn projectNDCToOceanSurface(
 	var world_position = camera.position.xyz + t * direction_world;
 	world_position.y = ocean_origin.y;
 
-	return world_position;
+	// let camera_forward_projected = vec3<f32>(camera.forward.x, 0.0, camera.forward.z);
+	return world_position; // - camera_forward_projected / max(length(camera_forward_projected),0.01) * 10.0;
 }
 
 struct VertexOut {
@@ -264,7 +265,7 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 		);
 
 	let ndc_min = vec2<f32>(-overlap.x, -overlap.y);
-	let ndc_max = vec2<f32>(overlap.x, ndc_horizon_forward.y / ndc_horizon_forward.w);
+	let ndc_max = vec2<f32>(overlap.x, min(ndc_horizon_forward.y / ndc_horizon_forward.w, overlap.y));
 
 	let ndc_space_coord = mix(ndc_min, ndc_max, vert_coord);
 

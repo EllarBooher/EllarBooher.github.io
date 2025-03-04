@@ -542,8 +542,8 @@ class SkySeaApp implements RendererApp {
 		debugFolder
 			.add(this.settings.cameraSettings.debugCamera, "translationY")
 			.name("Camera Y")
-			.min(-100.0)
-			.max(100.0);
+			.min(10.0)
+			.max(5000.0);
 		debugFolder
 			.add(this.settings.cameraSettings.debugCamera, "translationZ")
 			.name("Camera Z")
@@ -567,6 +567,27 @@ class SkySeaApp implements RendererApp {
 			.min(-Math.PI)
 			.max(Math.PI);
 		*/
+		debugFolder
+			.add(
+				{
+					fn: () => {
+						Object.assign<
+							typeof this.settings.cameraSettings.debugCamera,
+							typeof this.settings.cameraSettings.debugCamera
+						>(
+							this.settings.cameraSettings.debugCamera,
+							structuredClone(
+								this.settings.cameraSettings.oceanCamera
+							)
+						);
+						debugFolder.controllers.forEach((c) => {
+							c.updateDisplay();
+						});
+					},
+				},
+				"fn"
+			)
+			.name("Reset to match main camera");
 	}
 
 	constructor(

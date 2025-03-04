@@ -245,7 +245,7 @@ class SkySeaApp implements RendererApp {
 			.name("Average FPS")
 			.listen();
 
-		const cameraParameters = gui.addFolder("Camera").close();
+		const cameraParameters = gui.addFolder("Camera").open();
 		cameraParameters
 			.add(this.settings.cameraSettings.oceanCamera, "translationX")
 			.name("Camera X")
@@ -281,51 +281,7 @@ class SkySeaApp implements RendererApp {
 			.max(Math.PI);
 		*/
 
-		const oceanFolder = gui.addFolder("Ocean").close();
-		oceanFolder
-			.add(this.settings.oceanSurfaceSettings, "gerstner")
-			.name("Gerstner Waves");
-		oceanFolder
-			.add(this.settings.oceanSurfaceSettings, "fft")
-			.name("FFT Accelerated Waves");
-		oceanFolder.add(this.settings, "pauseGlobalTime").name("Pause Waves");
-		oceanFolder
-			.add(this.settings.oceanSurfaceSettings, "foamScale")
-			.name("Foam Scale")
-			.min(-30.0)
-			.max(30.0);
-		oceanFolder
-			.add(this.settings.oceanSurfaceSettings, "foamBias")
-			.name("Foam Bias")
-			.min(-1.0)
-			.max(1.0);
-
-		oceanFolder
-			.add(this.settings.fourierWavesSettings, "gravity")
-			.name("Gravity (m / s^2)")
-			.min(0.01)
-			.max(20.0);
-		oceanFolder
-			.add(this.settings.fourierWavesSettings, "waveSwell")
-			.name("Wave Swell")
-			.min(0.01)
-			.max(1.0);
-		oceanFolder
-			.add(this.settings.fourierWavesSettings, "windFetchMeters")
-			.name("Wind Fetch (m)")
-			.min(1000.0)
-			.max(100.0 * 1000.0);
-		oceanFolder
-			.add(
-				this.settings.fourierWavesSettings,
-				"windSpeedMetersPerSeconds"
-			)
-			.name("Wind Speed (m/s)")
-			.min(0.01)
-			.max(100.0);
-
-		const sunFolder = gui.addFolder("Sun").close();
-
+		const sunFolder = gui.addFolder("Sun").open();
 		sunFolder
 			.add(this.settings.orbit, "timeHours")
 			.min(0.0)
@@ -378,6 +334,49 @@ class SkySeaApp implements RendererApp {
 			.name("Sun Inclination")
 			.min(0.0)
 			.max(Math.PI);
+
+		const oceanFolder = gui.addFolder("Ocean").close();
+		oceanFolder
+			.add(this.settings.oceanSurfaceSettings, "gerstner")
+			.name("Gerstner Waves");
+		oceanFolder
+			.add(this.settings.oceanSurfaceSettings, "fft")
+			.name("FFT Accelerated Waves");
+		oceanFolder.add(this.settings, "pauseGlobalTime").name("Pause Waves");
+		oceanFolder
+			.add(this.settings.oceanSurfaceSettings, "foamScale")
+			.name("Foam Scale")
+			.min(-30.0)
+			.max(30.0);
+		oceanFolder
+			.add(this.settings.oceanSurfaceSettings, "foamBias")
+			.name("Foam Bias")
+			.min(-1.0)
+			.max(1.0);
+
+		oceanFolder
+			.add(this.settings.fourierWavesSettings, "gravity")
+			.name("Gravity (m / s^2)")
+			.min(0.01)
+			.max(20.0);
+		oceanFolder
+			.add(this.settings.fourierWavesSettings, "waveSwell")
+			.name("Wave Swell")
+			.min(0.01)
+			.max(1.0);
+		oceanFolder
+			.add(this.settings.fourierWavesSettings, "windFetchMeters")
+			.name("Wind Fetch (m)")
+			.min(1000.0)
+			.max(100.0 * 1000.0);
+		oceanFolder
+			.add(
+				this.settings.fourierWavesSettings,
+				"windSpeedMetersPerSeconds"
+			)
+			.name("Wind Speed (m/s)")
+			.min(0.01)
+			.max(100.0);
 
 		const outputTextureFolder = gui.addFolder("Output Transform").close();
 		outputTextureFolder

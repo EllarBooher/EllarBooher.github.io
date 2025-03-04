@@ -8,7 +8,8 @@ struct FullscreenQuadUBO
 {
     color_gain: vec4<f32>,
     vertex_scale: vec4<f32>,
-	padding0: vec2<f32>,
+	swap_ba_rg: u32,
+	channel_mask: u32,
 	array_layer: u32,
 	mip_level: u32,
 }
@@ -42,16 +43,54 @@ fn vertexMain(@builtin(vertex_index) index : u32) -> VertexOut
     return output;
 }
 
-@fragment
-fn fragmentMain(fragData: VertexOut) -> @location(0) vec4<f32>
+struct FragmentOut {
+	@location(0) color: vec4<f32>
+}
+
+fn doFragment(rgba: vec4<f32>) -> FragmentOut
 {
-    let color = u_fullscreen_quad.color_gain * textureSampleLevel(b_texture, b_sampler, fragData.uv, f32(u_fullscreen_quad.mip_level));
-    return vec4<f32>(color.xyz, 1.0);
+	var result: FragmentOut;
+	result.color = rgba;
+
+	if(u_fullscreen_quad.swap_ba_rg == 1)
+	{
+		result.color = result.color.barg;
+	}
+
+	result.color.r *= f32((u_fullscreen_quad.channel_mask & 1) > 0);
+	result.color.g *= f32((u_fullscreen_quad.channel_mask & 2) > 0);
+	result.color.b *= f32((u_fullscreen_quad.channel_mask & 4) > 0);
+
+	result.color *= u_fullscreen_quad.color_gain;
+
+	result.color.a = 1.0;
+
+	return result;
 }
 
 @fragment
-fn fragmentMainArray(fragData: VertexOut) -> @location(0) vec4<f32>
+fn fragmentMain(frag_interpolated: VertexOut) -> FragmentOut
 {
-    let color = u_fullscreen_quad.color_gain * textureSampleLevel(b_texture_array, b_sampler, fragData.uv, u_fullscreen_quad.array_layer, f32(u_fullscreen_quad.mip_level));
-    return vec4<f32>(color.xyz, 1.0);
+    return doFragment(
+		textureSampleLevel(
+			b_texture,
+			b_sampler,
+			frag_interpolated.uv,
+			f32(u_fullscreen_quad.mip_level)
+		)
+	);
+}
+
+@fragment
+fn fragmentMainArray(frag_interpolated: VertexOut) -> FragmentOut
+{
+	return doFragment(
+		textureSampleLevel(
+			b_texture_array,
+			b_sampler,
+			frag_interpolated.uv,
+			u_fullscreen_quad.array_layer,
+			f32(u_fullscreen_quad.mip_level)
+		)
+	);
 }

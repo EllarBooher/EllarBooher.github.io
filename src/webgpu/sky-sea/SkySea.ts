@@ -27,6 +27,12 @@ class RenderOutputTransform {
 		g: number;
 		b: number;
 	} = { r: 1.0, g: 1.0, b: 1.0 };
+	channelMasks: {
+		r: boolean;
+		g: boolean;
+		b: boolean;
+	} = { r: true, g: true, b: true };
+	swapBARG = false;
 	mipLevel = 0;
 	arrayLayer = 0;
 }
@@ -38,7 +44,11 @@ const RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES: ({
 })[] = [
 	{ id: RenderOutput.Scene },
 	{ id: RenderOutput.TransmittanceLUT, flip: true },
-	{ id: RenderOutput.MultiscatterLUT, flip: true },
+	{
+		id: RenderOutput.MultiscatterLUT,
+		flip: true,
+		colorGain: { r: 20.0, g: 20.0, b: 20.0 },
+	},
 	{ id: RenderOutput.SkyviewLUT, colorGain: { r: 8.0, g: 8.0, b: 8.0 } },
 	{ id: RenderOutput.GBufferColor },
 	{ id: RenderOutput.GBufferNormal },
@@ -390,7 +400,7 @@ class SkySeaApp implements RendererApp {
 			.listen();
 		outputTextureFolder
 			.add({ gain: 0.0 }, "gain")
-			.name("RGB")
+			.name("Uniform Scale")
 			.min(0.0)
 			.max(10000.0)
 			.onChange((v: number) => {
@@ -398,23 +408,39 @@ class SkySeaApp implements RendererApp {
 				this.settings.currentRenderOutputTransform.colorGain.g = v;
 				this.settings.currentRenderOutputTransform.colorGain.b = v;
 			});
+		const rMaskController = outputTextureFolder
+			.add(this.settings.currentRenderOutputTransform.channelMasks, "r")
+			.name("R")
+			.listen();
 		const rController = outputTextureFolder
 			.add(this.settings.currentRenderOutputTransform.colorGain, "r")
-			.name("R")
+			.name("")
 			.min(0.0)
 			.max(10000.0)
+			.listen();
+		const gMaskController = outputTextureFolder
+			.add(this.settings.currentRenderOutputTransform.channelMasks, "g")
+			.name("G")
 			.listen();
 		const gController = outputTextureFolder
 			.add(this.settings.currentRenderOutputTransform.colorGain, "g")
-			.name("G")
+			.name("")
 			.min(0.0)
 			.max(10000.0)
 			.listen();
+		const bMaskController = outputTextureFolder
+			.add(this.settings.currentRenderOutputTransform.channelMasks, "b")
+			.name("B")
+			.listen();
 		const bController = outputTextureFolder
 			.add(this.settings.currentRenderOutputTransform.colorGain, "b")
-			.name("B")
+			.name("")
 			.min(0.0)
 			.max(10000.0)
+			.listen();
+		outputTextureFolder
+			.add(this.settings.currentRenderOutputTransform, "swapBARG")
+			.name("Swap Blue-Alpha and Red-Green Pairs")
 			.listen();
 
 		outputTextureController.onChange((newValue: RenderOutput) => {
@@ -461,6 +487,13 @@ class SkySeaApp implements RendererApp {
 				this.settings.currentRenderOutputTransform.colorGain;
 			bController.object =
 				this.settings.currentRenderOutputTransform.colorGain;
+
+			rMaskController.object =
+				this.settings.currentRenderOutputTransform.channelMasks;
+			gMaskController.object =
+				this.settings.currentRenderOutputTransform.channelMasks;
+			bMaskController.object =
+				this.settings.currentRenderOutputTransform.channelMasks;
 		});
 
 		const renderOutput = this.renderOutputs.get(
@@ -1207,6 +1240,11 @@ class SkySeaApp implements RendererApp {
 			uboData.array_layer_u32 = Math.round(
 				renderOutputTransform.arrayLayer
 			);
+			uboData.channel_mask =
+				(renderOutputTransform.channelMasks.r ? 1 : 0) +
+				(renderOutputTransform.channelMasks.g ? 2 : 0) +
+				(renderOutputTransform.channelMasks.b ? 4 : 0);
+			uboData.swap_ba_rg = renderOutputTransform.swapBARG;
 
 			timestampIndexMapping.set(
 				FrametimeCategory.FullscreenQuad,

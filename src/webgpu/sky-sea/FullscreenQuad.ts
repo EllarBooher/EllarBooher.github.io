@@ -1,12 +1,13 @@
 import { UBO } from "./UBO";
 import { RenderOutput, TimestampQueryInterval } from "./Common";
 import FullscreenQuadPak from "../../shaders/sky-sea/fullscreen_quad.wgsl";
-import { Vec2, vec2, Vec4, vec4 } from "wgpu-matrix";
+import { Vec4, vec4 } from "wgpu-matrix";
 
 export class FullscreenQuadUBOData {
 	color_gain: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
 	vertex_scale: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
-	padding0: Vec2 = vec2.create();
+	swap_ba_rg = false;
+	channel_mask: number = 1 + 2 + 4;
 	array_layer_u32 = 0;
 	mip_level_u32 = 0;
 }
@@ -24,7 +25,8 @@ export class FullscreenQuadUBO extends UBO {
 
 		new Float32Array(buffer).set(this.data.color_gain, 0 / 4);
 		new Float32Array(buffer).set(this.data.vertex_scale, 16 / 4);
-		// padding0 byteOffset: 32 byteLength: 8
+		view.setUint32(32, this.data.swap_ba_rg ? 1 : 0, true);
+		view.setUint32(36, this.data.channel_mask, true);
 		view.setUint32(40, this.data.array_layer_u32, true);
 		view.setUint32(44, this.data.mip_level_u32, true);
 

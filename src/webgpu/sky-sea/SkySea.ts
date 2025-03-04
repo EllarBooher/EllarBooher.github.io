@@ -530,64 +530,74 @@ class SkySeaApp implements RendererApp {
 		});
 
 		const debugFolder = gui.addFolder("Debug").close();
+		const debugCameraControllers: LilController[] = [];
 		debugFolder
 			.add(this.settings.cameraSettings, "renderFromOceanPOV")
-			.name("Render from Ocean POV");
+			.name("Render from Ocean POV")
+			.onFinishChange((v: boolean) => {
+				debugCameraControllers.forEach((c) => {
+					c.enable(!v);
+				});
+			});
 
-		debugFolder
-			.add(this.settings.cameraSettings.debugCamera, "translationX")
-			.name("Camera X")
-			.min(-100.0)
-			.max(100.0);
-		debugFolder
-			.add(this.settings.cameraSettings.debugCamera, "translationY")
-			.name("Camera Y")
-			.min(10.0)
-			.max(5000.0);
-		debugFolder
-			.add(this.settings.cameraSettings.debugCamera, "translationZ")
-			.name("Camera Z")
-			.min(-100.0)
-			.max(100.0);
+		debugCameraControllers.push(
+			debugFolder
+				.add(this.settings.cameraSettings.debugCamera, "translationX")
+				.name("Camera X")
+				.min(-100.0)
+				.max(100.0),
+			debugFolder
+				.add(this.settings.cameraSettings.debugCamera, "translationY")
+				.name("Camera Y")
+				.min(10.0)
+				.max(5000.0),
+			debugFolder
+				.add(this.settings.cameraSettings.debugCamera, "translationZ")
+				.name("Camera Z")
+				.min(-100.0)
+				.max(100.0),
 
-		debugFolder
-			.add(this.settings.cameraSettings.debugCamera, "eulerAnglesX")
-			.name("Camera Pitch")
-			.min(-Math.PI / 2.0 + EULER_ANGLES_X_SAFETY_MARGIN)
-			.max(Math.PI / 2.0 - EULER_ANGLES_X_SAFETY_MARGIN);
-		debugFolder
-			.add(this.settings.cameraSettings.debugCamera, "eulerAnglesY")
-			.name("Camera Yaw")
-			.min(-Math.PI)
-			.max(Math.PI);
-		/* Non-zero camera roll breaks certain horizon calculations in shaders
+			debugFolder
+				.add(this.settings.cameraSettings.debugCamera, "eulerAnglesX")
+				.name("Camera Pitch")
+				.min(-Math.PI / 2.0 + EULER_ANGLES_X_SAFETY_MARGIN)
+				.max(Math.PI / 2.0 - EULER_ANGLES_X_SAFETY_MARGIN),
+			debugFolder
+				.add(this.settings.cameraSettings.debugCamera, "eulerAnglesY")
+				.name("Camera Yaw")
+				.min(-Math.PI)
+				.max(Math.PI),
+
+			/* Non-zero camera roll breaks certain horizon calculations in shaders
 		debugFolder
 			.add(this.settings.cameraSettings.debugCamera, "eulerAnglesZ")
 			.name("Camera Roll")
 			.min(-Math.PI)
-			.max(Math.PI);
+			.max(Math.PI),
 		*/
-		debugFolder
-			.add(
-				{
-					fn: () => {
-						Object.assign<
-							typeof this.settings.cameraSettings.debugCamera,
-							typeof this.settings.cameraSettings.debugCamera
-						>(
-							this.settings.cameraSettings.debugCamera,
-							structuredClone(
-								this.settings.cameraSettings.oceanCamera
-							)
-						);
-						debugFolder.controllers.forEach((c) => {
-							c.updateDisplay();
-						});
+			debugFolder
+				.add(
+					{
+						fn: () => {
+							Object.assign<
+								typeof this.settings.cameraSettings.debugCamera,
+								typeof this.settings.cameraSettings.debugCamera
+							>(
+								this.settings.cameraSettings.debugCamera,
+								structuredClone(
+									this.settings.cameraSettings.oceanCamera
+								)
+							);
+							debugFolder.controllers.forEach((c) => {
+								c.updateDisplay();
+							});
+						},
 					},
-				},
-				"fn"
-			)
-			.name("Reset to match main camera");
+					"fn"
+				)
+				.name("Reset to match main camera")
+		);
+		debugCameraControllers.forEach((c) => c.enable(false));
 	}
 
 	constructor(

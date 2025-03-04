@@ -204,8 +204,52 @@ fn projectNDCToOceanSurface(
 	var world_position = camera.position.xyz + t * direction_world;
 	world_position.y = ocean_origin.y;
 
-	// let camera_forward_projected = vec3<f32>(camera.forward.x, 0.0, camera.forward.z);
-	return world_position; // - camera_forward_projected / max(length(camera_forward_projected),0.01) * 10.0;
+	return world_position;
+}
+fn projectNDCToOceanSurfaceWithPivot(
+	ndc: vec2<f32>,
+	ndc_offset: vec2<f32>,
+	camera: Camera,
+	height: f32,
+	pivot: vec3<f32>,
+) -> vec3<f32>
+{
+	let world_position = projectNDCToOceanSurface(ndc, ndc_offset, camera, height);
+	let pivot_offset = world_position - pivot;
+	let pivot_distance = length(pivot_offset);
+
+	/*
+	 * Stretch all points away from a pivot, which should be some sort of
+	 * "center" of the projected ocean surface quad. This covers gaps at the
+	 * edges when waves grow too large, while being reactive to the shape of
+	 * the quad.
+	 *
+	 * Some other solutions that might work, but weren't chosen over this due
+	 * to being too complicated or difficult to make work nicely:
+	 * 		- stretch input NDC-space coordinates before projecting. This ends
+	 *		  up wasting many vertices in the distance, and compensating for
+	 *		  world space distance in ndc-space requires lots of back and forth
+	 * 		  conversions.
+	 *		- Some sort of offset based on the camera forward. This quickly
+	 *		  falls apart when the camera forward is close to the unperturbed
+	 *		  ocean surface normal/world-up, and handling that case separately
+	 *		  is messy since it is predicated on camera FOV, aspect ratio,
+	 *		  position, etc.
+	 */
+	const STRETCH_THRESHOLDS = vec2<f32>(1.0,10.0);
+	// Avoid the singularity near the pivot
+	if(pivot_distance < STRETCH_THRESHOLDS.x)
+	{
+		return world_position;
+	}
+	const STRETCH_ABSOLUTE_BIAS = 40.0;
+	let stretch_parameter = smoothstep(
+		STRETCH_THRESHOLDS.x,
+		STRETCH_THRESHOLDS.y,
+		pivot_distance
+	);
+	let stretch = ((pivot_distance + stretch_parameter * STRETCH_ABSOLUTE_BIAS) / pivot_distance);
+	return pivot + pivot_offset * stretch;
 }
 
 struct VertexOut {
@@ -237,7 +281,7 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 		f32(index / VERTEX_DIMENSION)
 	) / f32(VERTEX_DIMENSION - 1u);
 
-	let overlap = vec2<f32>(1.5);
+	let overlap = vec2<f32>(1.05);
 
 	/*
 	 * This assumes:
@@ -272,23 +316,33 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	let ocean_origin = vec3<f32>(0.0, WAVE_NEUTRAL_PLANE, 0.0);
 	let ocean_normal = vec3<f32>(0.0,1.0,0.0);
 
-	let cell_world_position = projectNDCToOceanSurface(
+	let center_position = projectNDCToOceanSurface(
+		mix(ndc_min, ndc_max, 0.5),
+		vec2<f32>(0.0,0.0),
+		ocean_camera,
+		WAVE_NEUTRAL_PLANE,
+	);
+
+	let cell_world_position = projectNDCToOceanSurfaceWithPivot(
 		ndc_space_coord,
 		vec2<f32>(0.0,0.0),
 		ocean_camera,
-		WAVE_NEUTRAL_PLANE
+		WAVE_NEUTRAL_PLANE,
+		center_position
 	);
-	let neighbor_world_position = projectNDCToOceanSurface(
+	let neighbor_world_position = projectNDCToOceanSurfaceWithPivot(
 		ndc_space_coord,
 		vec2<f32>(1.0) / f32(VERTEX_DIMENSION - 1u),
 		ocean_camera,
-		WAVE_NEUTRAL_PLANE
+		WAVE_NEUTRAL_PLANE,
+		center_position
 	);
-	let pixel_neighbor_world_position = projectNDCToOceanSurface(
+	let pixel_neighbor_world_position = projectNDCToOceanSurfaceWithPivot(
 		ndc_space_coord,
 		vec2<f32>(1.0) / u_settings.gbuffer_extent,
 		ocean_camera,
-		WAVE_NEUTRAL_PLANE
+		WAVE_NEUTRAL_PLANE,
+		center_position
 	);
 
 	var cascade_position_weights = array<f32, CASCADE_CAPACITY>(1,1,1,1);

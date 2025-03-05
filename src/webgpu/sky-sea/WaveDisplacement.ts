@@ -8,14 +8,17 @@ class WaveSurfaceDisplacementUBO extends UBO {
 	public readonly data: {
 		patch_world_half_extent: number;
 		b_gerstner: boolean;
-		b_fft: boolean;
+		b_displacement_map: boolean;
+		vertex_size: number;
+
 		gbuffer_extent: Vec2;
 		foam_scale: number;
 		foam_bias: number;
 	} = {
 		patch_world_half_extent: 50.0,
 		b_gerstner: true,
-		b_fft: true,
+		b_displacement_map: true,
+		vertex_size: 1000,
 		gbuffer_extent: vec2.create(1.0, 1.0),
 		foam_scale: 1.0,
 		foam_bias: 0.0,
@@ -37,8 +40,8 @@ class WaveSurfaceDisplacementUBO extends UBO {
 
 		view.setFloat32(0, this.data.patch_world_half_extent, true);
 		view.setUint32(4, this.data.b_gerstner ? 1 : 0, true);
-		view.setUint32(8, this.data.b_fft ? 1 : 0, true);
-		view.setFloat32(12, 0.0, true);
+		view.setUint32(8, this.data.b_displacement_map ? 1 : 0, true);
+		view.setUint32(12, this.data.vertex_size, true);
 
 		float32.set(this.data.gbuffer_extent, 4);
 		view.setFloat32(24, this.data.foam_scale, true);
@@ -51,11 +54,13 @@ class WaveSurfaceDisplacementUBO extends UBO {
 // Holds a compute pass for computing the displacement of a bunch of vertices,
 // then a graphics pass for rasterizing these vertices
 export class WaveSurfaceDisplacementPassResources {
+	private oceanSurfaceRasterizationPipeline: GPURenderPipeline;
+
 	/*
 	 * @group(0) @binding(0) var<uniform> u_settings: WaveSurfaceDisplacementUBO;
 	 * @group(0) @binding(1) var<uniform> u_global: GlobalUBO;
 	 */
-	group0: GPUBindGroup;
+	private group0: GPUBindGroup;
 
 	/*
 	 * @group(1) @binding(0) var displacement_map_sampler: sampler;
@@ -63,20 +68,17 @@ export class WaveSurfaceDisplacementPassResources {
 	 * @group(1) @binding(2) var Dydx_Dydz_Dxdx_Dzdz_spatial: texture_2d<f32>;
 	 * @group(1) @binding(3) var<uniform> u_waves: array<PlaneWave, WAVE_COUNT>;
 	 */
-	group1: GPUBindGroup;
+	private group1: GPUBindGroup;
 
-	group2ByTurbulenceMapIndex: GPUBindGroup[];
+	/*
+	 * @group(2) @binding(0) var turbulence_jacobian: texture_2d_array<f32>;
+	 */
+	private group2ByTurbulenceMapIndex: GPUBindGroup[];
 
-	settingsUBO: WaveSurfaceDisplacementUBO;
+	private settingsUBO: WaveSurfaceDisplacementUBO;
 
-	vertexDimension: number;
-	lodCount: number;
-	baseIndexCount: number;
-	mipLevelCount: number;
-
-	indices: GPUBuffer;
-
-	oceanSurfaceRasterizationPipeline: GPURenderPipeline;
+	private baseIndexCount: number;
+	private indices: GPUBuffer;
 
 	/**
 	 * Creates an instance of WaveSurfaceDisplacementPassResources.
@@ -96,20 +98,13 @@ export class WaveSurfaceDisplacementPassResources {
 		depthFormat: GPUTextureFormat,
 		displacementMaps: FFTWaveDisplacementMaps
 	) {
-		const VERTEX_DIMENSION = 1000;
+		// The number of vertices we use for the ocean surface mesh projected from screen space
+		const VERTEX_SIZE = 1024;
 
-		this.vertexDimension = VERTEX_DIMENSION;
-
-		// u32
-		const INDEX_SIZE_BYTES = 4;
-		const TRIANGLE_COUNT =
-			2 * (VERTEX_DIMENSION - 1) * (VERTEX_DIMENSION - 1);
+		const INDEX_SIZE_BYTES = 4; /* u32 */
+		const TRIANGLE_COUNT = 2 * (VERTEX_SIZE - 1) * (VERTEX_SIZE - 1);
 		const INDEX_COUNT = 3 * TRIANGLE_COUNT;
 		this.baseIndexCount = INDEX_COUNT;
-
-		// Each LOD quarters the triangle count (halves the span)
-		const LOD_COUNT = 10;
-		this.lodCount = LOD_COUNT;
 
 		this.indices = device.createBuffer({
 			size: INDEX_COUNT * INDEX_SIZE_BYTES,
@@ -120,16 +115,16 @@ export class WaveSurfaceDisplacementPassResources {
 		// Could use instancing instead of duplicating the indices, since these are all a bunch of quads
 		const indicesSource = new Uint32Array(INDEX_COUNT);
 		let indicesSourceOffset = 0;
-		for (let y = 0; y < VERTEX_DIMENSION - 1; y++) {
-			for (let x = 0; x < VERTEX_DIMENSION - 1; x++) {
+		for (let y = 0; y < VERTEX_SIZE - 1; y++) {
+			for (let x = 0; x < VERTEX_SIZE - 1; x++) {
 				// Looking at the grid from above we have 4 indices per cell of adjacent vertices
 				// y 2 3
 				// | 0 1
 				// ----x
 
-				const index0 = x + y * VERTEX_DIMENSION;
+				const index0 = x + y * VERTEX_SIZE;
 				const index1 = index0 + 1;
-				const index2 = index0 + VERTEX_DIMENSION;
+				const index2 = index0 + VERTEX_SIZE;
 				const index3 = index2 + 1;
 
 				const twoTriangleIndices = new Uint32Array([
@@ -260,6 +255,7 @@ export class WaveSurfaceDisplacementPassResources {
 		device.queue.writeBuffer(waves, 0, wavesFloats);
 
 		this.settingsUBO = new WaveSurfaceDisplacementUBO(device);
+		this.settingsUBO.data.vertex_size = VERTEX_SIZE;
 
 		const group1Layout = device.createBindGroupLayout({
 			label: "Wave Surface Displacement Group 1 Compute (Displacement Map)",
@@ -317,7 +313,6 @@ export class WaveSurfaceDisplacementPassResources {
 				},
 			],
 		});
-		this.mipLevelCount = displacementMaps.mipLevelCount;
 
 		const group2Layout = device.createBindGroupLayout({
 			entries: [
@@ -434,7 +429,7 @@ export class WaveSurfaceDisplacementPassResources {
 			? 100.0
 			: 300.0;
 		this.settingsUBO.data.b_gerstner = settings.gerstner;
-		this.settingsUBO.data.b_fft = settings.fft;
+		this.settingsUBO.data.b_displacement_map = settings.fft;
 		this.settingsUBO.data.foam_bias = settings.foamBias;
 		this.settingsUBO.data.gbuffer_extent = attachments.extent;
 		this.settingsUBO.data.foam_scale = settings.foamScale;

@@ -15,7 +15,7 @@ struct WaveSurfaceDisplacementUBO
 	patch_world_half_extent: f32,
 	b_gerstner: u32,
 	b_displacement_map: u32,
-	padding0: f32,
+	vertex_size: u32,
 
 	gbuffer_extent: vec2<f32>,
 	foam_scale: f32,
@@ -33,11 +33,6 @@ struct WaveSurfaceDisplacementUBO
 @group(2) @binding(0) var turbulence_jacobian: texture_2d_array<f32>;
 
 const PI = 3.141592653589793;
-
-const VERTEX_DIMENSION = 1000u;
-const VERTEX_COUNT = VERTEX_DIMENSION * VERTEX_DIMENSION;
-// const TRIANGLE_COUNT = 2u * (VERTEX_DIMENSION - 1u) * (VERTEX_DIMENSION - 1u);
-// const INDEX_COUNT = 3u * TRIANGLE_COUNT;
 
 const WAVE_COUNT = 12u;
 
@@ -261,9 +256,9 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	let ocean_camera = u_global.ocean_camera;
 
 	let vert_coord = vec2<f32>(
-		f32(index % VERTEX_DIMENSION),
-		f32(index / VERTEX_DIMENSION)
-	) / f32(VERTEX_DIMENSION - 1u);
+		f32(index % u_settings.vertex_size),
+		f32(index / u_settings.vertex_size)
+	) / f32(u_settings.vertex_size - 1u);
 
 	let overlap = vec2<f32>(1.05);
 
@@ -314,7 +309,7 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	);
 	let neighbor_world_position = projectNDCToOceanSurfaceWithPivot(
 		ndc_space_coord,
-		vec2<f32>(1.0) / f32(VERTEX_DIMENSION - 1u),
+		vec2<f32>(1.0) / f32(u_settings.vertex_size - 1u),
 		ocean_camera,
 		center_position
 	);

@@ -1,4 +1,4 @@
-var _e=Object.defineProperty;var me=(l,e,t)=>e in l?_e(l,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):l[e]=t;var a=(l,e,t)=>me(l,typeof e!="symbol"?e+"":e,t);import{m as M,v as A,a as x,b}from"./wgpu-matrix.module-BO3i1RYM.js";const oe=4;class E{constructor(e,t,r){a(this,"buffer");this.buffer=e.createBuffer({size:t*oe,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.UNIFORM,label:r})}writeToGPU(e){const t=this.packed();t.byteLength!=this.buffer.size&&console.warn(`GPUBuffer label: '${this.buffer.label}' uploaded with improper size. Expected: ${this.buffer.size} bytes, got ${t.byteLength} bytes.`),e.writeBuffer(this.buffer,0,t)}}function pe(){return{rayleighMm:{scattering:x.create(5.802,13.558,33.1),absorption:x.create(0,0,0),densityScale:.008},mieMm:{scattering:x.create(3.996,3.996,3.996),absorption:x.create(4.4,4.4,4.4),densityScale:.0012},ozoneMm:{scattering:x.create(0,0,0),absorption:x.create(.65,1.881,.085)},planetRadiusMm:6.36,atmosphereRadiusMm:6.42,groundAlbedo:x.create(.3*1,.3*.75,.3*.4)}}function he(){return{color:x.create(1,1,1),strength:60,forward:x.create(0,-1,0),angularRadius:16/60*(3.141592653589793/180)}}const fe=16,ge=128,ve=16,ye=32,be=16,Te=256,xe=16,we=16;function Se(l,e){return Math.ceil(e/l)*l}const ze=Math.max(fe,ve,be,xe),De=Se(ze,ge+ye+Te+we);class Me extends E{constructor(t){super(t,De/oe,"Global UBO");a(this,"data",{atmosphere:pe(),light:he(),camera:{invProj:M.identity(),invView:M.identity(),projView:M.identity(),position:A.create(0,0,0,1),forward:A.create(0,0,-1,0)},time:{timeSeconds:0,deltaTimeSeconds:0}})}packed(){const t=new Float32Array(2).fill(0),r=new Float32Array(4).fill(0),s=new Float32Array(4*2).fill(0),i=this.data.atmosphere,n=i.rayleighMm,o=i.mieMm,u=new Float32Array([...n.scattering,n.densityScale,...n.absorption,i.planetRadiusMm,...o.scattering,o.densityScale,...o.absorption,i.atmosphereRadiusMm,...i.groundAlbedo,0,...i.ozoneMm.scattering,0,...i.ozoneMm.absorption,0,...r]),c=this.data.light,_=new Float32Array([...c.color,c.strength,...c.forward,c.angularRadius]),d=this.data.camera,p=new Float32Array([...d.invProj,...d.invView,...d.projView,...d.position,...d.forward,...s]),h=this.data.time,g=new Float32Array([...t,h.timeSeconds,h.deltaTimeSeconds]);return new Float32Array([...p,...u,..._,...g])}}var m=(l=>(l[l.SkyviewLUT=0]="SkyviewLUT",l[l.TransmittanceLUT=1]="TransmittanceLUT",l[l.MultiscatterLUT=2]="MultiscatterLUT",l[l.Scene=3]="Scene",l[l.GBufferColor=4]="GBufferColor",l[l.GBufferNormal=5]="GBufferNormal",l[l.FFTWaveSpectrumGaussianNoise=6]="FFTWaveSpectrumGaussianNoise",l[l.FFTWaveInitialAmplitude=7]="FFTWaveInitialAmplitude",l[l.FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude=8]="FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude",l[l.FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude=9]="FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude",l[l.FFTWaveTurbulenceJacobian=10]="FFTWaveTurbulenceJacobian",l[l.FFTWaveDx_Dy_Dz_Dxdz_Spatial=11]="FFTWaveDx_Dy_Dz_Dxdz_Spatial",l[l.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial=12]="FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial",l))(m||{});class T{constructor(e){a(this,"texture");a(this,"view");this.texture=e,this.view=e.createView({label:`Render Output View for '${e.label}'`,dimension:this.depthOrArrayLayerCount>1?"2d-array":"2d",arrayLayerCount:this.depthOrArrayLayerCount,baseArrayLayer:0})}get mipLevelCount(){return this.texture.mipLevelCount}get depthOrArrayLayerCount(){return this.texture.depthOrArrayLayers}}const $="rgba16float",Ae="float",Ue="depth32float",Z="rgba16float",Ee="float";class ee{constructor(e,t,r){a(this,"colorWithSurfaceWorldDepthInAlpha");a(this,"colorWithSurfaceWorldDepthInAlphaView");a(this,"normalWithSurfaceFoamStrengthInAlpha");a(this,"normalWithSurfaceFoamStrengthInAlphaView");a(this,"depth");a(this,"depthView");a(this,"readGroupLayout");a(this,"readGroup");a(this,"writeGroupLayout");a(this,"writeGroup");this.colorWithSurfaceWorldDepthInAlpha=e.createTexture({size:t,dimension:"2d",format:$,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING,label:"GBuffer ColorWithSurfaceWorldDepthInAlpha"}),this.colorWithSurfaceWorldDepthInAlphaView=this.colorWithSurfaceWorldDepthInAlpha.createView({label:"GBuffer ColorWithSurfaceWorldDepthInAlpha"}),this.normalWithSurfaceFoamStrengthInAlpha=e.createTexture({size:t,dimension:"2d",format:Z,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING,label:"GBuffer Normal"}),this.normalWithSurfaceFoamStrengthInAlphaView=this.normalWithSurfaceFoamStrengthInAlpha.createView({label:"GBuffer Normal"}),this.readGroupLayout=(r==null?void 0:r.readGroupLayout)??e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE|GPUShaderStage.FRAGMENT,texture:{sampleType:Ae}},{binding:1,visibility:GPUShaderStage.COMPUTE|GPUShaderStage.FRAGMENT,texture:{sampleType:Ee}}],label:"GBuffer Read Group Layout"}),this.readGroup=e.createBindGroup({layout:this.readGroupLayout,entries:[{binding:0,resource:this.colorWithSurfaceWorldDepthInAlphaView},{binding:1,resource:this.normalWithSurfaceFoamStrengthInAlphaView}],label:"GBuffer Read Group"}),this.writeGroupLayout=(r==null?void 0:r.writeGroupLayout)??e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE|GPUShaderStage.FRAGMENT,storageTexture:{access:"write-only",format:$}},{binding:1,visibility:GPUShaderStage.COMPUTE|GPUShaderStage.FRAGMENT,storageTexture:{access:"write-only",format:Z}}],label:"GBuffer Write Group Layout"}),this.writeGroup=e.createBindGroup({layout:this.writeGroupLayout,entries:[{binding:0,resource:this.colorWithSurfaceWorldDepthInAlphaView},{binding:1,resource:this.normalWithSurfaceFoamStrengthInAlphaView}],label:"GBuffer Write Group"}),this.depth=e.createTexture({size:t,dimension:"2d",format:Ue,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING,label:"GBuffer Depth"}),this.depthView=this.depth.createView({label:"GBuffer Depth"})}}const Re=`// Sizeof(Atmosphere) = 8 * 16 = 128
+var pe=Object.defineProperty;var he=(c,e,t)=>e in c?pe(c,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):c[e]=t;var a=(c,e,t)=>he(c,typeof e!="symbol"?e+"":e,t);import{m as h,v as S,a as z,b as M}from"./wgpu-matrix.module-BO3i1RYM.js";const ce=4;class P{constructor(e,t,r){a(this,"buffer");this.buffer=e.createBuffer({size:t*ce,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.UNIFORM,label:r})}writeToGPU(e){const t=this.packed();t.byteLength!=this.buffer.size&&console.warn(`GPUBuffer label: '${this.buffer.label}' uploaded with improper size. Expected: ${this.buffer.size} bytes, got ${t.byteLength} bytes.`),e.writeBuffer(this.buffer,0,t)}}function fe(){return{rayleighMm:{scattering:z.create(5.802,13.558,33.1),absorption:z.create(0,0,0),densityScale:.008},mieMm:{scattering:z.create(3.996,3.996,3.996),absorption:z.create(4.4,4.4,4.4),densityScale:.0012},ozoneMm:{scattering:z.create(0,0,0),absorption:z.create(.65,1.881,.085)},planetRadiusMm:6.36,atmosphereRadiusMm:6.42,groundAlbedo:z.create(.3*1,.3*.75,.3*.4)}}function ge(){return{color:z.create(1,1,1),strength:60,forward:z.create(0,-1,0),angularRadius:16/60*(3.141592653589793/180)}}const ve=16,ye=128,be=16,Te=32,xe=16,$=256,we=16,Se=16;function Me(c,e){return Math.ceil(e/c)*c}const ze=Math.max(ve,be,xe,we),Ae=Me(ze,$+$+ye+Te+Se);class Ue extends P{constructor(t){super(t,Ae/ce,"Global UBO");a(this,"data",{atmosphere:fe(),light:ge(),camera:{invProj:h.identity(),invView:h.identity(),projView:h.identity(),position:S.create(0,0,0,1),forward:S.create(0,0,-1,0)},ocean_camera:{invProj:h.identity(),invView:h.identity(),projView:h.identity(),position:S.create(0,0,0,1),forward:S.create(0,0,-1,0)},time:{timeSeconds:0,deltaTimeSeconds:0}})}packed(){const t=new Float32Array(2).fill(0),r=new Float32Array(4).fill(0),i=new Float32Array(4*2).fill(0),n=this.data.atmosphere,s=n.rayleighMm,o=n.mieMm,l=new Float32Array([...s.scattering,s.densityScale,...s.absorption,n.planetRadiusMm,...o.scattering,o.densityScale,...o.absorption,n.atmosphereRadiusMm,...n.groundAlbedo,0,...n.ozoneMm.scattering,0,...n.ozoneMm.absorption,0,...r]),u=this.data.light,d=new Float32Array([...u.color,u.strength,...u.forward,u.angularRadius]),m=this.data.camera,v=new Float32Array([...m.invProj,...m.invView,...m.projView,...m.position,...m.forward,...i]),b=this.data.ocean_camera,T=new Float32Array([...b.invProj,...b.invView,...b.projView,...b.position,...b.forward,...i]),x=this.data.time,f=new Float32Array([...t,x.timeSeconds,x.deltaTimeSeconds]);return new Float32Array([...v,...T,...l,...d,...f])}}var _=(c=>(c[c.AtmosphereSkyviewLUT=0]="AtmosphereSkyviewLUT",c[c.AtmosphereTransmittanceLUT=1]="AtmosphereTransmittanceLUT",c[c.AtmosphereMultiscatterLUT=2]="AtmosphereMultiscatterLUT",c[c.AtmosphereAerialPerspectiveLUT=3]="AtmosphereAerialPerspectiveLUT",c[c.Scene=4]="Scene",c[c.GBufferColor=5]="GBufferColor",c[c.GBufferNormal=6]="GBufferNormal",c[c.FFTWaveSpectrumGaussianNoise=7]="FFTWaveSpectrumGaussianNoise",c[c.FFTWaveInitialAmplitude=8]="FFTWaveInitialAmplitude",c[c.FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude=9]="FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude",c[c.FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude=10]="FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude",c[c.FFTWaveTurbulenceJacobian=11]="FFTWaveTurbulenceJacobian",c[c.FFTWaveDx_Dy_Dz_Dxdz_Spatial=12]="FFTWaveDx_Dy_Dz_Dxdz_Spatial",c[c.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial=13]="FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial",c))(_||{});class w{constructor(e){a(this,"texture");a(this,"view");a(this,"viewDimension");this.texture=e;let t=1,r=this.texture.dimension;this.texture.dimension=="2d"&&this.texture.depthOrArrayLayers>1&&(t=this.texture.depthOrArrayLayers,r="2d-array"),this.viewDimension=r,this.view=e.createView({label:`Render Output View for '${e.label}'`,dimension:this.viewDimension,arrayLayerCount:t,baseArrayLayer:0})}get mipLevelCount(){return this.texture.mipLevelCount}get depthOrArrayLayerCount(){return this.texture.depthOrArrayLayers}}const J="rgba16float",Ee="float",Re="depth32float",Z="rgba16float",De="float";class ee{constructor(e,t,r){a(this,"colorWithSurfaceWorldDepthInAlpha");a(this,"colorWithSurfaceWorldDepthInAlphaView");a(this,"normalWithSurfaceFoamStrengthInAlpha");a(this,"normalWithSurfaceFoamStrengthInAlphaView");a(this,"depth");a(this,"depthView");a(this,"readGroupLayout");a(this,"readGroup");a(this,"writeGroupLayout");a(this,"writeGroup");this.colorWithSurfaceWorldDepthInAlpha=e.createTexture({size:t,dimension:"2d",format:J,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING,label:"GBuffer ColorWithSurfaceWorldDepthInAlpha"}),this.colorWithSurfaceWorldDepthInAlphaView=this.colorWithSurfaceWorldDepthInAlpha.createView({label:"GBuffer ColorWithSurfaceWorldDepthInAlpha"}),this.normalWithSurfaceFoamStrengthInAlpha=e.createTexture({size:t,dimension:"2d",format:Z,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING,label:"GBuffer Normal"}),this.normalWithSurfaceFoamStrengthInAlphaView=this.normalWithSurfaceFoamStrengthInAlpha.createView({label:"GBuffer Normal"}),this.readGroupLayout=(r==null?void 0:r.readGroupLayout)??e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE|GPUShaderStage.FRAGMENT,texture:{sampleType:Ee}},{binding:1,visibility:GPUShaderStage.COMPUTE|GPUShaderStage.FRAGMENT,texture:{sampleType:De}}],label:"GBuffer Read Group Layout"}),this.readGroup=e.createBindGroup({layout:this.readGroupLayout,entries:[{binding:0,resource:this.colorWithSurfaceWorldDepthInAlphaView},{binding:1,resource:this.normalWithSurfaceFoamStrengthInAlphaView}],label:"GBuffer Read Group"}),this.writeGroupLayout=(r==null?void 0:r.writeGroupLayout)??e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE|GPUShaderStage.FRAGMENT,storageTexture:{access:"write-only",format:J}},{binding:1,visibility:GPUShaderStage.COMPUTE|GPUShaderStage.FRAGMENT,storageTexture:{access:"write-only",format:Z}}],label:"GBuffer Write Group Layout"}),this.writeGroup=e.createBindGroup({layout:this.writeGroupLayout,entries:[{binding:0,resource:this.colorWithSurfaceWorldDepthInAlphaView},{binding:1,resource:this.normalWithSurfaceFoamStrengthInAlphaView}],label:"GBuffer Write Group"}),this.depth=e.createTexture({size:t,dimension:"2d",format:Re,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING,label:"GBuffer Depth"}),this.depthView=this.depth.createView({label:"GBuffer Depth"})}}const Pe=`// Sizeof(Atmosphere) = 8 * 16 = 128
 // Alignof(Atmosphere) = 16
 struct Atmosphere
 {
@@ -63,14 +63,97 @@ struct Time
 
 // All of these uniform values have identical lifetimes: they update before rendering for the frame, and are constant throughout
 // Thus we store everything together to simplify the bindings
-// Sizeof(GlobalUBO) = 128 + 32 + 256 + 16 = 432 (as of writing)
+// Sizeof(GlobalUBO) = 672 + 16 = 688 (as of writing)
 // Alignof(GlobalUBO) = 16
 struct GlobalUBO
 {
-	camera: Camera, // offset 128 + 32
-	atmosphere: Atmosphere, // offset 0
-	light: CelestialLight, // offset 128
-	time: Time, // offset 128 + 32 + 256
+	camera: Camera,           // offsets
+	ocean_camera: Camera,     // 0   + 256 = 256
+	atmosphere: Atmosphere,   // 256 + 256 = 512
+	light: CelestialLight,    // 512 + 128 = 640
+	time: Time,               // 640 + 32  = 672
+}
+
+struct RaySphereHit
+{
+    hit: bool,
+    t0: f32,
+    t1: f32,
+}
+
+// t1 > t0, values can be negative. Function returns true even if the sphere is behind the ray.
+// If this returns false, t0 and t1 are unchanged.
+fn raySphereIntersection(
+    ray_origin: vec3<f32>,
+    ray_direction_normalized: vec3<f32>,
+    radius: f32
+) -> RaySphereHit
+{
+    // Method taken from "Precision Improvements for Ray/Sphere Intersection"
+    // by Eric Haines, Johannes Günther, and Tomas Akenine-Möller
+    //
+    // The method includes tricks to reduce float point inaccuracy errors.
+
+    let f: vec3<f32> = ray_origin;
+    let d: vec3<f32> = ray_direction_normalized;
+    let b: f32 = -1.0 * dot(f, d);
+    let center_to_intersection_chord: vec3<f32> = f + b * d;
+    let discriminant: f32 = radius * radius - dot(center_to_intersection_chord, center_to_intersection_chord);
+    let c: f32 = dot(f, f) - radius * radius;
+
+    var output : RaySphereHit;
+    output.hit = false;
+    output.t0 = 0.0;
+    output.t1 = 0.0;
+
+    if (discriminant < 0.0)
+    {
+        return output;
+    }
+
+    var q: f32 = b;
+    if (b < 0.0)
+    {
+        q -= sqrt(discriminant);
+    }
+    else
+    {
+        q += sqrt(discriminant);
+    }
+
+    output.hit = true;
+    output.t0 = c / q;
+    output.t1 = q;
+
+    if (output.t0 > output.t1)
+    {
+        let temp: f32 = output.t0;
+        output.t0 = output.t1;
+        output.t1 = temp;
+    }
+
+    return output;
+}
+
+struct RayPlaneHit {
+	hit: bool,
+	t: f32,
+}
+
+fn rayPlaneIntersection(
+	ray_origin: vec3<f32>,
+	ray_direction: vec3<f32>,
+	plane_origin: vec3<f32>,
+	plane_normal: vec3<f32>
+) -> RayPlaneHit
+{
+	var result: RayPlaneHit;
+
+	let perp = dot(plane_normal, ray_direction);
+	result.t = dot(plane_origin - ray_origin, plane_normal) / perp;
+	result.hit = (abs(perp) > 0.00001) && (result.t > 0.0);
+
+	return result;
 }
 
 
@@ -95,6 +178,8 @@ const MULTISCATTER_LUT_HEIGHT = 1024u;
 
 const SKYVIEW_LUT_WIDTH = 1024u;
 const SKYVIEW_LUT_HEIGHT = 512u;
+
+const AERIAL_PERSPECTIVE_MM_PER_SLICE = 0.001;
 
 const METERS_PER_MM: f32 = 1000000;
 const PI: f32 = 3.141592653589793;
@@ -368,67 +453,6 @@ fn sampleExtinction(atmosphere: ptr<function,Atmosphere>, altitude_Mm: f32) -> E
     extinction_sample.extinction = extinction_sample.scattering + absorption_rayleigh + absorption_mie + absorption_ozone;
 
     return extinction_sample;
-}
-
-struct RaySphereHit
-{
-    hit: bool,
-    t0: f32,
-    t1: f32,
-}
-
-// t1 > t0, values can be negative. Function returns true even if the sphere is behind the ray.
-// If this returns false, t0 and t1 are unchanged.
-fn raySphereIntersection(
-    ray_origin: vec3<f32>,
-    ray_direction_normalized: vec3<f32>,
-    radius: f32
-) -> RaySphereHit
-{
-    // Method taken from "Precision Improvements for Ray/Sphere Intersection"
-    // by Eric Haines, Johannes Günther, and Tomas Akenine-Möller
-    //
-    // The method includes tricks to reduce float point inaccuracy errors.
-
-    let f: vec3<f32> = ray_origin;
-    let d: vec3<f32> = ray_direction_normalized;
-    let b: f32 = -1.0 * dot(f, d);
-    let center_to_intersection_chord: vec3<f32> = f + b * d;
-    let discriminant: f32 = radius * radius - dot(center_to_intersection_chord, center_to_intersection_chord);
-    let c: f32 = dot(f, f) - radius * radius;
-
-    var output : RaySphereHit;
-    output.hit = false;
-    output.t0 = 0.0;
-    output.t1 = 0.0;
-
-    if (discriminant < 0.0)
-    {
-        return output;
-    }
-
-    var q: f32 = b;
-    if (b < 0.0)
-    {
-        q -= sqrt(discriminant);
-    }
-    else
-    {
-        q += sqrt(discriminant);
-    }
-
-    output.hit = true;
-    output.t0 = c / q;
-    output.t1 = q;
-
-    if (output.t0 > output.t1)
-    {
-        let temp: f32 = output.t0;
-        output.t0 = output.t1;
-        output.t1 = temp;
-    }
-
-    return output;
 }
 
 // Input cosine is the cosine of the angle between incident and outgoing scattering directions
@@ -582,7 +606,7 @@ fn computeTransmittance(@builtin(global_invocation_id) global_id : vec3<u32>,)
 
     textureStore(transmittance_lut, texel_coord, vec4<f32>(transmittance, 1.0));
 }
-`,Le="rgba32float";class Pe{constructor(e,t,r){a(this,"texture");a(this,"view");a(this,"group0");a(this,"group1");a(this,"pipeline");this.texture=e.createTexture({size:t,dimension:"2d",format:Le,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING,label:"Transmittance LUT"}),this.view=this.texture.createView({label:"Transmittance LUT"});const s=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:"write-only",format:this.texture.format}}],label:"Transmittance LUT Group 0"});this.group0=e.createBindGroup({layout:s,entries:[{binding:0,resource:this.view}],label:"Transmittance LUT Group 0"});const i=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{}}],label:"Transmittance LUT Group 1"});this.group1=e.createBindGroup({layout:i,entries:[{binding:0,resource:{buffer:r.buffer}}],label:"Transmittance LUT Group 1"});const n=e.createShaderModule({code:Re,label:"Transmittance LUT"});this.pipeline=e.createComputePipeline({compute:{module:n,entryPoint:"computeTransmittance"},layout:e.createPipelineLayout({bindGroupLayouts:[s,i]}),label:"Transmittance LUT"})}}const Ie=`// Sizeof(Atmosphere) = 8 * 16 = 128
+`,Le="rgba32float";class Ie{constructor(e,t,r){a(this,"texture");a(this,"view");a(this,"group0");a(this,"group1");a(this,"pipeline");this.texture=e.createTexture({size:t,dimension:"2d",format:Le,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING,label:"Transmittance LUT"}),this.view=this.texture.createView({label:"Transmittance LUT"});const i=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:"write-only",format:this.texture.format}}],label:"Transmittance LUT Group 0"});this.group0=e.createBindGroup({layout:i,entries:[{binding:0,resource:this.view}],label:"Transmittance LUT Group 0"});const n=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{}}],label:"Transmittance LUT Group 1"});this.group1=e.createBindGroup({layout:n,entries:[{binding:0,resource:{buffer:r.buffer}}],label:"Transmittance LUT Group 1"});const s=e.createShaderModule({code:Pe,label:"Transmittance LUT"});this.pipeline=e.createComputePipeline({compute:{module:s,entryPoint:"computeTransmittance"},layout:e.createPipelineLayout({bindGroupLayouts:[i,n]}),label:"Transmittance LUT"})}}const Ce=`// Sizeof(Atmosphere) = 8 * 16 = 128
 // Alignof(Atmosphere) = 16
 struct Atmosphere
 {
@@ -647,14 +671,97 @@ struct Time
 
 // All of these uniform values have identical lifetimes: they update before rendering for the frame, and are constant throughout
 // Thus we store everything together to simplify the bindings
-// Sizeof(GlobalUBO) = 128 + 32 + 256 + 16 = 432 (as of writing)
+// Sizeof(GlobalUBO) = 672 + 16 = 688 (as of writing)
 // Alignof(GlobalUBO) = 16
 struct GlobalUBO
 {
-	camera: Camera, // offset 128 + 32
-	atmosphere: Atmosphere, // offset 0
-	light: CelestialLight, // offset 128
-	time: Time, // offset 128 + 32 + 256
+	camera: Camera,           // offsets
+	ocean_camera: Camera,     // 0   + 256 = 256
+	atmosphere: Atmosphere,   // 256 + 256 = 512
+	light: CelestialLight,    // 512 + 128 = 640
+	time: Time,               // 640 + 32  = 672
+}
+
+struct RaySphereHit
+{
+    hit: bool,
+    t0: f32,
+    t1: f32,
+}
+
+// t1 > t0, values can be negative. Function returns true even if the sphere is behind the ray.
+// If this returns false, t0 and t1 are unchanged.
+fn raySphereIntersection(
+    ray_origin: vec3<f32>,
+    ray_direction_normalized: vec3<f32>,
+    radius: f32
+) -> RaySphereHit
+{
+    // Method taken from "Precision Improvements for Ray/Sphere Intersection"
+    // by Eric Haines, Johannes Günther, and Tomas Akenine-Möller
+    //
+    // The method includes tricks to reduce float point inaccuracy errors.
+
+    let f: vec3<f32> = ray_origin;
+    let d: vec3<f32> = ray_direction_normalized;
+    let b: f32 = -1.0 * dot(f, d);
+    let center_to_intersection_chord: vec3<f32> = f + b * d;
+    let discriminant: f32 = radius * radius - dot(center_to_intersection_chord, center_to_intersection_chord);
+    let c: f32 = dot(f, f) - radius * radius;
+
+    var output : RaySphereHit;
+    output.hit = false;
+    output.t0 = 0.0;
+    output.t1 = 0.0;
+
+    if (discriminant < 0.0)
+    {
+        return output;
+    }
+
+    var q: f32 = b;
+    if (b < 0.0)
+    {
+        q -= sqrt(discriminant);
+    }
+    else
+    {
+        q += sqrt(discriminant);
+    }
+
+    output.hit = true;
+    output.t0 = c / q;
+    output.t1 = q;
+
+    if (output.t0 > output.t1)
+    {
+        let temp: f32 = output.t0;
+        output.t0 = output.t1;
+        output.t1 = temp;
+    }
+
+    return output;
+}
+
+struct RayPlaneHit {
+	hit: bool,
+	t: f32,
+}
+
+fn rayPlaneIntersection(
+	ray_origin: vec3<f32>,
+	ray_direction: vec3<f32>,
+	plane_origin: vec3<f32>,
+	plane_normal: vec3<f32>
+) -> RayPlaneHit
+{
+	var result: RayPlaneHit;
+
+	let perp = dot(plane_normal, ray_direction);
+	result.t = dot(plane_origin - ray_origin, plane_normal) / perp;
+	result.hit = (abs(perp) > 0.00001) && (result.t > 0.0);
+
+	return result;
 }
 
 
@@ -681,6 +788,8 @@ const MULTISCATTER_LUT_HEIGHT = 1024u;
 
 const SKYVIEW_LUT_WIDTH = 1024u;
 const SKYVIEW_LUT_HEIGHT = 512u;
+
+const AERIAL_PERSPECTIVE_MM_PER_SLICE = 0.001;
 
 const METERS_PER_MM: f32 = 1000000;
 const PI: f32 = 3.141592653589793;
@@ -956,67 +1065,6 @@ fn sampleExtinction(atmosphere: ptr<function,Atmosphere>, altitude_Mm: f32) -> E
     return extinction_sample;
 }
 
-struct RaySphereHit
-{
-    hit: bool,
-    t0: f32,
-    t1: f32,
-}
-
-// t1 > t0, values can be negative. Function returns true even if the sphere is behind the ray.
-// If this returns false, t0 and t1 are unchanged.
-fn raySphereIntersection(
-    ray_origin: vec3<f32>,
-    ray_direction_normalized: vec3<f32>,
-    radius: f32
-) -> RaySphereHit
-{
-    // Method taken from "Precision Improvements for Ray/Sphere Intersection"
-    // by Eric Haines, Johannes Günther, and Tomas Akenine-Möller
-    //
-    // The method includes tricks to reduce float point inaccuracy errors.
-
-    let f: vec3<f32> = ray_origin;
-    let d: vec3<f32> = ray_direction_normalized;
-    let b: f32 = -1.0 * dot(f, d);
-    let center_to_intersection_chord: vec3<f32> = f + b * d;
-    let discriminant: f32 = radius * radius - dot(center_to_intersection_chord, center_to_intersection_chord);
-    let c: f32 = dot(f, f) - radius * radius;
-
-    var output : RaySphereHit;
-    output.hit = false;
-    output.t0 = 0.0;
-    output.t1 = 0.0;
-
-    if (discriminant < 0.0)
-    {
-        return output;
-    }
-
-    var q: f32 = b;
-    if (b < 0.0)
-    {
-        q -= sqrt(discriminant);
-    }
-    else
-    {
-        q += sqrt(discriminant);
-    }
-
-    output.hit = true;
-    output.t0 = c / q;
-    output.t1 = q;
-
-    if (output.t0 > output.t1)
-    {
-        let temp: f32 = output.t0;
-        output.t0 = output.t1;
-        output.t1 = temp;
-    }
-
-    return output;
-}
-
 // Input cosine is the cosine of the angle between incident and outgoing scattering directions
 fn phaseRayleigh(cosine: f32) -> f32
 {
@@ -1112,7 +1160,6 @@ fn sampleTransmittanceLUT_RayMarchStep(
 
 // Contains methods and overloads for raymarching the atmosphere
 
-//// FLAGS MULTISCATTERING ISOTROPIC_PHASE SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE HIGH_SAMPLE_COUNT SAMPLE_PATH_TRANSMITTANCE
 
 /*
 Flags explanation:
@@ -1200,6 +1247,7 @@ fn raycastAtmosphere(atmosphere: ptr<function, Atmosphere>, origin: vec3<f32>, d
 struct ScatteringResult
 {
     luminance: vec3<f32>,
+	transmittance: vec3<f32>,
     multiscattering_transfer: vec3<f32>,
 }
 
@@ -1229,10 +1277,12 @@ fn computeLuminanceScatteringIntegral(
 {
     var result: ScatteringResult;
     result.luminance = vec3<f32>(0.0);
+	result.transmittance = vec3<f32>(1.0);
     result.multiscattering_transfer = vec3<f32>(0.0);
 
 	if(sample_distance <= 0.0)
 	{
+		result.luminance = vec3<f32>(1.0, 1.0, 0.0);
 		return result;
 	}
 
@@ -1319,6 +1369,8 @@ fn computeLuminanceScatteringIntegral(
             transmittance_to_surface * transmittance_to_sun * normal_dot_light * diffuse
             * 1.0;
     }
+
+	result.transmittance = transmittance_accumulated;
 
     return result;
 }
@@ -1466,7 +1518,7 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     textureStore(multiscatter_lut, texel_coord, vec4<f32>(multiscattering, 1.0));
 }
-`,te="rgba32float";class Ce{constructor(e,t,r,s,i){a(this,"texture");a(this,"view");a(this,"group0");a(this,"group1");a(this,"pipeline");const n="Multiscatter LUT";this.texture=e.createTexture({size:t,dimension:"2d",format:te,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING,label:"Multiscatter LUT"}),this.view=this.texture.createView({label:n});const o=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:"write-only",format:te}},{binding:1,visibility:GPUShaderStage.COMPUTE,sampler:{type:s?"filtering":"non-filtering"}},{binding:2,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:s?"float":"unfilterable-float"}}],label:"Multiscatter LUT Group 0"});this.group0=e.createBindGroup({layout:o,entries:[{binding:0,resource:this.view},{binding:1,resource:e.createSampler({magFilter:s?"linear":"nearest",minFilter:s?"linear":"nearest"})},{binding:2,resource:r}],label:"Multiscatter LUT Group 0"});const u=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{}}],label:"Multiscatter LUT Group 1"});this.group1=e.createBindGroup({layout:u,entries:[{binding:0,resource:{buffer:i.buffer}}],label:"Multiscatter LUT Group 1"});const c=e.createShaderModule({code:Ie,label:n});this.pipeline=e.createComputePipeline({compute:{module:c,entryPoint:"computeMultiscattering"},layout:e.createPipelineLayout({bindGroupLayouts:[o,u]}),label:"Multiscatter LUT"})}}const Ge=`// Sizeof(Atmosphere) = 8 * 16 = 128
+`,te="rgba32float";class Ge{constructor(e,t,r,i,n){a(this,"texture");a(this,"view");a(this,"group0");a(this,"group1");a(this,"pipeline");const s="Multiscatter LUT";this.texture=e.createTexture({size:t,dimension:"2d",format:te,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING,label:"Multiscatter LUT"}),this.view=this.texture.createView({label:s});const o=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:"write-only",format:te}},{binding:1,visibility:GPUShaderStage.COMPUTE,sampler:{type:i?"filtering":"non-filtering"}},{binding:2,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:i?"float":"unfilterable-float"}}],label:"Multiscatter LUT Group 0"});this.group0=e.createBindGroup({layout:o,entries:[{binding:0,resource:this.view},{binding:1,resource:e.createSampler({magFilter:i?"linear":"nearest",minFilter:i?"linear":"nearest"})},{binding:2,resource:r}],label:"Multiscatter LUT Group 0"});const l=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{}}],label:"Multiscatter LUT Group 1"});this.group1=e.createBindGroup({layout:l,entries:[{binding:0,resource:{buffer:n.buffer}}],label:"Multiscatter LUT Group 1"});const u=e.createShaderModule({code:Ce,label:s});this.pipeline=e.createComputePipeline({compute:{module:u,entryPoint:"computeMultiscattering"},layout:e.createPipelineLayout({bindGroupLayouts:[o,l]}),label:"Multiscatter LUT"})}}const Oe=`// Sizeof(Atmosphere) = 8 * 16 = 128
 // Alignof(Atmosphere) = 16
 struct Atmosphere
 {
@@ -1531,14 +1583,15 @@ struct Time
 
 // All of these uniform values have identical lifetimes: they update before rendering for the frame, and are constant throughout
 // Thus we store everything together to simplify the bindings
-// Sizeof(GlobalUBO) = 128 + 32 + 256 + 16 = 432 (as of writing)
+// Sizeof(GlobalUBO) = 672 + 16 = 688 (as of writing)
 // Alignof(GlobalUBO) = 16
 struct GlobalUBO
 {
-	camera: Camera, // offset 128 + 32
-	atmosphere: Atmosphere, // offset 0
-	light: CelestialLight, // offset 128
-	time: Time, // offset 128 + 32 + 256
+	camera: Camera,           // offsets
+	ocean_camera: Camera,     // 0   + 256 = 256
+	atmosphere: Atmosphere,   // 256 + 256 = 512
+	light: CelestialLight,    // 512 + 128 = 640
+	time: Time,               // 640 + 32  = 672
 }
 
 
@@ -1566,6 +1619,8 @@ const MULTISCATTER_LUT_HEIGHT = 1024u;
 
 const SKYVIEW_LUT_WIDTH = 1024u;
 const SKYVIEW_LUT_HEIGHT = 512u;
+
+const AERIAL_PERSPECTIVE_MM_PER_SLICE = 0.001;
 
 const METERS_PER_MM: f32 = 1000000;
 const PI: f32 = 3.141592653589793;
@@ -1841,67 +1896,6 @@ fn sampleExtinction(atmosphere: ptr<function,Atmosphere>, altitude_Mm: f32) -> E
     return extinction_sample;
 }
 
-struct RaySphereHit
-{
-    hit: bool,
-    t0: f32,
-    t1: f32,
-}
-
-// t1 > t0, values can be negative. Function returns true even if the sphere is behind the ray.
-// If this returns false, t0 and t1 are unchanged.
-fn raySphereIntersection(
-    ray_origin: vec3<f32>,
-    ray_direction_normalized: vec3<f32>,
-    radius: f32
-) -> RaySphereHit
-{
-    // Method taken from "Precision Improvements for Ray/Sphere Intersection"
-    // by Eric Haines, Johannes Günther, and Tomas Akenine-Möller
-    //
-    // The method includes tricks to reduce float point inaccuracy errors.
-
-    let f: vec3<f32> = ray_origin;
-    let d: vec3<f32> = ray_direction_normalized;
-    let b: f32 = -1.0 * dot(f, d);
-    let center_to_intersection_chord: vec3<f32> = f + b * d;
-    let discriminant: f32 = radius * radius - dot(center_to_intersection_chord, center_to_intersection_chord);
-    let c: f32 = dot(f, f) - radius * radius;
-
-    var output : RaySphereHit;
-    output.hit = false;
-    output.t0 = 0.0;
-    output.t1 = 0.0;
-
-    if (discriminant < 0.0)
-    {
-        return output;
-    }
-
-    var q: f32 = b;
-    if (b < 0.0)
-    {
-        q -= sqrt(discriminant);
-    }
-    else
-    {
-        q += sqrt(discriminant);
-    }
-
-    output.hit = true;
-    output.t0 = c / q;
-    output.t1 = q;
-
-    if (output.t0 > output.t1)
-    {
-        let temp: f32 = output.t0;
-        output.t0 = output.t1;
-        output.t1 = temp;
-    }
-
-    return output;
-}
-
 // Input cosine is the cosine of the angle between incident and outgoing scattering directions
 fn phaseRayleigh(cosine: f32) -> f32
 {
@@ -1995,9 +1989,90 @@ fn sampleTransmittanceLUT_RayMarchStep(
     return clamp(transmittance, vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
+struct RaySphereHit
+{
+    hit: bool,
+    t0: f32,
+    t1: f32,
+}
+
+// t1 > t0, values can be negative. Function returns true even if the sphere is behind the ray.
+// If this returns false, t0 and t1 are unchanged.
+fn raySphereIntersection(
+    ray_origin: vec3<f32>,
+    ray_direction_normalized: vec3<f32>,
+    radius: f32
+) -> RaySphereHit
+{
+    // Method taken from "Precision Improvements for Ray/Sphere Intersection"
+    // by Eric Haines, Johannes Günther, and Tomas Akenine-Möller
+    //
+    // The method includes tricks to reduce float point inaccuracy errors.
+
+    let f: vec3<f32> = ray_origin;
+    let d: vec3<f32> = ray_direction_normalized;
+    let b: f32 = -1.0 * dot(f, d);
+    let center_to_intersection_chord: vec3<f32> = f + b * d;
+    let discriminant: f32 = radius * radius - dot(center_to_intersection_chord, center_to_intersection_chord);
+    let c: f32 = dot(f, f) - radius * radius;
+
+    var output : RaySphereHit;
+    output.hit = false;
+    output.t0 = 0.0;
+    output.t1 = 0.0;
+
+    if (discriminant < 0.0)
+    {
+        return output;
+    }
+
+    var q: f32 = b;
+    if (b < 0.0)
+    {
+        q -= sqrt(discriminant);
+    }
+    else
+    {
+        q += sqrt(discriminant);
+    }
+
+    output.hit = true;
+    output.t0 = c / q;
+    output.t1 = q;
+
+    if (output.t0 > output.t1)
+    {
+        let temp: f32 = output.t0;
+        output.t0 = output.t1;
+        output.t1 = temp;
+    }
+
+    return output;
+}
+
+struct RayPlaneHit {
+	hit: bool,
+	t: f32,
+}
+
+fn rayPlaneIntersection(
+	ray_origin: vec3<f32>,
+	ray_direction: vec3<f32>,
+	plane_origin: vec3<f32>,
+	plane_normal: vec3<f32>
+) -> RayPlaneHit
+{
+	var result: RayPlaneHit;
+
+	let perp = dot(plane_normal, ray_direction);
+	result.t = dot(plane_origin - ray_origin, plane_normal) / perp;
+	result.hit = (abs(perp) > 0.00001) && (result.t > 0.0);
+
+	return result;
+}
+
 // Contains methods and overloads for raymarching the atmosphere
 
-//// FLAGS MULTISCATTERING ISOTROPIC_PHASE SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE HIGH_SAMPLE_COUNT SAMPLE_PATH_TRANSMITTANCE
 
 /*
 Flags explanation:
@@ -2085,6 +2160,7 @@ fn raycastAtmosphere(atmosphere: ptr<function, Atmosphere>, origin: vec3<f32>, d
 struct ScatteringResult
 {
     luminance: vec3<f32>,
+	transmittance: vec3<f32>,
     multiscattering_transfer: vec3<f32>,
 }
 
@@ -2115,10 +2191,12 @@ fn computeLuminanceScatteringIntegral(
 {
     var result: ScatteringResult;
     result.luminance = vec3<f32>(0.0);
+	result.transmittance = vec3<f32>(1.0);
     result.multiscattering_transfer = vec3<f32>(0.0);
 
 	if(sample_distance <= 0.0)
 	{
+		result.luminance = vec3<f32>(1.0, 1.0, 0.0);
 		return result;
 	}
 
@@ -2213,6 +2291,8 @@ fn computeLuminanceScatteringIntegral(
             transmittance_to_surface * transmittance_to_sun * normal_dot_light * diffuse
             * 1.0;
     }
+
+	result.transmittance = transmittance_accumulated;
 
     return result;
 }
@@ -2325,7 +2405,7 @@ fn computeSkyViewLuminance(@builtin(global_invocation_id) global_id : vec3<u32>,
 
     textureStore(skyview_lut, texel_coord, vec4(luminance, 1.0));
 }
-`,ae="rgba32float";class Oe{constructor(e,t,r,s,i,n){a(this,"texture");a(this,"view");a(this,"group0");a(this,"group1");a(this,"pipeline");this.texture=e.createTexture({size:t,dimension:"2d",format:ae,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING,label:"Skyview LUT"}),this.view=this.texture.createView({label:"Skyview LUT"});const o=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:"write-only",format:ae}},{binding:1,visibility:GPUShaderStage.COMPUTE,sampler:{type:i?"filtering":"non-filtering"}},{binding:2,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:i?"float":"unfilterable-float"}},{binding:3,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:i?"float":"unfilterable-float"}}],label:"Skyview LUT"});this.group0=e.createBindGroup({layout:o,entries:[{binding:0,resource:this.view},{binding:1,resource:e.createSampler({magFilter:i?"linear":"nearest",minFilter:i?"linear":"nearest"})},{binding:2,resource:r},{binding:3,resource:s}],label:"Skyview LUT Group 0"});const u=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{}}],label:"Skyview LUT Group 1"});this.group1=e.createBindGroup({layout:u,entries:[{binding:0,resource:{buffer:n.buffer}}],label:"Skyview LUT Group 1"});const c=e.createShaderModule({code:Ge});this.pipeline=e.createComputePipeline({compute:{module:c,entryPoint:"computeSkyViewLuminance"},layout:e.createPipelineLayout({bindGroupLayouts:[o,u]}),label:"Skyview LUT"})}}const Fe=`// Textures must have the same dimension
+`,ae="rgba32float";class Fe{constructor(e,t,r,i,n,s){a(this,"texture");a(this,"view");a(this,"group0");a(this,"group1");a(this,"pipeline");this.texture=e.createTexture({size:t,dimension:"2d",format:ae,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING,label:"Skyview LUT"}),this.view=this.texture.createView({label:"Skyview LUT"});const o=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:"write-only",format:ae}},{binding:1,visibility:GPUShaderStage.COMPUTE,sampler:{type:n?"filtering":"non-filtering"}},{binding:2,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:n?"float":"unfilterable-float"}},{binding:3,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:n?"float":"unfilterable-float"}}],label:"Skyview LUT"});this.group0=e.createBindGroup({layout:o,entries:[{binding:0,resource:this.view},{binding:1,resource:e.createSampler({magFilter:n?"linear":"nearest",minFilter:n?"linear":"nearest"})},{binding:2,resource:r},{binding:3,resource:i}],label:"Skyview LUT Group 0"});const l=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{}}],label:"Skyview LUT Group 1"});this.group1=e.createBindGroup({layout:l,entries:[{binding:0,resource:{buffer:s.buffer}}],label:"Skyview LUT Group 1"});const u=e.createShaderModule({code:Oe});this.pipeline=e.createComputePipeline({compute:{module:u,entryPoint:"computeSkyViewLuminance"},layout:e.createPipelineLayout({bindGroupLayouts:[o,l]}),label:"Skyview LUT"})}record(e,t){const r=e.beginComputePass({timestampWrites:t!==void 0?{querySet:t.querySet,beginningOfPassWriteIndex:t.beginWriteIndex,endOfPassWriteIndex:t.endWriteIndex}:void 0,label:"Skyview LUT"});r.setPipeline(this.pipeline),r.setBindGroup(0,this.group0),r.setBindGroup(1,this.group1),r.dispatchWorkgroups(Math.ceil(this.texture.width/16),Math.ceil(this.texture.height/(16*1.9))),r.end()}}const Ne=`// Textures must have the same dimension
 // Sizeof(Atmosphere) = 8 * 16 = 128
 // Alignof(Atmosphere) = 16
 struct Atmosphere
@@ -2391,33 +2471,40 @@ struct Time
 
 // All of these uniform values have identical lifetimes: they update before rendering for the frame, and are constant throughout
 // Thus we store everything together to simplify the bindings
-// Sizeof(GlobalUBO) = 128 + 32 + 256 + 16 = 432 (as of writing)
+// Sizeof(GlobalUBO) = 672 + 16 = 688 (as of writing)
 // Alignof(GlobalUBO) = 16
 struct GlobalUBO
 {
-	camera: Camera, // offset 128 + 32
-	atmosphere: Atmosphere, // offset 0
-	light: CelestialLight, // offset 128
-	time: Time, // offset 128 + 32 + 256
+	camera: Camera,           // offsets
+	ocean_camera: Camera,     // 0   + 256 = 256
+	atmosphere: Atmosphere,   // 256 + 256 = 512
+	light: CelestialLight,    // 512 + 128 = 640
+	time: Time,               // 640 + 32  = 672
 }
 
 
 const PI = 3.141592653589793;
+const CASCADE_CAPACITY = 4u;
 
+struct CascadeUBO
+{
+	wave_number_min_max: vec2<f32>,
+	wave_patch_extent_meters: f32,
+	padding0: f32,
+}
 struct FourierWavesUBO
 {
 	fourier_grid_size: u32,
 	gravity: f32,
-	wave_patch_extent_meters: f32,
+	padding0: f32,
 	wave_period_seconds: f32,
 
 	wind_speed_meters_per_second: f32,
 	wind_fetch_meters: f32,
 	wave_swell: f32,
-	padding0: f32,
+	padding1: f32,
 
-	wave_number_min_max: vec2<f32>,
-	padding1: vec2<f32>,
+	cascades: array<CascadeUBO, CASCADE_CAPACITY>,
 }
 
 // Implementation derived from:
@@ -2443,7 +2530,11 @@ fn quantizeFrequency(frequency: f32, fundamental_frequency: f32) -> f32
 	return (multiple - fract(multiple)) * fundamental_frequency;
 }
 
-fn waveParameters(settings: ptr<uniform, FourierWavesUBO>, texel_coord: vec2<u32>) -> WaveParameters
+fn waveParameters(
+	settings: ptr<uniform, FourierWavesUBO>,
+	patch_extent_meters: f32,
+	texel_coord: vec2<u32>
+) -> WaveParameters
 {
 	var result: WaveParameters;
 
@@ -2456,10 +2547,11 @@ fn waveParameters(settings: ptr<uniform, FourierWavesUBO>, texel_coord: vec2<u32
 	if (QUANTIZED_FREQUENCIES)
 	{
 		let frequency_quantization_step = 2.0 * PI / (*settings).wave_period_seconds;
+		let non_quantized_fundamental_wave_number = 2.0 * PI / patch_extent_meters;
 		let fundamental_frequency = quantizeFrequency(
-			sqrt(g * 2.0 * PI / (*settings).wave_patch_extent_meters),
+			sqrt(g * non_quantized_fundamental_wave_number),
 			frequency_quantization_step
-			);
+		);
 		let fundamental_wave_number = fundamental_frequency * fundamental_frequency / g;
 		result.delta_wave_number = fundamental_wave_number;
 
@@ -2475,7 +2567,7 @@ fn waveParameters(settings: ptr<uniform, FourierWavesUBO>, texel_coord: vec2<u32
 	}
 	else
 	{
-		let fundamental_wave_number = 2.0 * PI / (*settings).wave_patch_extent_meters;
+		let fundamental_wave_number = 2.0 * PI / patch_extent_meters;
 		let fundamental_frequency = sqrt(g * fundamental_wave_number);
 		result.delta_wave_number = fundamental_wave_number;
 
@@ -2552,31 +2644,41 @@ fn waveDirectionalSpreading(settings: ptr<uniform, FourierWavesUBO>, frequency: 
 	return q * pow(abs(cos(angle / 2.0)), 2.0 * s);
 }
 
-@group(0) @binding(0) var out_initial_amplitude: texture_storage_2d<rg32float, write>;
-@group(0) @binding(1) var in_gaussian_random_pairs: texture_storage_2d<rg32float, read>;
+@group(0) @binding(0) var out_initial_amplitude: texture_storage_2d_array<rg32float, write>;
+@group(0) @binding(1) var in_gaussian_random_pairs: texture_2d_array<f32>;
 
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 @group(1) @binding(1) var<uniform> u_fourier_waves: FourierWavesUBO;
 
-@compute @workgroup_size(16, 16)
+@compute @workgroup_size(16, 16, 1)
 fn computeInitialAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
-    let texel_coord = vec2<u32>(global_id.xy);
+    let texel_coord: vec2<u32> = global_id.xy;
+	let array_layer: u32 = global_id.z;
     let size = textureDimensions(out_initial_amplitude);
-    if texel_coord.x >= size.x || texel_coord.y >= size.y {
+    if texel_coord.x >= size.x
+		|| texel_coord.y >= size.y
+		|| array_layer > textureNumLayers(out_initial_amplitude)
+	{
         return;
     }
 
-	let gaussian_pair = textureLoad(in_gaussian_random_pairs, texel_coord).xy;
-	let wave = waveParameters(&u_fourier_waves, texel_coord);
+	let gaussian_pair = textureLoad(in_gaussian_random_pairs, texel_coord, array_layer, 0).xy;
+	let wave = waveParameters(&u_fourier_waves, u_fourier_waves.cascades[array_layer].wave_patch_extent_meters, texel_coord);
+	let wave_number_min_max = u_fourier_waves.cascades[array_layer].wave_number_min_max;
 
 	if (abs(wave.wave_number) < wave.delta_wave_number
-		|| abs(wave.wave_number) < u_fourier_waves.wave_number_min_max.x
-		|| abs(wave.wave_number) > u_fourier_waves.wave_number_min_max.y
+		|| abs(wave.wave_number) < wave_number_min_max.x
+		|| abs(wave.wave_number) > wave_number_min_max.y
 	)
 	{
 		let amplitude = vec2<f32>(0.0, 0.0);
-		textureStore(out_initial_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));
+		textureStore(
+			out_initial_amplitude,
+			texel_coord,
+			array_layer,
+			vec4<f32>(amplitude, 0.0, 0.0)
+		);
 		return;
 	}
 
@@ -2600,7 +2702,12 @@ fn computeInitialAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
 		* gaussian_pair
 		* magnitude;
 
-	textureStore(out_initial_amplitude, texel_coord, vec4<f32>(amplitude, 0.0, 0.0));
+	textureStore(
+		out_initial_amplitude,
+		texel_coord,
+		array_layer,
+		vec4<f32>(amplitude, 0.0, 0.0)
+	);
 }
 
 
@@ -2618,9 +2725,9 @@ fn computeInitialAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
  *
  * Thus, we can pack two sets of inputs for the FFT into the same two input channels, and avoid a wasted output channel.
  */
-@group(0) @binding(0) var out_packed_Dx_plus_iDy_Dz_iDxdz_amplitude: texture_storage_2d<rgba32float, write>;
-@group(0) @binding(1) var out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitude: texture_storage_2d<rgba32float, write>;
-@group(0) @binding(2) var in_initial_amplitude: texture_storage_2d<rg32float, read>;
+@group(0) @binding(0) var out_packed_Dx_plus_iDy_Dz_iDxdz_amplitudeArray: texture_storage_2d_array<rgba32float, write>;
+@group(0) @binding(1) var out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitudeArray: texture_storage_2d_array<rgba32float, write>;
+@group(0) @binding(2) var in_initial_amplitude: texture_2d_array<f32>;
 
 /* Commented to avoid re-declaration
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
@@ -2631,48 +2738,57 @@ fn complexMult(a: vec2<f32>, b: vec2<f32>) -> vec2<f32>
 	return vec2<f32>(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x);
 }
 
-@compute @workgroup_size(16, 16)
+@compute @workgroup_size(16, 16, 1)
 fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
-	let texel_coord = vec2<u32>(global_id.xy);
-    let size = textureDimensions(out_packed_Dx_plus_iDy_Dz_iDxdz_amplitude);
-    if texel_coord.x >= size.x || texel_coord.y >= size.y {
+    let texel_coord: vec2<u32> = global_id.xy;
+	let array_layer: u32 = global_id.z;
+    let size = textureDimensions(in_initial_amplitude);
+    if texel_coord.x >= size.x
+		|| texel_coord.y >= size.y
+		|| array_layer > textureNumLayers(in_initial_amplitude)
+	{
         return;
     }
 
-	let wave = waveParameters(&u_fourier_waves, texel_coord);
+	let wave = waveParameters(&u_fourier_waves, u_fourier_waves.cascades[array_layer].wave_patch_extent_meters, texel_coord);
+	let wave_number_min_max = u_fourier_waves.cascades[array_layer].wave_number_min_max;
 
 	if (abs(wave.wave_number) < wave.delta_wave_number
-		|| abs(wave.wave_number) < u_fourier_waves.wave_number_min_max.x
-		|| abs(wave.wave_number) > u_fourier_waves.wave_number_min_max.y)
+		|| abs(wave.wave_number) < wave_number_min_max.x
+		|| abs(wave.wave_number) > wave_number_min_max.y
+	)
 	{
 		textureStore(
-			out_packed_Dx_plus_iDy_Dz_iDxdz_amplitude,
+			out_packed_Dx_plus_iDy_Dz_iDxdz_amplitudeArray,
 			texel_coord,
+			array_layer,
 			vec4<f32>(0.0)
 		);
 		textureStore(
-			out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitude,
+			out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitudeArray,
 			texel_coord,
+			array_layer,
 			vec4<f32>(0.0)
 		);
 		return;
 	}
 
-	let k_amplitude = textureLoad(in_initial_amplitude, texel_coord).xy;
+	let k_amplitude = textureLoad(in_initial_amplitude, texel_coord, array_layer, 0).xy;
 
 	let k_minus_coord = vec2<u32>(
 		(u_fourier_waves.fourier_grid_size - texel_coord.x) % u_fourier_waves.fourier_grid_size,
 		(u_fourier_waves.fourier_grid_size - texel_coord.y) % u_fourier_waves.fourier_grid_size
 	);
-	let k_minus_amplitude = textureLoad(in_initial_amplitude, k_minus_coord).xy;
+	let k_minus_amplitude = textureLoad(in_initial_amplitude, k_minus_coord, array_layer, 0).xy;
 	let k_minus_amplitude_conjugate = vec2<f32>(k_minus_amplitude.x, -k_minus_amplitude.y);
 
 	let phase = wave.frequency * u_global.time.time_seconds;
 	let exponential = vec2<f32>(cos(phase), sin(phase));
 	let exponential_conjugate = vec2<f32>(exponential.x, -exponential.y);
 
-	let Dy_amplitude = complexMult(exponential, k_amplitude) + complexMult(exponential_conjugate, k_minus_amplitude_conjugate);
+	let Dy_amplitude = complexMult(exponential, k_amplitude)
+		+ complexMult(exponential_conjugate, k_minus_amplitude_conjugate);
 
 	/*
 	 * For gerstner waves, displacement in x/z directions is based on the
@@ -2715,13 +2831,15 @@ fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
 	let iDzdz_amplitude = vec2<f32>(-Dzdz_amplitude.y, Dzdz_amplitude.x);
 
 	textureStore(
-		out_packed_Dx_plus_iDy_Dz_iDxdz_amplitude,
+		out_packed_Dx_plus_iDy_Dz_iDxdz_amplitudeArray,
 		texel_coord,
+		array_layer,
 		vec4<f32>(Dx_amplitude + iDy_amplitude, Dz_amplitude + iDxdz_amplitude)
 	);
 	textureStore(
-		out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitude,
+		out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitudeArray,
 		texel_coord,
+		array_layer,
 		vec4<f32>(Dydx_amplitude + iDydz_amplitude, Dxdx_amplitude + iDzdz_amplitude)
 	);
 }
@@ -2797,7 +2915,7 @@ fn accumulateTurbulence(@builtin(global_invocation_id) global_id: vec3<u32>)
 		);
 	}
 }
-`,Ne=`const PI = 3.141592653589793;
+`,Be=`const PI = 3.141592653589793;
 
 /*
 * Decimation-in-time Cooley-Tukey Inverse Discrete Fast Fourier Transform
@@ -2884,7 +3002,7 @@ fn precomputeDFFTInstructions(@builtin(global_invocation_id) global_id: vec3<u32
 @group(0) @binding(2) var<storage, read_write> buffer_0: array<vec4<f32>>;
 @group(0) @binding(3) var<storage, read_write> buffer_1: array<vec4<f32>>;
 @group(0) @binding(4) var<uniform> step_counter: u32;
-@group(0) @binding(5) var out_texture: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(5) var out_texture: texture_storage_2d_array<rgba16float, write>;
 
 fn complexMult(a: vec2<f32>, b: vec2<f32>) -> vec2<f32>
 {
@@ -2896,9 +3014,10 @@ fn complexMult2(a: vec4<f32>, b: vec4<f32>) -> vec4<f32>
 	return vec4<f32>(complexMult(a.xy, b.xy), complexMult(a.zw, b.zw));
 }
 
-fn bufferIndex(x: u32, y: u32) -> u32
+fn bufferIndex(x: u32, y: u32, z: u32) -> u32
 {
-	return x + y * u_parameters.size;
+	let size = u_parameters.size;
+	return x + y * size + z * size * size;
 }
 
 fn loadTwoPointDFT(major_index: u32) -> TwoPointDFT
@@ -2915,7 +3034,7 @@ fn loadTwoPointDFT(major_index: u32) -> TwoPointDFT
 * The final output will be in buffer_0 (since vertical + horizontal guarantees an even amount of ping-pongs)
 * Make sure step_counter is updated between steps, incrementing by one until 2 * log2(N)
 */
-@compute @workgroup_size(16, 16)
+@compute @workgroup_size(16, 16, 1)
 fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
 	// We need to bounce between buffers since each cell in each step relies on multiple cells from the previous step
@@ -2930,21 +3049,21 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 		let two_point_dft = loadTwoPointDFT(global_id.x);
 		if(ping_pong)
 		{
-			let lower_input = buffer_1[bufferIndex(two_point_dft.lower_index, global_id.y)];
-			let upper_input = buffer_1[bufferIndex(two_point_dft.upper_index, global_id.y)];
+			let lower_input = buffer_1[bufferIndex(two_point_dft.lower_index, global_id.y, global_id.z)];
+			let upper_input = buffer_1[bufferIndex(two_point_dft.upper_index, global_id.y, global_id.z)];
 
 			let result = lower_input + complexMult2(vec4<f32>(two_point_dft.twiddle, two_point_dft.twiddle), upper_input);
 
-			buffer_0[bufferIndex(global_id.x, global_id.y)] = result;
+			buffer_0[bufferIndex(global_id.x, global_id.y, global_id.z)] = result;
 		}
 		else
 		{
-			let lower_input = buffer_0[bufferIndex(two_point_dft.lower_index, global_id.y)];
-			let upper_input = buffer_0[bufferIndex(two_point_dft.upper_index, global_id.y)];
+			let lower_input = buffer_0[bufferIndex(two_point_dft.lower_index, global_id.y, global_id.z)];
+			let upper_input = buffer_0[bufferIndex(two_point_dft.upper_index, global_id.y, global_id.z)];
 
 			let result = lower_input + complexMult2(vec4<f32>(two_point_dft.twiddle, two_point_dft.twiddle), upper_input);
 
-			buffer_1[bufferIndex(global_id.x, global_id.y)] = result;
+			buffer_1[bufferIndex(global_id.x, global_id.y, global_id.z)] = result;
 		}
 	}
 	else
@@ -2953,21 +3072,21 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
 		let two_point_dft = loadTwoPointDFT(global_id.y);
 		if(ping_pong)
 		{
-			let lower_input = buffer_1[bufferIndex(global_id.x, two_point_dft.lower_index)];
-			let upper_input = buffer_1[bufferIndex(global_id.x, two_point_dft.upper_index)];
+			let lower_input = buffer_1[bufferIndex(global_id.x, two_point_dft.lower_index, global_id.z)];
+			let upper_input = buffer_1[bufferIndex(global_id.x, two_point_dft.upper_index, global_id.z)];
 
 			let result = lower_input + complexMult2(vec4<f32>(two_point_dft.twiddle, two_point_dft.twiddle), upper_input);
 
-			buffer_0[bufferIndex(global_id.x, global_id.y)] = result;
+			buffer_0[bufferIndex(global_id.x, global_id.y, global_id.z)] = result;
 		}
 		else
 		{
-			let lower_input = buffer_0[bufferIndex(global_id.x, two_point_dft.lower_index)];
-			let upper_input = buffer_0[bufferIndex(global_id.x, two_point_dft.upper_index)];
+			let lower_input = buffer_0[bufferIndex(global_id.x, two_point_dft.lower_index, global_id.z)];
+			let upper_input = buffer_0[bufferIndex(global_id.x, two_point_dft.upper_index, global_id.z)];
 
 			let result = lower_input + complexMult2(vec4<f32>(two_point_dft.twiddle, two_point_dft.twiddle), upper_input);
 
-			buffer_1[bufferIndex(global_id.x, global_id.y)] = result;
+			buffer_1[bufferIndex(global_id.x, global_id.y, global_id.z)] = result;
 		}
 	}
 }
@@ -2982,7 +3101,7 @@ fn performDFFTStep(@builtin(global_invocation_id) global_id: vec3<u32>)
  *
  * This sort of clustering occurs with how we process ocean waves, since our wave "origin" with the longest wavelength, highest frequency/energy waves is at (grid_size/2, grid_size/2)
  */
-@compute @workgroup_size(16, 16)
+@compute @workgroup_size(16, 16, 1)
 fn performSwapEvenSignsAndCopyToHalfPrecisionOutput(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
 	let ping_pong = (step_counter % 2u) == 1u;
@@ -2991,11 +3110,21 @@ fn performSwapEvenSignsAndCopyToHalfPrecisionOutput(@builtin(global_invocation_i
 
 	if(ping_pong)
 	{
-		textureStore(out_texture, global_id.xy, buffer_0[bufferIndex(global_id.x, global_id.y)] * factor);
+		textureStore(
+			out_texture,
+			global_id.xy,
+			global_id.z,
+			buffer_0[bufferIndex(global_id.x, global_id.y, global_id.z)] * factor
+		);
 	}
 	else
 	{
-		textureStore(out_texture, global_id.xy, buffer_1[bufferIndex(global_id.x, global_id.y)] * factor);
+		textureStore(
+			out_texture,
+			global_id.xy,
+			global_id.z,
+			buffer_1[bufferIndex(global_id.x, global_id.y, global_id.z)] * factor
+		);
 	}
 }
 
@@ -3017,7 +3146,7 @@ fn resetStepCounter(@builtin(global_invocation_id) global_id: vec3<u32>)
 		out_step_counter = 0;
 	}
 }
-`;class Be extends E{constructor(t){super(t,3,"DFFT Parameters UBO");a(this,"data",{log_2_size:1,size:2,b_inverse:!1})}packed(){const t=new ArrayBuffer(this.buffer.size),r=new DataView(t);return r.setUint32(0,this.data.log_2_size,!0),r.setUint32(4,this.data.size,!0),r.setFloat32(8,this.data.b_inverse?1:0,!0),t}}const O="rgba16float";class We{constructor(e,t){a(this,"parametersUBO");a(this,"intermediateDFTs");a(this,"complexBuffer0");a(this,"complexBuffer1");a(this,"stepCounterBuffer");a(this,"outputTexture");a(this,"intermediateDFTsBindGroup");a(this,"intermediateDFTsKernel");a(this,"performBindGroup");a(this,"performKernel");a(this,"performSwapEvenSignsAndCopyToHalfPrecisionOutputKernel");a(this,"stepCounterBindGroup");a(this,"incrementStepCounterKernel");a(this,"resetStepCounterKernel");a(this,"debugBuffersCopied",!1);if(t<5)throw new RangeError("gridSizeExponent must be greater than 4.");const r=Math.pow(2,t);this.parametersUBO=new Be(e),this.parametersUBO.data.log_2_size=t,this.parametersUBO.data.size=r,this.parametersUBO.data.b_inverse=!1,this.parametersUBO.writeToGPU(e.queue);const s=16;this.intermediateDFTs=e.createBuffer({label:"DFFT Precompute Stage Steps",size:t*r*s,usage:GPUBufferUsage.STORAGE});const i=e.createShaderModule({label:"DFFT Precompute Stage",code:Ne}),n=e.createBindGroupLayout({label:"DFFT Precompute Stage Group 0",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}},{binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:"storage"}}]});this.intermediateDFTsBindGroup=e.createBindGroup({label:"DFFT Precompute Stage Group 0",layout:n,entries:[{binding:0,resource:{buffer:this.parametersUBO.buffer}},{binding:1,resource:{buffer:this.intermediateDFTs}}]});const o=e.createPipelineLayout({label:"DFFT Precompute Steps Kernel",bindGroupLayouts:[n]});this.intermediateDFTsKernel=e.createComputePipeline({label:"DFFT Precompute Stage",compute:{module:i,entryPoint:"precomputeDFFTInstructions"},layout:o});const u=e.createBindGroupLayout({label:"DFFT Perform Group 0",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}},{binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:"read-only-storage"}},{binding:2,visibility:GPUShaderStage.COMPUTE,buffer:{type:"storage"}},{binding:3,visibility:GPUShaderStage.COMPUTE,buffer:{type:"storage"}},{binding:4,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}},{binding:5,visibility:GPUShaderStage.COMPUTE,storageTexture:{format:O,access:"write-only"}}]}),c=16;this.complexBuffer0=e.createBuffer({label:"DFFT Buffer 0",size:r*r*c,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST}),this.complexBuffer1=e.createBuffer({label:"DFFT Buffer 1",size:this.complexBuffer0.size,usage:this.complexBuffer0.usage}),this.stepCounterBuffer=e.createBuffer({label:"DFFT Step Counter",size:4,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.STORAGE|GPUBufferUsage.UNIFORM});const _=new Uint32Array(1);_[0]=0,e.queue.writeBuffer(this.stepCounterBuffer,0,_),this.outputTexture=e.createTexture({label:"DFFT Output Texture",format:O,size:{width:r,height:r,depthOrArrayLayers:1},usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC}),this.performBindGroup=e.createBindGroup({label:"DFFT Perform Group 0",layout:u,entries:[{binding:0,resource:{buffer:this.parametersUBO.buffer}},{binding:1,resource:{buffer:this.intermediateDFTs}},{binding:2,resource:{buffer:this.complexBuffer0}},{binding:3,resource:{buffer:this.complexBuffer1}},{binding:4,resource:{buffer:this.stepCounterBuffer}},{binding:5,resource:this.outputTexture.createView()}]});const d=e.createPipelineLayout({label:"DFFT Perform",bindGroupLayouts:[u]});this.performKernel=e.createComputePipeline({label:"DFFT Perform DFFT Step",compute:{module:i,entryPoint:"performDFFTStep"},layout:d}),this.performSwapEvenSignsAndCopyToHalfPrecisionOutputKernel=e.createComputePipeline({label:"DFFT Perform Swap Even Signs",compute:{module:i,entryPoint:"performSwapEvenSignsAndCopyToHalfPrecisionOutput"},layout:d});const p=e.createBindGroupLayout({label:"DFFT Step Counter Bind Group 0",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:"storage"}}]});this.stepCounterBindGroup=e.createBindGroup({label:"DFFT Step Counter Bind Group 0",layout:p,entries:[{binding:0,resource:{buffer:this.stepCounterBuffer}}]});const h=e.createPipelineLayout({label:"DFFT Step Counter",bindGroupLayouts:[p]});this.incrementStepCounterKernel=e.createComputePipeline({label:"DFFT Increment Step Counter Kernel",layout:h,compute:{module:i,entryPoint:"incrementStepCounter"}}),this.resetStepCounterKernel=e.createComputePipeline({label:"DFFT Reset Step Counter Kernel",layout:h,compute:{module:i,entryPoint:"resetStepCounter"}}),this.parametersUBO.data.b_inverse=!0,this.parametersUBO.writeToGPU(e.queue);const g=e.createCommandEncoder({label:"DFFT Precompute"}),f=g.beginComputePass({label:"DFFT Precompute Steps"});f.setPipeline(this.intermediateDFTsKernel),f.setBindGroup(0,this.intermediateDFTsBindGroup),f.dispatchWorkgroups(r/2/2,1),f.end(),e.queue.submit([g.finish()])}recordPerformOnBuffer0(e,t){const r=this.parametersUBO.data.size,s=this.parametersUBO.data.log_2_size,i=e.beginComputePass({label:"DFFT Perform",timestampWrites:t});for(let n=0;n<2*s;n++)n===0?(i.setPipeline(this.resetStepCounterKernel),i.setBindGroup(0,this.stepCounterBindGroup),i.dispatchWorkgroups(1)):(i.setPipeline(this.incrementStepCounterKernel),i.setBindGroup(0,this.stepCounterBindGroup),i.dispatchWorkgroups(1)),i.setPipeline(this.performKernel),i.setBindGroup(0,this.performBindGroup),i.dispatchWorkgroups(r/16,r/16);i.setPipeline(this.performSwapEvenSignsAndCopyToHalfPrecisionOutputKernel),i.setBindGroup(0,this.performBindGroup),i.dispatchWorkgroups(r/16,r/16),i.end()}recordPerform(e,t,r,s,i,n,o){const u="rgba32float";if(r.format!=u)throw RangeError(`sourceTexture (format ${r.format}) must be ${u}`);if(s.format!=O)throw RangeError(`destinationArray (format ${r.format}) must be ${u}`);r.depthOrArrayLayers!==1&&console.warn(`Source Texture '${r.label}' DepthOrArrayLayers > 1 - will only use the first layer.`),this.parametersUBO.data.b_inverse=n,this.parametersUBO.writeToGPU(e.queue);const c=this.parametersUBO.data.size;t.copyTextureToBuffer({texture:r},{buffer:this.complexBuffer0,bytesPerRow:this.complexBuffer0.size/c},{width:r.width,height:r.height,depthOrArrayLayers:1}),this.recordPerformOnBuffer0(t,o),t.copyTextureToTexture({texture:this.outputTexture},{texture:s,origin:{x:0,y:0,z:i}},{width:s.width,height:s.height,depthOrArrayLayers:1})}}const ke=`@group(0) @binding(0) var out_next_mip_level: texture_storage_2d_array<rgba16float, write>;
+`;class We extends P{constructor(t){super(t,3,"DFFT Parameters UBO");a(this,"data",{log_2_size:1,size:2,b_inverse:!1})}packed(){const t=new ArrayBuffer(this.buffer.size),r=new DataView(t);return r.setUint32(0,this.data.log_2_size,!0),r.setUint32(4,this.data.size,!0),r.setFloat32(8,this.data.b_inverse?1:0,!0),t}}const re=16,F="rgba16float";class ke{constructor(e,t,r){a(this,"parametersUBO");a(this,"intermediateDFTs");a(this,"gridSize3D");a(this,"complexBuffer0");a(this,"complexBuffer1");a(this,"stepCounterBuffer");a(this,"outputTexture");a(this,"intermediateDFTsBindGroup");a(this,"intermediateDFTsKernel");a(this,"performBindGroup");a(this,"performKernel");a(this,"performSwapEvenSignsAndCopyToHalfPrecisionOutputKernel");a(this,"stepCounterBindGroup");a(this,"incrementStepCounterKernel");a(this,"resetStepCounterKernel");a(this,"debugBuffersCopied",!1);if(t<5)throw new RangeError("gridSizeExponent must be greater than 4.");if(!Number.isFinite(r)||r<1)throw new RangeError(`layerCount of ${r} is invalid`);const i=Math.pow(2,t);this.gridSize3D={width:i,height:i,depthOrArrayLayers:r};const n=this.gridSize3D.width*this.gridSize3D.height*this.gridSize3D.depthOrArrayLayers;this.parametersUBO=new We(e),this.parametersUBO.data.log_2_size=t,this.parametersUBO.data.size=i,this.parametersUBO.data.b_inverse=!1,this.parametersUBO.writeToGPU(e.queue);const s=16;this.intermediateDFTs=e.createBuffer({label:"DFFT Precompute Stage Steps",size:t*i*s,usage:GPUBufferUsage.STORAGE});const o=e.createShaderModule({label:"DFFT Precompute Stage",code:Be}),l=e.createBindGroupLayout({label:"DFFT Precompute Stage Group 0",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}},{binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:"storage"}}]});this.intermediateDFTsBindGroup=e.createBindGroup({label:"DFFT Precompute Stage Group 0",layout:l,entries:[{binding:0,resource:{buffer:this.parametersUBO.buffer}},{binding:1,resource:{buffer:this.intermediateDFTs}}]});const u=e.createPipelineLayout({label:"DFFT Precompute Steps Kernel",bindGroupLayouts:[l]});this.intermediateDFTsKernel=e.createComputePipeline({label:"DFFT Precompute Stage",compute:{module:o,entryPoint:"precomputeDFFTInstructions"},layout:u});const d=e.createBindGroupLayout({label:"DFFT Perform Group 0",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}},{binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:"read-only-storage"}},{binding:2,visibility:GPUShaderStage.COMPUTE,buffer:{type:"storage"}},{binding:3,visibility:GPUShaderStage.COMPUTE,buffer:{type:"storage"}},{binding:4,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}},{binding:5,visibility:GPUShaderStage.COMPUTE,storageTexture:{format:F,viewDimension:"2d-array",access:"write-only"}}]});this.complexBuffer0=e.createBuffer({label:"DFFT Buffer 0",size:n*re,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST}),this.complexBuffer1=e.createBuffer({label:"DFFT Buffer 1",size:this.complexBuffer0.size,usage:this.complexBuffer0.usage});const m=4;this.stepCounterBuffer=e.createBuffer({label:"DFFT Step Counter",size:m,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.STORAGE|GPUBufferUsage.UNIFORM});const v=new Uint32Array(1);v[0]=0,e.queue.writeBuffer(this.stepCounterBuffer,0,v),this.outputTexture=e.createTexture({label:"DFFT Output Texture",format:F,size:this.gridSize3D,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC}),this.performBindGroup=e.createBindGroup({label:"DFFT Perform Group 0",layout:d,entries:[{binding:0,resource:{buffer:this.parametersUBO.buffer}},{binding:1,resource:{buffer:this.intermediateDFTs}},{binding:2,resource:{buffer:this.complexBuffer0}},{binding:3,resource:{buffer:this.complexBuffer1}},{binding:4,resource:{buffer:this.stepCounterBuffer}},{binding:5,resource:this.outputTexture.createView()}]});const b=e.createPipelineLayout({label:"DFFT Perform",bindGroupLayouts:[d]});this.performKernel=e.createComputePipeline({label:"DFFT Perform DFFT Step",compute:{module:o,entryPoint:"performDFFTStep"},layout:b}),this.performSwapEvenSignsAndCopyToHalfPrecisionOutputKernel=e.createComputePipeline({label:"DFFT Perform Swap Even Signs",compute:{module:o,entryPoint:"performSwapEvenSignsAndCopyToHalfPrecisionOutput"},layout:b});const T=e.createBindGroupLayout({label:"DFFT Step Counter Bind Group 0",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:"storage"}}]});this.stepCounterBindGroup=e.createBindGroup({label:"DFFT Step Counter Bind Group 0",layout:T,entries:[{binding:0,resource:{buffer:this.stepCounterBuffer}}]});const x=e.createPipelineLayout({label:"DFFT Step Counter",bindGroupLayouts:[T]});this.incrementStepCounterKernel=e.createComputePipeline({label:"DFFT Increment Step Counter Kernel",layout:x,compute:{module:o,entryPoint:"incrementStepCounter"}}),this.resetStepCounterKernel=e.createComputePipeline({label:"DFFT Reset Step Counter Kernel",layout:x,compute:{module:o,entryPoint:"resetStepCounter"}}),this.parametersUBO.data.b_inverse=!0,this.parametersUBO.writeToGPU(e.queue);const f=e.createCommandEncoder({label:"DFFT Precompute"}),g=f.beginComputePass({label:"DFFT Precompute Steps"});g.setPipeline(this.intermediateDFTsKernel),g.setBindGroup(0,this.intermediateDFTsBindGroup),g.dispatchWorkgroups(i/2/2,1),g.end(),e.queue.submit([f.finish()])}recordPerformOnBuffer0(e,t){const r=2*this.parametersUBO.data.log_2_size,i=e.beginComputePass({label:"DFFT Perform",timestampWrites:t});for(let n=0;n<r;n++)n===0?(i.setPipeline(this.resetStepCounterKernel),i.setBindGroup(0,this.stepCounterBindGroup),i.dispatchWorkgroups(1)):(i.setPipeline(this.incrementStepCounterKernel),i.setBindGroup(0,this.stepCounterBindGroup),i.dispatchWorkgroups(1)),i.setPipeline(this.performKernel),i.setBindGroup(0,this.performBindGroup),i.dispatchWorkgroups(this.gridSize3D.width/16,this.gridSize3D.height/16,this.gridSize3D.depthOrArrayLayers/1);i.setPipeline(this.performSwapEvenSignsAndCopyToHalfPrecisionOutputKernel),i.setBindGroup(0,this.performBindGroup),i.dispatchWorkgroups(this.gridSize3D.width/16,this.gridSize3D.height/16,this.gridSize3D.depthOrArrayLayers/1),i.end()}recordPerform(e,t,r,i,n,s){const o="rgba32float";if(r.format!=o)throw RangeError(`sourceTexture (format ${r.format}) must be ${o}`);if(i.format!=F)throw RangeError(`destinationArray (format ${r.format}) must be ${o}`);if(r.width!=i.width||r.height!=i.height||r.depthOrArrayLayers!=i.depthOrArrayLayers)throw RangeError(`SourceTexture ${r.label} does not match destination texture ${i.label} extent`);this.parametersUBO.data.b_inverse=n,this.parametersUBO.writeToGPU(e.queue),t.copyTextureToBuffer({texture:r},{buffer:this.complexBuffer0,bytesPerRow:this.gridSize3D.width*re,rowsPerImage:this.gridSize3D.height},this.gridSize3D),this.recordPerformOnBuffer0(t,s),t.copyTextureToTexture({texture:this.outputTexture},{texture:i},this.gridSize3D)}}const qe=`@group(0) @binding(0) var out_next_mip_level: texture_storage_2d_array<rgba16float, write>;
 @group(0) @binding(1) var in_previous_mip_level: texture_2d_array<f32>;
 
 @compute @workgroup_size(16, 16, 1)
@@ -3052,7 +3181,7 @@ fn fillMipMapSmaller(@builtin(global_invocation_id) global_id: vec3<u32>)
 	);
 	textureStore(out_next_mip_level, global_id.xy, array_level, color);
 }
-`,F="rgba16float";class qe{constructor(e){a(this,"fillMipMapTextureInOutLayout");a(this,"fillMipMapKernel");a(this,"fillMipMapSmallerKernel");this.fillMipMapTextureInOutLayout=e.createBindGroupLayout({label:"MipMap Generation fillMipMap Texture In-Out",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{format:F,viewDimension:"2d-array"}},{binding:1,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:"unfilterable-float",viewDimension:"2d-array"}}]});const t=e.createShaderModule({label:"sky-sea/mipmap.wgsl",code:ke}),r=e.createPipelineLayout({label:"MipMap Generation fillMipMap Kernel",bindGroupLayouts:[this.fillMipMapTextureInOutLayout]});this.fillMipMapKernel=e.createComputePipeline({label:"MipMap Generation fillMipMap Kernel",layout:r,compute:{module:t,entryPoint:"fillMipMap"}}),this.fillMipMapSmallerKernel=e.createComputePipeline({label:"MipMap Generation fillMipMapSmaller Kernel",layout:r,compute:{module:t,entryPoint:"fillMipMapSmaller"}})}createBindGroups(e,t){if(t.format!=F)throw new RangeError(`Invalid source texture (label ${t.label}) for MipMap generation`,{cause:`Source format is ${t.format} when expected ${F}`});if(t.dimension!="2d")throw new RangeError(`Invalid source texture (label ${t.label}) for MipMap generation`,{cause:"Source texture is not 2d"});if(!(t.usage&GPUTextureUsage.COPY_SRC))throw new RangeError(`Invalid source texture (label ${t.label}) for MipMap generation`,{cause:"Source usage is missing required flag COPY_SRC"});if(t.width!=t.height||!Number.isInteger(Math.log2(t.width)))throw new RangeError(`Invalid source texture (label ${t.label}) for MipMap generation`,{cause:`Source dimensions of (${t.width},${t.height}) are invalid, texture must be square and power-of-2.`});const r=Math.log2(t.width);return{level0Size:{width:t.width,height:t.height},bindGroupsByMipLevel:[...new Array(Math.min(r,t.mipLevelCount)-1).keys()].map((s,i)=>{const n=i+1,o=i;return e.createBindGroup({label:`MipMap Generation for '${t.label}' IO Bind Group '${o} => ${n}'`,layout:this.fillMipMapTextureInOutLayout,entries:[{binding:0,resource:t.createView({dimension:"2d-array",baseMipLevel:n,mipLevelCount:1})},{binding:1,resource:t.createView({dimension:"2d-array",baseMipLevel:o,mipLevelCount:1})}]})}),arrayLevelCount:t.depthOrArrayLayers}}updateMipMaps(e,t){t.bindGroupsByMipLevel.forEach((r,s)=>{e.setBindGroup(0,r);const i=1<<s,n=t.level0Size.width/i,o=t.level0Size.height/i;n>=16&&o>=16?(e.setPipeline(this.fillMipMapKernel),e.dispatchWorkgroups(n/16,o/16,t.arrayLevelCount)):(e.setPipeline(this.fillMipMapSmallerKernel),e.dispatchWorkgroups(n,o,t.arrayLevelCount))})}}const le=512,N=9,Ve=9.8,He=100,re="rg32float",B="rg32float",je="rgba16float",ie="rgba16float",W="rgba32float";class Qe extends E{constructor(t){super(t,12,"Fourier Waves UBO");a(this,"data",{fourier_grid_size:le,gravity:Ve,wave_patch_extent_meters:50,wave_period_seconds:He,wind_speed_meters_per_second:10,wind_fetch_meters:10*1e3,wave_swell:.3,padding0:0,wave_number_min_max:b.create(0,1e3),padding1:b.create(0,0)})}packed(){const t=new ArrayBuffer(this.buffer.size),r=new DataView(t),s=new Float32Array(t);return r.setUint32(0,this.data.fourier_grid_size,!0),r.setFloat32(4,this.data.gravity,!0),r.setFloat32(8,this.data.wave_patch_extent_meters,!0),r.setFloat32(12,this.data.wave_period_seconds,!0),r.setFloat32(16,this.data.wind_speed_meters_per_second,!0),r.setFloat32(20,this.data.wind_fetch_meters,!0),r.setFloat32(24,this.data.wave_swell,!0),r.setFloat32(28,this.data.padding0,!0),s.set(this.data.wave_number_min_max,8),s.set(this.data.padding1,10),t}}function Ye(){const l=Math.random(),e=Math.random(),t=Math.sqrt(-2*Math.log(l)),r=2*Math.PI*e,s=t*Math.cos(r),i=t*Math.sin(r);return[s,i]}class Ke{constructor(e,t,r){a(this,"Dx_Dy_Dz_Dxdz_Spatial");a(this,"Dydx_Dydz_Dxdx_Dzdz_Spatial");a(this,"turbulenceJacobian");a(this,"Dx_Dy_Dz_Dxdz_SpatialAllMips");a(this,"Dydx_Dydz_Dxdx_Dzdz_SpatialAllMips");a(this,"turbulenceJacobianOneMip");e.mipLevelCount!=t.mipLevelCount&&console.warn(`FFT Wave Displacement maps do not have identical mip levels. ${e.mipLevelCount} vs ${t.mipLevelCount}`),this.Dx_Dy_Dz_Dxdz_Spatial=e,this.Dydx_Dydz_Dxdx_Dzdz_Spatial=t,this.turbulenceJacobian=r,this.Dx_Dy_Dz_Dxdz_SpatialAllMips=this.Dx_Dy_Dz_Dxdz_Spatial.createView({label:`FFT Wave DisplacementMaps for ${this.Dx_Dy_Dz_Dxdz_Spatial.label}`}),this.Dydx_Dydz_Dxdx_Dzdz_SpatialAllMips=this.Dydx_Dydz_Dxdx_Dzdz_Spatial.createView({label:`FFT Wave DisplacementMaps for ${this.Dydx_Dydz_Dxdx_Dzdz_Spatial.label}`}),this.turbulenceJacobianOneMip=this.turbulenceJacobian.map((s,i)=>s.createView({label:`FFT Wave DisplacementMaps for ${this.turbulenceJacobian[i].label} index ${i}`}))}get mipLevelCount(){return this.Dx_Dy_Dz_Dxdz_Spatial.mipLevelCount}}class Xe{constructor(e,t){a(this,"gridSize");a(this,"initialAmplitudeKernel");a(this,"realizedAmplitudeKernel");a(this,"accumulateTurbulenceKernel");a(this,"dfftResources");a(this,"mipMapGenerator");a(this,"cascades");a(this,"Dx_Dy_Dz_Dxdz_SpatialArray");a(this,"Dydx_Dydz_Dxdx_Dzdz_SpatialArray");a(this,"turbulenceJacobianArrays");a(this,"turbulenceJacobianIndex",0);a(this,"Dx_Dy_Dz_Dxdz_SpatialArray_MipMapBindings");a(this,"Dydx_Dydz_Dxdx_Dzdz_SpatialArray_MipMapBindings");a(this,"waveSettings");this.gridSize=le;const r=e.createBindGroupLayout({label:"FFT Wave Initial Amplitude h_0(k) Group 0",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{format:B,access:"write-only"}},{binding:1,visibility:GPUShaderStage.COMPUTE,storageTexture:{format:re,access:"read-only"}}]}),s=e.createBindGroupLayout({label:"FFT Wave Initial Amplitude h_0(k) Group 1",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}},{binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}}]});this.dfftResources=new We(e,N);const i=e.createShaderModule({label:"FFT Wave",code:Fe});this.initialAmplitudeKernel=e.createComputePipeline({label:"FFT Wave Initial Amplitude h_0(k)",layout:e.createPipelineLayout({label:"FFT Wave Initial Amplitude h_0(k)",bindGroupLayouts:[r,s]}),compute:{module:i,entryPoint:"computeInitialAmplitude"}}),this.mipMapGenerator=new qe(e);const n=e.createBindGroupLayout({label:"FFT Wave Realized Fourier Amplitude h(k,t) Group 0",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{format:W,access:"write-only"}},{binding:1,visibility:GPUShaderStage.COMPUTE,storageTexture:{format:W,access:"write-only"}},{binding:2,visibility:GPUShaderStage.COMPUTE,storageTexture:{format:B,access:"read-only"}}]}),o=e.createBindGroupLayout({label:"FFT Wave Realized Fourier Amplitude h(k,t) Group 1",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}},{binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}}]});this.realizedAmplitudeKernel=e.createComputePipeline({label:"FFT Wave Realized Fourier Amplitude h(k,t)",layout:e.createPipelineLayout({label:"FFT Wave Realized Fourier Amplitude h(k,t)",bindGroupLayouts:[n,o]}),compute:{module:i,entryPoint:"computeRealizedAmplitude"}});const u=e.createBindGroupLayout({label:"FFT Wave Accumulate Turbulence Group 0",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{viewDimension:"2d-array",format:ie}},{binding:1,visibility:GPUShaderStage.COMPUTE,texture:{viewDimension:"2d-array",sampleType:"unfilterable-float"}},{binding:2,visibility:GPUShaderStage.COMPUTE,texture:{viewDimension:"2d-array",sampleType:"unfilterable-float"}},{binding:3,visibility:GPUShaderStage.COMPUTE,texture:{viewDimension:"2d-array",sampleType:"unfilterable-float"}},{binding:4,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}}]});this.accumulateTurbulenceKernel=e.createComputePipeline({label:"FFT Wave Accumulate Turbulence",layout:e.createPipelineLayout({label:"FFT Wave Accumulate Turbulence",bindGroupLayouts:[u]}),compute:{module:i,entryPoint:"accumulateTurbulence"}});function c(y){const v=2*y;return 2*Math.PI/v}const _=[200,50,10],d=[.001,..._.map(y=>c(y/this.gridSize)),1e3],p=_.map((y,v)=>({patchExtentMeters:y,waveNumberMinMax:[d[v],d[v+1]]})),h=p.length;this.Dx_Dy_Dz_Dxdz_SpatialArray=e.createTexture({label:"FFT Wave Final Displacement Array",format:je,dimension:"2d",size:{width:this.gridSize,height:this.gridSize,depthOrArrayLayers:h},mipLevelCount:N,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST}),this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray=e.createTexture({label:"FFT Wave Final Derivatives Array",format:this.Dx_Dy_Dz_Dxdz_SpatialArray.format,size:{width:this.Dx_Dy_Dz_Dxdz_SpatialArray.width,height:this.Dx_Dy_Dz_Dxdz_SpatialArray.height,depthOrArrayLayers:this.Dx_Dy_Dz_Dxdz_SpatialArray.depthOrArrayLayers},mipLevelCount:this.Dx_Dy_Dz_Dxdz_SpatialArray.mipLevelCount,usage:this.Dx_Dy_Dz_Dxdz_SpatialArray.usage}),this.cascades=p.map(y=>this.createCascade(e,t,y.patchExtentMeters,y.waveNumberMinMax));const f=new Uint16Array(this.Dx_Dy_Dz_Dxdz_SpatialArray.width*this.Dx_Dy_Dz_Dxdz_SpatialArray.height*this.Dx_Dy_Dz_Dxdz_SpatialArray.depthOrArrayLayers*4).fill(15360);this.turbulenceJacobianArrays=[0,0].map((y,v)=>e.createTexture({label:`FFT Wave (Turbulence,Jacobian) Array ${v}`,format:ie,size:{width:this.Dx_Dy_Dz_Dxdz_SpatialArray.width,height:this.Dx_Dy_Dz_Dxdz_SpatialArray.height,depthOrArrayLayers:this.Dx_Dy_Dz_Dxdz_SpatialArray.depthOrArrayLayers},mipLevelCount:N,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST})).reduce((y,v,D,S)=>{e.queue.writeTexture({texture:v},f,{bytesPerRow:this.Dx_Dy_Dz_Dxdz_SpatialArray.width*8,rowsPerImage:this.Dx_Dy_Dz_Dxdz_SpatialArray.height},{width:this.Dx_Dy_Dz_Dxdz_SpatialArray.width,height:this.Dx_Dy_Dz_Dxdz_SpatialArray.height,depthOrArrayLayers:this.Dx_Dy_Dz_Dxdz_SpatialArray.depthOrArrayLayers});const w=e.createBindGroup({layout:this.accumulateTurbulenceKernel.getBindGroupLayout(0),entries:[{binding:0,resource:v.createView({mipLevelCount:1})},{binding:1,resource:S[(D+1)%S.length].createView({})},{binding:2,resource:this.Dx_Dy_Dz_Dxdz_SpatialArray.createView({})},{binding:3,resource:this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray.createView({})},{binding:4,resource:{buffer:t.buffer}}]});return y.concat({textureArray:v,bindGroup:w,mipMapBindings:this.mipMapGenerator.createBindGroups(e,v)})},[]),this.Dx_Dy_Dz_Dxdz_SpatialArray_MipMapBindings=this.mipMapGenerator.createBindGroups(e,this.Dx_Dy_Dz_Dxdz_SpatialArray),this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray_MipMapBindings=this.mipMapGenerator.createBindGroups(e,this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray),this.waveSettings={gravity:0,waveSwell:0,windFetchMeters:0,windSpeedMetersPerSeconds:0}}get turbulenceMapIndex(){return this.turbulenceJacobianIndex}createCascade(e,t,r,s){const i={width:this.gridSize,height:this.gridSize},n=e.createTexture({label:"FFT Wave Gaussian Noise",format:re,size:i,usage:GPUTextureUsage.COPY_DST|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING}),o=2,c=8*this.gridSize,_=new Float32Array(this.gridSize*this.gridSize*o);for(let S=0;S<_.length;S++)_[S]=Ye()[0];e.queue.writeTexture({texture:n},_,{bytesPerRow:c},{width:n.width,height:n.height});const d=new Qe(e);d.data.wave_patch_extent_meters=r,b.set(s[0],s[1],d.data.wave_number_min_max),d.writeToGPU(e.queue);const p=e.createTexture({label:"FFT Wave Fourier Amplitude h_0(k)",format:B,size:i,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING}),h=e.createBindGroup({label:"FFT Wave Initial Amplitude h_0(k) Group 0",layout:this.initialAmplitudeKernel.getBindGroupLayout(0),entries:[{binding:0,resource:p.createView()},{binding:1,resource:n.createView()}]}),g=e.createBindGroup({label:"FFT Wave Initial Amplitude h_0(k) Group 1",layout:this.initialAmplitudeKernel.getBindGroupLayout(1),entries:[{binding:0,resource:{buffer:t.buffer}},{binding:1,resource:{buffer:d.buffer}}]}),f=e.createTexture({label:"FFT Wave Packed (Dx + iDy, Dz + iDxdz) Amplitude",format:W,size:i,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC}),y=e.createTexture({label:"FFT Wave Packed (Dydx + iDydz, Dxdx + iDzdz) Amplitude",format:f.format,size:i,usage:f.usage}),v=e.createBindGroup({label:"FFT Wave Realized Fourier Amplitude h(k,t) Group 0",layout:this.realizedAmplitudeKernel.getBindGroupLayout(0),entries:[{binding:0,resource:f.createView()},{binding:1,resource:y.createView()},{binding:2,resource:p.createView()}]}),D=e.createBindGroup({label:"FFT Wave Realized Fourier Amplitude h(k,t) Group 1",layout:this.realizedAmplitudeKernel.getBindGroupLayout(1),entries:[{binding:0,resource:{buffer:t.buffer}},{binding:1,resource:{buffer:d.buffer}}]});return{gaussianNoise:n,initialAmplitude:p,waveSettings:d,initialAmplitudeGroup0:h,initialAmplitudeGroup1:g,packed_Dx_plus_iDy_Dz_iDxdz_Amplitude:f,packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude:y,realizedAmplitudeGroup0:v,realizedAmplitudeGroup1:D}}views(){const e=this.cascades[0];return{gaussianNoise:new T(e.gaussianNoise),initialAmplitude:new T(e.initialAmplitude),packed_Dx_plus_iDy_Dz_iDxdz_Amplitude:new T(e.packed_Dx_plus_iDy_Dz_iDxdz_Amplitude),packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude:new T(e.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude),turbulenceJacobian:new T(this.turbulenceJacobianArrays[0].textureArray),Dx_Dy_Dz_Dxdz_Spatial:new T(this.Dx_Dy_Dz_Dxdz_SpatialArray),Dydx_Dydz_Dxdx_Dzdz_Spatial:new T(this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray)}}displacementMaps(){return new Ke(this.Dx_Dy_Dz_Dxdz_SpatialArray,this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray,this.turbulenceJacobianArrays.map(e=>e.textureArray))}record(e,t,r,s){if(r.gravity!=this.waveSettings.gravity||r.waveSwell!=this.waveSettings.waveSwell||r.windSpeedMetersPerSeconds!=this.waveSettings.windSpeedMetersPerSeconds||r.windFetchMeters!=this.waveSettings.windFetchMeters){this.waveSettings=structuredClone(r);const c=t.beginComputePass({label:"FFT Wave Initial Amplitude"});this.cascades.forEach(_=>{_.waveSettings.data.wave_swell=this.waveSettings.waveSwell,_.waveSettings.data.wind_fetch_meters=this.waveSettings.windFetchMeters,_.waveSettings.data.wind_speed_meters_per_second=this.waveSettings.windSpeedMetersPerSeconds,_.waveSettings.data.gravity=this.waveSettings.gravity,_.waveSettings.writeToGPU(e.queue),c.setPipeline(this.initialAmplitudeKernel),c.setBindGroup(0,_.initialAmplitudeGroup0),c.setBindGroup(1,_.initialAmplitudeGroup1);const d={width:_.initialAmplitude.width,height:_.initialAmplitude.height,depth:_.initialAmplitude.depthOrArrayLayers};c.dispatchWorkgroups(d.width/16,d.height/16,d.depth/1)}),c.end()}const n=t.beginComputePass({label:"FFT Wave Fourier Amplitude Realization",timestampWrites:s!==void 0?{querySet:s.querySet,beginningOfPassWriteIndex:s.beginWriteIndex}:void 0});this.cascades.forEach(c=>{n.setPipeline(this.realizedAmplitudeKernel),n.setBindGroup(0,c.realizedAmplitudeGroup0),n.setBindGroup(1,c.realizedAmplitudeGroup1);const _={width:c.packed_Dx_plus_iDy_Dz_iDxdz_Amplitude.width,height:c.packed_Dx_plus_iDy_Dz_iDxdz_Amplitude.height,depth:1};n.dispatchWorkgroups(_.width/16,_.height/16,_.depth/1)}),n.end(),this.cascades.forEach((c,_)=>{this.dfftResources.recordPerform(e,t,c.packed_Dx_plus_iDy_Dz_iDxdz_Amplitude,this.Dx_Dy_Dz_Dxdz_SpatialArray,_,!0,void 0),this.dfftResources.recordPerform(e,t,c.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray,_,!0,void 0)});const o=t.beginComputePass({label:"Turbulence Accumulation"});o.setPipeline(this.accumulateTurbulenceKernel),o.setBindGroup(0,this.turbulenceJacobianArrays[this.turbulenceJacobianIndex].bindGroup),o.dispatchWorkgroups(this.gridSize/16,this.gridSize/16),o.end();const u=t.beginComputePass({label:"MipMap Generation",timestampWrites:s!==void 0?{querySet:s.querySet,endOfPassWriteIndex:s.endWriteIndex}:void 0});this.mipMapGenerator.updateMipMaps(u,this.Dx_Dy_Dz_Dxdz_SpatialArray_MipMapBindings),this.mipMapGenerator.updateMipMaps(u,this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray_MipMapBindings),this.mipMapGenerator.updateMipMaps(u,this.turbulenceJacobianArrays[this.turbulenceJacobianIndex].mipMapBindings),this.turbulenceJacobianIndex+=1,this.turbulenceJacobianIndex%=this.turbulenceJacobianArrays.length,u.end()}}const Je=`// Displace a grid of vertices representing the ocean surface, then rasterize into the gbuffer with a graphics pass
+`,N="rgba16float";class He{constructor(e){a(this,"fillMipMapTextureInOutLayout");a(this,"fillMipMapKernel");a(this,"fillMipMapSmallerKernel");this.fillMipMapTextureInOutLayout=e.createBindGroupLayout({label:"MipMap Generation fillMipMap Texture In-Out",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{format:N,viewDimension:"2d-array"}},{binding:1,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:"unfilterable-float",viewDimension:"2d-array"}}]});const t=e.createShaderModule({label:"sky-sea/mipmap.wgsl",code:qe}),r=e.createPipelineLayout({label:"MipMap Generation fillMipMap Kernel",bindGroupLayouts:[this.fillMipMapTextureInOutLayout]});this.fillMipMapKernel=e.createComputePipeline({label:"MipMap Generation fillMipMap Kernel",layout:r,compute:{module:t,entryPoint:"fillMipMap"}}),this.fillMipMapSmallerKernel=e.createComputePipeline({label:"MipMap Generation fillMipMapSmaller Kernel",layout:r,compute:{module:t,entryPoint:"fillMipMapSmaller"}})}createBindGroups(e,t){if(t.format!=N)throw new RangeError(`Invalid source texture (label ${t.label}) for MipMap generation`,{cause:`Source format is ${t.format} when expected ${N}`});if(t.dimension!="2d")throw new RangeError(`Invalid source texture (label ${t.label}) for MipMap generation`,{cause:"Source texture is not 2d"});if(!(t.usage&GPUTextureUsage.COPY_SRC))throw new RangeError(`Invalid source texture (label ${t.label}) for MipMap generation`,{cause:"Source usage is missing required flag COPY_SRC"});if(t.width!=t.height||!Number.isInteger(Math.log2(t.width)))throw new RangeError(`Invalid source texture (label ${t.label}) for MipMap generation`,{cause:`Source dimensions of (${t.width},${t.height}) are invalid, texture must be square and power-of-2.`});const r=Math.log2(t.width);return{level0Size:{width:t.width,height:t.height},bindGroupsByMipLevel:[...new Array(Math.min(r,t.mipLevelCount)-1).keys()].map((i,n)=>{const s=n+1,o=n;return e.createBindGroup({label:`MipMap Generation for '${t.label}' IO Bind Group '${o} => ${s}'`,layout:this.fillMipMapTextureInOutLayout,entries:[{binding:0,resource:t.createView({dimension:"2d-array",baseMipLevel:s,mipLevelCount:1})},{binding:1,resource:t.createView({dimension:"2d-array",baseMipLevel:o,mipLevelCount:1})}]})}),arrayLevelCount:t.depthOrArrayLayers}}updateMipMaps(e,t){t.bindGroupsByMipLevel.forEach((r,i)=>{e.setBindGroup(0,r);const n=1<<i,s=t.level0Size.width/n,o=t.level0Size.height/n;s>=16&&o>=16?(e.setPipeline(this.fillMipMapKernel),e.dispatchWorkgroups(s/16,o/16,t.arrayLevelCount)):(e.setPipeline(this.fillMipMapSmallerKernel),e.dispatchWorkgroups(s,o,t.arrayLevelCount))})}}const de=512,B=9,Ve=9.8,je=100,Ye="rg32float",ie="rg32float",Qe="rgba16float",ne="rgba16float",W="rgba32float",Xe=4,se=4;class Ke extends P{constructor(t){super(t,8+Xe*se,"Fourier Waves UBO");a(this,"data",{fourier_grid_size:de,gravity:Ve,padding0:0,wave_period_seconds:je,wind_speed_meters_per_second:10,wind_fetch_meters:10*1e3,wave_swell:.3,padding1:0,cascades:new Array(4)})}packed(){const t=new ArrayBuffer(this.buffer.size),r=new DataView(t),i=new Float32Array(t);r.setUint32(0,this.data.fourier_grid_size,!0),r.setFloat32(4,this.data.gravity,!0),r.setFloat32(8,this.data.padding0,!0),r.setFloat32(12,this.data.wave_period_seconds,!0),r.setFloat32(16,this.data.wind_speed_meters_per_second,!0),r.setFloat32(20,this.data.wind_fetch_meters,!0),r.setFloat32(24,this.data.wave_swell,!0),r.setFloat32(28,this.data.padding1,!0);const n=8;return this.data.cascades.forEach((s,o)=>{const l=n+o*se;i.set(s.wave_number_min_max,l),i[l+2]=s.wave_patch_extent_meters,i[l+3]=0}),t}}function $e(){const c=Math.random(),e=Math.random(),t=Math.sqrt(-2*Math.log(c)),r=2*Math.PI*e,i=t*Math.cos(r),n=t*Math.sin(r);return[i,n]}class Je{constructor(e,t,r){a(this,"Dx_Dy_Dz_Dxdz_Spatial");a(this,"Dydx_Dydz_Dxdx_Dzdz_Spatial");a(this,"turbulenceJacobian");a(this,"Dx_Dy_Dz_Dxdz_SpatialAllMips");a(this,"Dydx_Dydz_Dxdx_Dzdz_SpatialAllMips");a(this,"turbulenceJacobianOneMip");e.mipLevelCount!=t.mipLevelCount&&console.warn(`FFT Wave Displacement maps do not have identical mip levels. ${e.mipLevelCount} vs ${t.mipLevelCount}`),this.Dx_Dy_Dz_Dxdz_Spatial=e,this.Dydx_Dydz_Dxdx_Dzdz_Spatial=t,this.turbulenceJacobian=r,this.Dx_Dy_Dz_Dxdz_SpatialAllMips=this.Dx_Dy_Dz_Dxdz_Spatial.createView({label:`FFT Wave DisplacementMaps for ${this.Dx_Dy_Dz_Dxdz_Spatial.label}`}),this.Dydx_Dydz_Dxdx_Dzdz_SpatialAllMips=this.Dydx_Dydz_Dxdx_Dzdz_Spatial.createView({label:`FFT Wave DisplacementMaps for ${this.Dydx_Dydz_Dxdx_Dzdz_Spatial.label}`}),this.turbulenceJacobianOneMip=this.turbulenceJacobian.map((i,n)=>i.createView({label:`FFT Wave DisplacementMaps for ${this.turbulenceJacobian[n].label} index ${n}`}))}get mipLevelCount(){return this.Dx_Dy_Dz_Dxdz_Spatial.mipLevelCount}}class Ze{constructor(e,t){a(this,"gridSize");a(this,"cascadeCount");a(this,"initialAmplitudeKernel");a(this,"realizedAmplitudeKernel");a(this,"accumulateTurbulenceKernel");a(this,"dfftResources");a(this,"mipMapGenerator");a(this,"cascades");a(this,"Dx_Dy_Dz_Dxdz_SpatialArray");a(this,"Dydx_Dydz_Dxdx_Dzdz_SpatialArray");a(this,"turbulenceJacobianArrays");a(this,"turbulenceJacobianIndex",0);a(this,"Dx_Dy_Dz_Dxdz_SpatialArray_MipMapBindings");a(this,"Dydx_Dydz_Dxdx_Dzdz_SpatialArray_MipMapBindings");a(this,"waveSettings");this.gridSize=de;const r=e.createBindGroupLayout({label:"FFT Wave Initial Amplitude h_0(k) Group 0",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{format:ie,viewDimension:"2d-array",access:"write-only"}},{binding:1,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:"unfilterable-float",viewDimension:"2d-array"}}]}),i=e.createBindGroupLayout({label:"FFT Wave Initial Amplitude h_0(k) Group 1",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}},{binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}}]}),n=e.createShaderModule({label:"FFT Wave",code:Ne});this.initialAmplitudeKernel=e.createComputePipeline({label:"FFT Wave Initial Amplitude h_0(k)",layout:e.createPipelineLayout({label:"FFT Wave Initial Amplitude h_0(k)",bindGroupLayouts:[r,i]}),compute:{module:n,entryPoint:"computeInitialAmplitude"}}),this.mipMapGenerator=new He(e);const s=e.createBindGroupLayout({label:"FFT Wave Realized Fourier Amplitude h(k,t) Group 0",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{format:W,viewDimension:"2d-array",access:"write-only"}},{binding:1,visibility:GPUShaderStage.COMPUTE,storageTexture:{format:W,viewDimension:"2d-array",access:"write-only"}},{binding:2,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:"unfilterable-float",viewDimension:"2d-array"}}]}),o=e.createBindGroupLayout({label:"FFT Wave Realized Fourier Amplitude h(k,t) Group 1",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}},{binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}}]});this.realizedAmplitudeKernel=e.createComputePipeline({label:"FFT Wave Realized Fourier Amplitude h(k,t)",layout:e.createPipelineLayout({label:"FFT Wave Realized Fourier Amplitude h(k,t)",bindGroupLayouts:[s,o]}),compute:{module:n,entryPoint:"computeRealizedAmplitude"}});const l=e.createBindGroupLayout({label:"FFT Wave Accumulate Turbulence Group 0",entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{viewDimension:"2d-array",format:ne}},{binding:1,visibility:GPUShaderStage.COMPUTE,texture:{viewDimension:"2d-array",sampleType:"unfilterable-float"}},{binding:2,visibility:GPUShaderStage.COMPUTE,texture:{viewDimension:"2d-array",sampleType:"unfilterable-float"}},{binding:3,visibility:GPUShaderStage.COMPUTE,texture:{viewDimension:"2d-array",sampleType:"unfilterable-float"}},{binding:4,visibility:GPUShaderStage.COMPUTE,buffer:{type:"uniform"}}]});this.accumulateTurbulenceKernel=e.createComputePipeline({label:"FFT Wave Accumulate Turbulence",layout:e.createPipelineLayout({label:"FFT Wave Accumulate Turbulence",bindGroupLayouts:[l]}),compute:{module:n,entryPoint:"accumulateTurbulence"}});function u(f){const g=2*f;return 2*Math.PI/g}const d=[200,50,10],m=[.001,...d.map(f=>u(f/this.gridSize)),1e3],v=d.map((f,g)=>({patchExtentMeters:f,waveNumberMinMax:[m[g],m[g+1]]}));this.cascadeCount=v.length,this.dfftResources=new ke(e,B,this.cascadeCount),this.Dx_Dy_Dz_Dxdz_SpatialArray=e.createTexture({label:"FFT Wave Final Displacement Array",format:Qe,dimension:"2d",size:this.textureGridSize,mipLevelCount:B,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST}),this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray=e.createTexture({label:"FFT Wave Final Derivatives Array",format:this.Dx_Dy_Dz_Dxdz_SpatialArray.format,size:this.textureGridSize,mipLevelCount:this.Dx_Dy_Dz_Dxdz_SpatialArray.mipLevelCount,usage:this.Dx_Dy_Dz_Dxdz_SpatialArray.usage}),this.cascades=this.createCascades(e,t,v);const b=15360,T=this.textureGridSize.width*this.textureGridSize.height*this.textureGridSize.depthOrArrayLayers,x=new Uint16Array(T*4).fill(b);this.turbulenceJacobianArrays=[0,0].map((f,g)=>e.createTexture({label:`FFT Wave (Turbulence,Jacobian) Array ${g}`,format:ne,size:this.textureGridSize,mipLevelCount:B,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST})).reduce((f,g,y,U)=>{e.queue.writeTexture({texture:g},x,{bytesPerRow:this.Dx_Dy_Dz_Dxdz_SpatialArray.width*8,rowsPerImage:this.Dx_Dy_Dz_Dxdz_SpatialArray.height},this.textureGridSize);const p=e.createBindGroup({layout:this.accumulateTurbulenceKernel.getBindGroupLayout(0),entries:[{binding:0,resource:g.createView({mipLevelCount:1})},{binding:1,resource:U[(y+1)%U.length].createView({})},{binding:2,resource:this.Dx_Dy_Dz_Dxdz_SpatialArray.createView({})},{binding:3,resource:this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray.createView({})},{binding:4,resource:{buffer:t.buffer}}]});return f.concat({textureArray:g,bindGroup:p,mipMapBindings:this.mipMapGenerator.createBindGroups(e,g)})},[]),this.Dx_Dy_Dz_Dxdz_SpatialArray_MipMapBindings=this.mipMapGenerator.createBindGroups(e,this.Dx_Dy_Dz_Dxdz_SpatialArray),this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray_MipMapBindings=this.mipMapGenerator.createBindGroups(e,this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray),this.waveSettings={gravity:0,waveSwell:0,windFetchMeters:0,windSpeedMetersPerSeconds:0}}get textureGridSize(){return{width:this.gridSize,height:this.gridSize,depthOrArrayLayers:this.cascadeCount}}get turbulenceMapIndex(){return this.turbulenceJacobianIndex}createCascades(e,t,r){const i=this.textureGridSize,n=i.width*i.height*i.depthOrArrayLayers,s=e.createTexture({label:"FFT Wave Gaussian Noise",format:Ye,size:i,usage:GPUTextureUsage.COPY_DST|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING}),o=2,l=8,u=new Float32Array(n*o);for(let y=0;y<u.length;y++)u[y]=$e()[0];e.queue.writeTexture({texture:s},u,{bytesPerRow:l*i.width,rowsPerImage:i.height},i);const d=new Ke(e);r.forEach((y,U)=>{d.data.cascades[U]={wave_number_min_max:M.create(...y.waveNumberMinMax),wave_patch_extent_meters:y.patchExtentMeters,padding0:0}}),d.writeToGPU(e.queue);const m=e.createTexture({label:"FFT Wave Fourier Amplitude h_0(k)",format:ie,size:i,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING}),v=e.createBindGroup({label:"FFT Wave Initial Amplitude h_0(k) Group 0",layout:this.initialAmplitudeKernel.getBindGroupLayout(0),entries:[{binding:0,resource:m.createView()},{binding:1,resource:s.createView()}]}),b=e.createBindGroup({label:"FFT Wave Initial Amplitude h_0(k) Group 1",layout:this.initialAmplitudeKernel.getBindGroupLayout(1),entries:[{binding:0,resource:{buffer:t.buffer}},{binding:1,resource:{buffer:d.buffer}}]}),T=e.createTexture({label:"FFT Wave Packed (Dx + iDy, Dz + iDxdz) Amplitude",format:W,size:i,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC}),x=e.createTexture({label:"FFT Wave Packed (Dydx + iDydz, Dxdx + iDzdz) Amplitude",format:T.format,size:i,usage:T.usage}),f=e.createBindGroup({label:"FFT Wave Realized Fourier Amplitude h(k,t) Group 0",layout:this.realizedAmplitudeKernel.getBindGroupLayout(0),entries:[{binding:0,resource:T.createView()},{binding:1,resource:x.createView()},{binding:2,resource:m.createView()}]}),g=e.createBindGroup({label:"FFT Wave Realized Fourier Amplitude h(k,t) Group 1",layout:this.realizedAmplitudeKernel.getBindGroupLayout(1),entries:[{binding:0,resource:{buffer:t.buffer}},{binding:1,resource:{buffer:d.buffer}}]});return{gaussianNoiseArray:s,initialAmplitudeArray:m,waveSettings:d,initialAmplitudeGroup0:v,initialAmplitudeGroup1:b,packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray:T,packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_AmplitudeArray:x,realizedAmplitudeGroup0:f,realizedAmplitudeGroup1:g}}views(){return{gaussianNoise:new w(this.cascades.gaussianNoiseArray),initialAmplitude:new w(this.cascades.initialAmplitudeArray),packed_Dx_plus_iDy_Dz_iDxdz_Amplitude:new w(this.cascades.packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray),packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude:new w(this.cascades.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_AmplitudeArray),turbulenceJacobian:new w(this.turbulenceJacobianArrays[0].textureArray),Dx_Dy_Dz_Dxdz_Spatial:new w(this.Dx_Dy_Dz_Dxdz_SpatialArray),Dydx_Dydz_Dxdx_Dzdz_Spatial:new w(this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray)}}displacementMaps(){return new Je(this.Dx_Dy_Dz_Dxdz_SpatialArray,this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray,this.turbulenceJacobianArrays.map(e=>e.textureArray))}record(e,t,r,i){if(r.gravity!=this.waveSettings.gravity||r.waveSwell!=this.waveSettings.waveSwell||r.windSpeedMetersPerSeconds!=this.waveSettings.windSpeedMetersPerSeconds||r.windFetchMeters!=this.waveSettings.windFetchMeters){this.waveSettings=structuredClone(r);const l=t.beginComputePass({label:"FFT Wave Initial Amplitude"}),u=this.cascades.waveSettings;u.data.wave_swell=this.waveSettings.waveSwell,u.data.wind_fetch_meters=this.waveSettings.windFetchMeters,u.data.wind_speed_meters_per_second=this.waveSettings.windSpeedMetersPerSeconds,u.data.gravity=this.waveSettings.gravity,u.writeToGPU(e.queue),l.setPipeline(this.initialAmplitudeKernel),l.setBindGroup(0,this.cascades.initialAmplitudeGroup0),l.setBindGroup(1,this.cascades.initialAmplitudeGroup1);const d=this.textureGridSize;l.dispatchWorkgroups(d.width/16,d.height/16,d.depthOrArrayLayers/1),l.end()}{const l=t.beginComputePass({label:"FFT Wave Fourier Amplitude Realization",timestampWrites:i!==void 0?{querySet:i.querySet,beginningOfPassWriteIndex:i.beginWriteIndex}:void 0});l.setPipeline(this.realizedAmplitudeKernel),l.setBindGroup(0,this.cascades.realizedAmplitudeGroup0),l.setBindGroup(1,this.cascades.realizedAmplitudeGroup1);const u=this.textureGridSize;l.dispatchWorkgroups(u.width/16,u.height/16,u.depthOrArrayLayers/1),l.end()}this.dfftResources.recordPerform(e,t,this.cascades.packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray,this.Dx_Dy_Dz_Dxdz_SpatialArray,!0,void 0),this.dfftResources.recordPerform(e,t,this.cascades.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_AmplitudeArray,this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray,!0,void 0);const s=t.beginComputePass({label:"Turbulence Accumulation"});s.setPipeline(this.accumulateTurbulenceKernel),s.setBindGroup(0,this.turbulenceJacobianArrays[this.turbulenceJacobianIndex].bindGroup),s.dispatchWorkgroups(this.gridSize/16,this.gridSize/16),s.end();const o=t.beginComputePass({label:"MipMap Generation",timestampWrites:i!==void 0?{querySet:i.querySet,endOfPassWriteIndex:i.endWriteIndex}:void 0});this.mipMapGenerator.updateMipMaps(o,this.Dx_Dy_Dz_Dxdz_SpatialArray_MipMapBindings),this.mipMapGenerator.updateMipMaps(o,this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray_MipMapBindings),this.mipMapGenerator.updateMipMaps(o,this.turbulenceJacobianArrays[this.turbulenceJacobianIndex].mipMapBindings),this.turbulenceJacobianIndex+=1,this.turbulenceJacobianIndex%=this.turbulenceJacobianArrays.length,o.end()}}const et=`// Displace a grid of vertices representing the ocean surface, then rasterize into the gbuffer with a graphics pass
 
 // Sizeof(Atmosphere) = 8 * 16 = 128
 // Alignof(Atmosphere) = 16
@@ -3119,14 +3248,97 @@ struct Time
 
 // All of these uniform values have identical lifetimes: they update before rendering for the frame, and are constant throughout
 // Thus we store everything together to simplify the bindings
-// Sizeof(GlobalUBO) = 128 + 32 + 256 + 16 = 432 (as of writing)
+// Sizeof(GlobalUBO) = 672 + 16 = 688 (as of writing)
 // Alignof(GlobalUBO) = 16
 struct GlobalUBO
 {
-	camera: Camera, // offset 128 + 32
-	atmosphere: Atmosphere, // offset 0
-	light: CelestialLight, // offset 128
-	time: Time, // offset 128 + 32 + 256
+	camera: Camera,           // offsets
+	ocean_camera: Camera,     // 0   + 256 = 256
+	atmosphere: Atmosphere,   // 256 + 256 = 512
+	light: CelestialLight,    // 512 + 128 = 640
+	time: Time,               // 640 + 32  = 672
+}
+
+struct RaySphereHit
+{
+    hit: bool,
+    t0: f32,
+    t1: f32,
+}
+
+// t1 > t0, values can be negative. Function returns true even if the sphere is behind the ray.
+// If this returns false, t0 and t1 are unchanged.
+fn raySphereIntersection(
+    ray_origin: vec3<f32>,
+    ray_direction_normalized: vec3<f32>,
+    radius: f32
+) -> RaySphereHit
+{
+    // Method taken from "Precision Improvements for Ray/Sphere Intersection"
+    // by Eric Haines, Johannes Günther, and Tomas Akenine-Möller
+    //
+    // The method includes tricks to reduce float point inaccuracy errors.
+
+    let f: vec3<f32> = ray_origin;
+    let d: vec3<f32> = ray_direction_normalized;
+    let b: f32 = -1.0 * dot(f, d);
+    let center_to_intersection_chord: vec3<f32> = f + b * d;
+    let discriminant: f32 = radius * radius - dot(center_to_intersection_chord, center_to_intersection_chord);
+    let c: f32 = dot(f, f) - radius * radius;
+
+    var output : RaySphereHit;
+    output.hit = false;
+    output.t0 = 0.0;
+    output.t1 = 0.0;
+
+    if (discriminant < 0.0)
+    {
+        return output;
+    }
+
+    var q: f32 = b;
+    if (b < 0.0)
+    {
+        q -= sqrt(discriminant);
+    }
+    else
+    {
+        q += sqrt(discriminant);
+    }
+
+    output.hit = true;
+    output.t0 = c / q;
+    output.t1 = q;
+
+    if (output.t0 > output.t1)
+    {
+        let temp: f32 = output.t0;
+        output.t0 = output.t1;
+        output.t1 = temp;
+    }
+
+    return output;
+}
+
+struct RayPlaneHit {
+	hit: bool,
+	t: f32,
+}
+
+fn rayPlaneIntersection(
+	ray_origin: vec3<f32>,
+	ray_direction: vec3<f32>,
+	plane_origin: vec3<f32>,
+	plane_normal: vec3<f32>
+) -> RayPlaneHit
+{
+	var result: RayPlaneHit;
+
+	let perp = dot(plane_normal, ray_direction);
+	result.t = dot(plane_origin - ray_origin, plane_normal) / perp;
+	result.hit = (abs(perp) > 0.00001) && (result.t > 0.0);
+
+	return result;
 }
 
 
@@ -3287,32 +3499,11 @@ fn getOceanSurfaceDisplacement(
 	return result;
 }
 
-struct RayPlaneHit {
-	hit: bool,
-	t: f32,
-}
-
-fn rayPlaneIntersection(
-	ray_origin: vec3<f32>,
-	ray_direction: vec3<f32>,
-	plane_origin: vec3<f32>,
-	plane_normal: vec3<f32>
-) -> RayPlaneHit
-{
-	var result: RayPlaneHit;
-
-	let perp = dot(plane_normal, ray_direction);
-	result.t = dot(plane_origin - ray_origin, plane_normal) / perp;
-	result.hit = (abs(perp) > 0.00001) && (result.t > 0.0);
-
-	return result;
-}
-
+const METERS_PER_MM: f32 = 1000000;
 fn projectNDCToOceanSurface(
 	ndc: vec2<f32>,
 	ndc_offset: vec2<f32>,
 	camera: Camera,
-	height: f32,
 ) -> vec3<f32>
 {
 	let near_plane = 1.0;
@@ -3324,23 +3515,72 @@ fn projectNDCToOceanSurface(
 
 	let direction_world = normalize((camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
 
-	let ocean_origin = vec3<f32>(0.0, height, 0.0);
-	let ocean_normal = vec3<f32>(0.0, 1.0, 0.0);
+	let ocean_hit = raySphereIntersection(
+		camera.position.xyz + vec3<f32>(0.0, u_global.atmosphere.planet_radius_Mm * METERS_PER_MM, 0.0),
+		direction_world,
+		u_global.atmosphere.planet_radius_Mm * METERS_PER_MM
+	);
+	let t = mix(10000.0, ocean_hit.t0, f32(ocean_hit.hit && ocean_hit.t0 > 0.0));
 
-	let ocean_plane_hit = rayPlaneIntersection(camera.position.xyz, direction_world, ocean_origin, ocean_normal);
-	let t = mix(1000.0, ocean_plane_hit.t, f32(ocean_plane_hit.hit));
-	var world_position = camera.position.xyz + t * direction_world;
-	world_position.y = ocean_origin.y;
+	if (ocean_hit.hit && ocean_hit.t0 > 0.0)
+	{
+		return camera.position.xyz + ocean_hit.t0 * direction_world;
+	}
 
-	return world_position;
+	return normalize(camera.position.xyz + 10000.0 * direction_world) * u_global.atmosphere.planet_radius_Mm * METERS_PER_MM - vec3<f32>(0.0, u_global.atmosphere.planet_radius_Mm * METERS_PER_MM, 0.0);
+}
+fn projectNDCToOceanSurfaceWithPivot(
+	ndc: vec2<f32>,
+	ndc_offset: vec2<f32>,
+	camera: Camera,
+	pivot: vec3<f32>,
+) -> vec3<f32>
+{
+	let world_position = projectNDCToOceanSurface(ndc, ndc_offset, camera);
+	let pivot_offset = world_position - pivot;
+	let pivot_distance = length(pivot_offset);
+
+	/*
+	 * Stretch all points away from a pivot, which should be some sort of
+	 * "center" of the projected ocean surface quad. This covers gaps at the
+	 * edges when waves grow too large, while being reactive to the shape of
+	 * the quad.
+	 *
+	 * Some other solutions that might work, but weren't chosen over this due
+	 * to being too complicated or difficult to make work nicely:
+	 * 		- stretch input NDC-space coordinates before projecting. This ends
+	 *		  up wasting many vertices in the distance, and compensating for
+	 *		  world space distance in ndc-space requires lots of back and forth
+	 * 		  conversions.
+	 *		- Some sort of offset based on the camera forward. This quickly
+	 *		  falls apart when the camera forward is close to the unperturbed
+	 *		  ocean surface normal/world-up, and handling that case separately
+	 *		  is messy since it is predicated on camera FOV, aspect ratio,
+	 *		  position, etc.
+	 */
+	const STRETCH_THRESHOLDS = vec2<f32>(2.0,20.0);
+	// Avoid the singularity near the pivot, and drop out when this fix is less necessary
+	if(pivot_distance < STRETCH_THRESHOLDS.x || camera.position.y > 100.0)
+	{
+		return world_position;
+	}
+	const STRETCH_ABSOLUTE_BIAS = 80.0;
+	let stretch_parameter = smoothstep(
+		STRETCH_THRESHOLDS.x,
+		STRETCH_THRESHOLDS.y,
+		pivot_distance
+	);
+	let stretch = ((pivot_distance + stretch_parameter * STRETCH_ABSOLUTE_BIAS) / pivot_distance);
+	return pivot + pivot_offset * stretch;
 }
 
 struct VertexOut {
-    @builtin(position) position : vec4<f32>,
-    @location(1) color : vec3<f32>,
-    @location(2) camera_distance : f32,
+    @builtin(position) position             : vec4<f32>,
+	@location(0) surface_normal             : vec3<f32>,
+    @location(1) color                      : vec3<f32>,
+    @location(2) camera_distance            : f32,
 	@location(3) cascade_1234_normal_weights: vec4<f32>,
-	@location(5) global_uv: vec2<f32>,
+	@location(5) global_uv                  : vec2<f32>,
 }
 
 /*
@@ -3351,14 +3591,20 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 {
 	var output : VertexOut;
 
-	let camera = u_global.camera;
+	/*
+	 * Note the usage of a separate camera. The camera for ocean surface
+	 * generation is decoupled from the final rendering POV camera. In normal
+	 * use it's the same, but for debugging and illustration it helps to render
+	 * the ocean surface from anywhere.
+	 */
+	let ocean_camera = u_global.ocean_camera;
 
 	let vert_coord = vec2<f32>(
 		f32(index % VERTEX_DIMENSION),
 		f32(index / VERTEX_DIMENSION)
 	) / f32(VERTEX_DIMENSION - 1u);
 
-	let overlap = vec2<f32>(1.5);
+	let overlap = vec2<f32>(1.05);
 
 	/*
 	 * This assumes:
@@ -3376,33 +3622,46 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	let ndc_horizon_forward = (camera.proj_view * vec4<f32>(camera.forward.x, 0.0, camera.forward.z, 0.0));
 	*/
 
-	let ndc_horizon_forward = (camera.proj_view * vec4<f32>(camera.forward.x, 0.0, camera.forward.z, 0.0));
+	let ndc_horizon_forward =
+		ocean_camera.proj_view
+		* vec4<f32>(
+			ocean_camera.forward.x,
+			0.0,
+			ocean_camera.forward.z,
+			0.0
+		);
 
 	let ndc_min = vec2<f32>(-overlap.x, -overlap.y);
-	let ndc_max = vec2<f32>(overlap.x, ndc_horizon_forward.y / ndc_horizon_forward.w);
+	let ndc_max = vec2<f32>(overlap.x, min(ndc_horizon_forward.y / ndc_horizon_forward.w, overlap.y));
 
 	let ndc_space_coord = mix(ndc_min, ndc_max, vert_coord);
 
 	let ocean_origin = vec3<f32>(0.0, WAVE_NEUTRAL_PLANE, 0.0);
 	let ocean_normal = vec3<f32>(0.0,1.0,0.0);
 
-	let cell_world_position = projectNDCToOceanSurface(
+	let center_position = projectNDCToOceanSurface(
+		mix(ndc_min, ndc_max, 0.5),
+		vec2<f32>(0.0,0.0),
+		ocean_camera,
+	);
+
+	let cell_world_position = projectNDCToOceanSurfaceWithPivot(
 		ndc_space_coord,
 		vec2<f32>(0.0,0.0),
-		camera,
-		WAVE_NEUTRAL_PLANE
+		ocean_camera,
+		center_position
 	);
-	let neighbor_world_position = projectNDCToOceanSurface(
+	let neighbor_world_position = projectNDCToOceanSurfaceWithPivot(
 		ndc_space_coord,
 		vec2<f32>(1.0) / f32(VERTEX_DIMENSION - 1u),
-		camera,
-		WAVE_NEUTRAL_PLANE
+		ocean_camera,
+		center_position
 	);
-	let pixel_neighbor_world_position = projectNDCToOceanSurface(
+	let pixel_neighbor_world_position = projectNDCToOceanSurfaceWithPivot(
 		ndc_space_coord,
 		vec2<f32>(1.0) / u_settings.gbuffer_extent,
-		camera,
-		WAVE_NEUTRAL_PLANE
+		ocean_camera,
+		center_position
 	);
 
 	var cascade_position_weights = array<f32, CASCADE_CAPACITY>(1,1,1,1);
@@ -3477,7 +3736,10 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	let world_position = cell_world_position + displacement_result.displacement;
 
 	output.global_uv = global_uv;
+
     output.position = u_global.camera.proj_view * vec4<f32>(world_position, 1.0);
+    output.camera_distance = distance(u_global.camera.position.xyz, world_position);
+
 	// Unclipped depth didn't work (and requires a feature) so this is a workaround
 	output.position.z /= 1.001;
 
@@ -3487,7 +3749,11 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	// output.color = vec3<f32>(step(fract(50 * ndc_space_coord), vec2<f32>(0.1)),0.0);
  	// output.color = vec3<f32>(step(fract(1.0 * world_position.x), 0.05),0.0,0.0);
 
-    output.camera_distance = distance(u_global.camera.position.xyz, world_position);
+
+	output.surface_normal = normalize(
+		world_position
+		+ vec3<f32>(0.0, u_global.atmosphere.planet_radius_Mm * METERS_PER_MM, 0.0)
+	);
 
 	output.cascade_1234_normal_weights = vec4<f32>(
 		cascade_normal_weights[0],
@@ -3710,14 +3976,26 @@ fn rasterizationFragment(frag_interpolated: VertexOut) -> FragmentOut
 		frag_interpolated.global_uv,
 		cascade_normal_weights,
 	);
-
 	// reverse left-handed WGSL coordinates
 	let normal = normalize(-cross(surface.tangent, surface.bitangent));
 
-    output.world_normal_with_surface_foam_strength_in_alpha = vec4<f32>(normal, surface.foam_strength);
+	// This probably falls apart in the general case, but the distance surface
+	// should be near flat anyway, with the surface normal close to planet
+	// normal
+	let surface_normal = normalize(frag_interpolated.surface_normal);
+	let tangent = normalize(-cross(vec3<f32>(0.0,0.0,1.0), surface_normal));
+	let bitangent = normalize(-cross(surface_normal, tangent));
+	let perturbed_normal = normal.x * tangent + normal.y * surface_normal + normal.z * bitangent;
+
+	//output.world_normal_with_surface_foam_strength_in_alpha = vec4<f32>(normal, surface.foam_strength);
+	output.world_normal_with_surface_foam_strength_in_alpha = vec4<f32>(
+		normalize(perturbed_normal),
+		surface.foam_strength
+	);
+
     return output;
 }
-`;class $e extends E{constructor(t){super(t,8,"Wave Surface Displacement Patch World Half Extent UBO");a(this,"data",{patch_world_half_extent:50,b_gerstner:!0,b_fft:!0,gbuffer_extent:b.create(1,1),foam_scale:1,foam_bias:0})}packed(){const t=new ArrayBuffer(this.buffer.size),r=new DataView(t),s=new Float32Array(t);return r.setFloat32(0,this.data.patch_world_half_extent,!0),r.setUint32(4,this.data.b_gerstner?1:0,!0),r.setUint32(8,this.data.b_fft?1:0,!0),r.setFloat32(12,0,!0),s.set(this.data.gbuffer_extent,4),r.setFloat32(24,this.data.foam_scale,!0),r.setFloat32(28,this.data.foam_bias,!0),t}}class Ze{constructor(e,t,r,s,i,n){a(this,"group0");a(this,"group1");a(this,"group2ByTurbulenceMapIndex");a(this,"settingsUBO");a(this,"vertexDimension");a(this,"lodCount");a(this,"baseIndexCount");a(this,"mipLevelCount");a(this,"indices");a(this,"oceanSurfaceRasterizationPipeline");this.vertexDimension=1e3;const u=4,_=3*(2*999*999);this.baseIndexCount=_;const d=10;this.lodCount=d,this.indices=e.createBuffer({size:_*u,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.INDEX,label:"Wave Surface Displacement Indices"});const p=new Uint32Array(_);let h=0;for(let z=0;z<999;z++)for(let U=0;U<999;U++){const C=U+z*1e3,X=C+1,G=C+1e3,de=G+1,J=new Uint32Array([C,G,X,X,G,de]);p.set(J,h),h+=J.length}e.queue.writeBuffer(this.indices,0,p);const g=12,f=4,y=4*f,v=e.createBuffer({size:g*y,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.UNIFORM,label:"Wave Surface Displacement Waves"}),D=9.8,S=60,w=S*S*D/(2*Math.PI),ce=new Array({direction:b.create(.4,2),amplitude:.25,wavelength:w/(12*12)},{direction:b.create(.6,2),amplitude:.3,wavelength:w/(14*14)},{direction:b.create(.8,2),amplitude:.35,wavelength:w/(12*12)},{direction:b.create(1,2),amplitude:.4,wavelength:w/(16*16)},{direction:b.create(1.2,2),amplitude:.45,wavelength:w/(12*12)},{direction:b.create(1.4,2),amplitude:.4,wavelength:w/(14*14)},{direction:b.create(1.6,2),amplitude:.35,wavelength:w/(12*12)},{direction:b.create(1.8,2),amplitude:.3,wavelength:w/(16*16)},{direction:b.create(.8,1.5),amplitude:.02,wavelength:w/(30*30)},{direction:b.create(1.1,1.5),amplitude:.02,wavelength:w/(30*30)},{direction:b.create(1.2,1.5),amplitude:.02,wavelength:w/(30*30)},{direction:b.create(1.3,1.5),amplitude:.02,wavelength:w/(30*30)}),R=new Float32Array(g*f);let L=0;ce.forEach(z=>{R.set(z.direction,L),R[L+2]=z.amplitude,R[L+3]=z.wavelength,L+=4}),e.queue.writeBuffer(v,0,R),this.settingsUBO=new $e(e);const j=e.createBindGroupLayout({label:"Wave Surface Displacement Group 1 Compute (Displacement Map)",entries:[{binding:0,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,sampler:{type:"filtering"}},{binding:1,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,texture:{sampleType:"float",viewDimension:"2d-array"}},{binding:2,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,texture:{sampleType:"float",viewDimension:"2d-array"}},{binding:3,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,buffer:{type:"uniform"}}]});this.group1=e.createBindGroup({label:"Wave Surface Displacement Group 1 Compute (Displacement Map)",layout:j,entries:[{binding:0,resource:e.createSampler({label:"Wave Surface Displacement Group 1 Sampler",minFilter:"linear",magFilter:"linear",addressModeU:"repeat",addressModeV:"repeat"})},{binding:1,resource:n.Dx_Dy_Dz_Dxdz_SpatialAllMips},{binding:2,resource:n.Dydx_Dydz_Dxdx_Dzdz_SpatialAllMips},{binding:3,resource:{buffer:v}}]}),this.mipLevelCount=n.mipLevelCount;const Q=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,texture:{sampleType:"float",viewDimension:"2d-array"}}]});this.group2ByTurbulenceMapIndex=n.turbulenceJacobianOneMip.map((z,U)=>e.createBindGroup({label:`Wave Surface Displacement Group 2 Compute (Turbulence) index ${U}`,layout:Q,entries:[{binding:0,resource:z}]}));const Y=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,buffer:{type:"uniform"}},{binding:1,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,buffer:{type:"uniform"}}],label:"Wave Surface Displacement Group 0"});this.group0=e.createBindGroup({layout:Y,entries:[{binding:0,resource:{buffer:this.settingsUBO.buffer}},{binding:1,resource:{buffer:t.buffer}}],label:"Wave Surface Displacement Group 0"});const K=e.createShaderModule({code:Je,label:"Wave Surface Displacement"});this.oceanSurfaceRasterizationPipeline=e.createRenderPipeline({layout:e.createPipelineLayout({bindGroupLayouts:[Y,j,Q]}),vertex:{module:K,entryPoint:"screenSpaceWarped"},fragment:{module:K,entryPoint:"rasterizationFragment",targets:[{format:r},{format:s}]},primitive:{topology:"triangle-list",cullMode:"back",frontFace:"cw"},depthStencil:{format:i,depthWriteEnabled:!0,depthCompare:"less"},label:"Wave Surface Displacement Surface Rasterization"})}record(e,t,r,s,i,n){this.settingsUBO.data.patch_world_half_extent=i.fft?100:300,this.settingsUBO.data.b_gerstner=i.gerstner,this.settingsUBO.data.b_fft=i.fft,this.settingsUBO.data.foam_bias=i.foamBias,this.settingsUBO.data.gbuffer_extent=n.extent,this.settingsUBO.data.foam_scale=i.foamScale,this.settingsUBO.writeToGPU(e.queue);const o=t.beginRenderPass({label:"Wave Surface Rasterization",colorAttachments:[{clearValue:{r:0,g:0,b:0,a:0},loadOp:"clear",storeOp:"store",view:n.colorWithSurfaceWorldDepthInAlpha},{clearValue:{r:0,g:0,b:0,a:0},loadOp:"clear",storeOp:"store",view:n.normalWithSurfaceFoamInAlpha}],depthStencilAttachment:{view:n.depth,depthClearValue:1,depthLoadOp:"clear",depthStoreOp:"store"},timestampWrites:r!==void 0?{querySet:r.querySet,beginningOfPassWriteIndex:r.beginWriteIndex,endOfPassWriteIndex:r.endWriteIndex}:void 0});o.setPipeline(this.oceanSurfaceRasterizationPipeline),o.setBindGroup(0,this.group0),o.setBindGroup(1,this.group1),o.setBindGroup(2,this.group2ByTurbulenceMapIndex[s]),o.setIndexBuffer(this.indices,"uint32"),o.drawIndexed(this.baseIndexCount,1),o.end()}}const et=`// Sizeof(Atmosphere) = 8 * 16 = 128
+`;class tt extends P{constructor(t){super(t,8,"Wave Surface Displacement Patch World Half Extent UBO");a(this,"data",{patch_world_half_extent:50,b_gerstner:!0,b_fft:!0,gbuffer_extent:M.create(1,1),foam_scale:1,foam_bias:0})}packed(){const t=new ArrayBuffer(this.buffer.size),r=new DataView(t),i=new Float32Array(t);return r.setFloat32(0,this.data.patch_world_half_extent,!0),r.setUint32(4,this.data.b_gerstner?1:0,!0),r.setUint32(8,this.data.b_fft?1:0,!0),r.setFloat32(12,0,!0),i.set(this.data.gbuffer_extent,4),r.setFloat32(24,this.data.foam_scale,!0),r.setFloat32(28,this.data.foam_bias,!0),t}}class at{constructor(e,t,r,i,n,s){a(this,"group0");a(this,"group1");a(this,"group2ByTurbulenceMapIndex");a(this,"settingsUBO");a(this,"vertexDimension");a(this,"lodCount");a(this,"baseIndexCount");a(this,"mipLevelCount");a(this,"indices");a(this,"oceanSurfaceRasterizationPipeline");this.vertexDimension=1e3;const l=4,d=3*(2*999*999);this.baseIndexCount=d;const m=10;this.lodCount=m,this.indices=e.createBuffer({size:d*l,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.INDEX,label:"Wave Surface Displacement Indices"});const v=new Uint32Array(d);let b=0;for(let E=0;E<999;E++)for(let D=0;D<999;D++){const G=D+E*1e3,X=G+1,O=G+1e3,me=O+1,K=new Uint32Array([G,O,X,X,O,me]);v.set(K,b),b+=K.length}e.queue.writeBuffer(this.indices,0,v);const T=12,x=4,f=4*x,g=e.createBuffer({size:T*f,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.UNIFORM,label:"Wave Surface Displacement Waves"}),y=9.8,U=60,p=U*U*y/(2*Math.PI),R=new Array({direction:M.create(.4,2),amplitude:.25,wavelength:p/(12*12)},{direction:M.create(.6,2),amplitude:.3,wavelength:p/(14*14)},{direction:M.create(.8,2),amplitude:.35,wavelength:p/(12*12)},{direction:M.create(1,2),amplitude:.4,wavelength:p/(16*16)},{direction:M.create(1.2,2),amplitude:.45,wavelength:p/(12*12)},{direction:M.create(1.4,2),amplitude:.4,wavelength:p/(14*14)},{direction:M.create(1.6,2),amplitude:.35,wavelength:p/(12*12)},{direction:M.create(1.8,2),amplitude:.3,wavelength:p/(16*16)},{direction:M.create(.8,1.5),amplitude:.02,wavelength:p/(30*30)},{direction:M.create(1.1,1.5),amplitude:.02,wavelength:p/(30*30)},{direction:M.create(1.2,1.5),amplitude:.02,wavelength:p/(30*30)},{direction:M.create(1.3,1.5),amplitude:.02,wavelength:p/(30*30)}),A=new Float32Array(T*x);let L=0;R.forEach(E=>{A.set(E.direction,L),A[L+2]=E.amplitude,A[L+3]=E.wavelength,L+=4}),e.queue.writeBuffer(g,0,A),this.settingsUBO=new tt(e);const V=e.createBindGroupLayout({label:"Wave Surface Displacement Group 1 Compute (Displacement Map)",entries:[{binding:0,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,sampler:{type:"filtering"}},{binding:1,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,texture:{sampleType:"float",viewDimension:"2d-array"}},{binding:2,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,texture:{sampleType:"float",viewDimension:"2d-array"}},{binding:3,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,buffer:{type:"uniform"}}]});this.group1=e.createBindGroup({label:"Wave Surface Displacement Group 1 Compute (Displacement Map)",layout:V,entries:[{binding:0,resource:e.createSampler({label:"Wave Surface Displacement Group 1 Sampler",minFilter:"linear",magFilter:"linear",mipmapFilter:"linear",addressModeU:"repeat",addressModeV:"repeat",maxAnisotropy:10})},{binding:1,resource:s.Dx_Dy_Dz_Dxdz_SpatialAllMips},{binding:2,resource:s.Dydx_Dydz_Dxdx_Dzdz_SpatialAllMips},{binding:3,resource:{buffer:g}}]}),this.mipLevelCount=s.mipLevelCount;const j=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,texture:{sampleType:"float",viewDimension:"2d-array"}}]});this.group2ByTurbulenceMapIndex=s.turbulenceJacobianOneMip.map((E,D)=>e.createBindGroup({label:`Wave Surface Displacement Group 2 Compute (Turbulence) index ${D}`,layout:j,entries:[{binding:0,resource:E}]}));const Y=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,buffer:{type:"uniform"}},{binding:1,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,buffer:{type:"uniform"}}],label:"Wave Surface Displacement Group 0"});this.group0=e.createBindGroup({layout:Y,entries:[{binding:0,resource:{buffer:this.settingsUBO.buffer}},{binding:1,resource:{buffer:t.buffer}}],label:"Wave Surface Displacement Group 0"});const Q=e.createShaderModule({code:et,label:"Wave Surface Displacement"});this.oceanSurfaceRasterizationPipeline=e.createRenderPipeline({layout:e.createPipelineLayout({bindGroupLayouts:[Y,V,j]}),vertex:{module:Q,entryPoint:"screenSpaceWarped"},fragment:{module:Q,entryPoint:"rasterizationFragment",targets:[{format:r},{format:i}]},primitive:{topology:"triangle-list",cullMode:"back",frontFace:"cw"},depthStencil:{format:n,depthWriteEnabled:!0,depthCompare:"less"},label:"Wave Surface Displacement Surface Rasterization"})}record(e,t,r,i,n,s){this.settingsUBO.data.patch_world_half_extent=n.fft?100:300,this.settingsUBO.data.b_gerstner=n.gerstner,this.settingsUBO.data.b_fft=n.fft,this.settingsUBO.data.foam_bias=n.foamBias,this.settingsUBO.data.gbuffer_extent=s.extent,this.settingsUBO.data.foam_scale=n.foamScale,this.settingsUBO.writeToGPU(e.queue);const o=t.beginRenderPass({label:"Wave Surface Rasterization",colorAttachments:[{clearValue:{r:0,g:0,b:0,a:0},loadOp:"clear",storeOp:"store",view:s.colorWithSurfaceWorldDepthInAlpha},{clearValue:{r:0,g:0,b:0,a:0},loadOp:"clear",storeOp:"store",view:s.normalWithSurfaceFoamInAlpha}],depthStencilAttachment:{view:s.depth,depthClearValue:1,depthLoadOp:"clear",depthStoreOp:"store"},timestampWrites:r!==void 0?{querySet:r.querySet,beginningOfPassWriteIndex:r.beginWriteIndex,endOfPassWriteIndex:r.endWriteIndex}:void 0});o.setPipeline(this.oceanSurfaceRasterizationPipeline),o.setBindGroup(0,this.group0),o.setBindGroup(1,this.group1),o.setBindGroup(2,this.group2ByTurbulenceMapIndex[i]),o.setIndexBuffer(this.indices,"uint32"),o.drawIndexed(this.baseIndexCount,1),o.end()}}const rt=`// Sizeof(Atmosphere) = 8 * 16 = 128
 // Alignof(Atmosphere) = 16
 struct Atmosphere
 {
@@ -3782,14 +4060,97 @@ struct Time
 
 // All of these uniform values have identical lifetimes: they update before rendering for the frame, and are constant throughout
 // Thus we store everything together to simplify the bindings
-// Sizeof(GlobalUBO) = 128 + 32 + 256 + 16 = 432 (as of writing)
+// Sizeof(GlobalUBO) = 672 + 16 = 688 (as of writing)
 // Alignof(GlobalUBO) = 16
 struct GlobalUBO
 {
-	camera: Camera, // offset 128 + 32
-	atmosphere: Atmosphere, // offset 0
-	light: CelestialLight, // offset 128
-	time: Time, // offset 128 + 32 + 256
+	camera: Camera,           // offsets
+	ocean_camera: Camera,     // 0   + 256 = 256
+	atmosphere: Atmosphere,   // 256 + 256 = 512
+	light: CelestialLight,    // 512 + 128 = 640
+	time: Time,               // 640 + 32  = 672
+}
+
+struct RaySphereHit
+{
+    hit: bool,
+    t0: f32,
+    t1: f32,
+}
+
+// t1 > t0, values can be negative. Function returns true even if the sphere is behind the ray.
+// If this returns false, t0 and t1 are unchanged.
+fn raySphereIntersection(
+    ray_origin: vec3<f32>,
+    ray_direction_normalized: vec3<f32>,
+    radius: f32
+) -> RaySphereHit
+{
+    // Method taken from "Precision Improvements for Ray/Sphere Intersection"
+    // by Eric Haines, Johannes Günther, and Tomas Akenine-Möller
+    //
+    // The method includes tricks to reduce float point inaccuracy errors.
+
+    let f: vec3<f32> = ray_origin;
+    let d: vec3<f32> = ray_direction_normalized;
+    let b: f32 = -1.0 * dot(f, d);
+    let center_to_intersection_chord: vec3<f32> = f + b * d;
+    let discriminant: f32 = radius * radius - dot(center_to_intersection_chord, center_to_intersection_chord);
+    let c: f32 = dot(f, f) - radius * radius;
+
+    var output : RaySphereHit;
+    output.hit = false;
+    output.t0 = 0.0;
+    output.t1 = 0.0;
+
+    if (discriminant < 0.0)
+    {
+        return output;
+    }
+
+    var q: f32 = b;
+    if (b < 0.0)
+    {
+        q -= sqrt(discriminant);
+    }
+    else
+    {
+        q += sqrt(discriminant);
+    }
+
+    output.hit = true;
+    output.t0 = c / q;
+    output.t1 = q;
+
+    if (output.t0 > output.t1)
+    {
+        let temp: f32 = output.t0;
+        output.t0 = output.t1;
+        output.t1 = temp;
+    }
+
+    return output;
+}
+
+struct RayPlaneHit {
+	hit: bool,
+	t: f32,
+}
+
+fn rayPlaneIntersection(
+	ray_origin: vec3<f32>,
+	ray_direction: vec3<f32>,
+	plane_origin: vec3<f32>,
+	plane_normal: vec3<f32>
+) -> RayPlaneHit
+{
+	var result: RayPlaneHit;
+
+	let perp = dot(plane_normal, ray_direction);
+	result.t = dot(plane_origin - ray_origin, plane_normal) / perp;
+	result.hit = (abs(perp) > 0.00001) && (result.t > 0.0);
+
+	return result;
 }
 
 
@@ -3798,6 +4159,7 @@ struct GlobalUBO
 @group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
 @group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
 @group(0) @binding(4) var skyview_lut: texture_2d<f32>;
+@group(0) @binding(5) var aerial_perspective_lut: texture_3d<f32>;
 
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
@@ -3824,6 +4186,8 @@ const MULTISCATTER_LUT_HEIGHT = 1024u;
 
 const SKYVIEW_LUT_WIDTH = 1024u;
 const SKYVIEW_LUT_HEIGHT = 512u;
+
+const AERIAL_PERSPECTIVE_MM_PER_SLICE = 0.001;
 
 const METERS_PER_MM: f32 = 1000000;
 const PI: f32 = 3.141592653589793;
@@ -4099,67 +4463,6 @@ fn sampleExtinction(atmosphere: ptr<function,Atmosphere>, altitude_Mm: f32) -> E
     return extinction_sample;
 }
 
-struct RaySphereHit
-{
-    hit: bool,
-    t0: f32,
-    t1: f32,
-}
-
-// t1 > t0, values can be negative. Function returns true even if the sphere is behind the ray.
-// If this returns false, t0 and t1 are unchanged.
-fn raySphereIntersection(
-    ray_origin: vec3<f32>,
-    ray_direction_normalized: vec3<f32>,
-    radius: f32
-) -> RaySphereHit
-{
-    // Method taken from "Precision Improvements for Ray/Sphere Intersection"
-    // by Eric Haines, Johannes Günther, and Tomas Akenine-Möller
-    //
-    // The method includes tricks to reduce float point inaccuracy errors.
-
-    let f: vec3<f32> = ray_origin;
-    let d: vec3<f32> = ray_direction_normalized;
-    let b: f32 = -1.0 * dot(f, d);
-    let center_to_intersection_chord: vec3<f32> = f + b * d;
-    let discriminant: f32 = radius * radius - dot(center_to_intersection_chord, center_to_intersection_chord);
-    let c: f32 = dot(f, f) - radius * radius;
-
-    var output : RaySphereHit;
-    output.hit = false;
-    output.t0 = 0.0;
-    output.t1 = 0.0;
-
-    if (discriminant < 0.0)
-    {
-        return output;
-    }
-
-    var q: f32 = b;
-    if (b < 0.0)
-    {
-        q -= sqrt(discriminant);
-    }
-    else
-    {
-        q += sqrt(discriminant);
-    }
-
-    output.hit = true;
-    output.t0 = c / q;
-    output.t1 = q;
-
-    if (output.t0 > output.t1)
-    {
-        let temp: f32 = output.t0;
-        output.t0 = output.t1;
-        output.t1 = temp;
-    }
-
-    return output;
-}
-
 // Input cosine is the cosine of the angle between incident and outgoing scattering directions
 fn phaseRayleigh(cosine: f32) -> f32
 {
@@ -4255,7 +4558,6 @@ fn sampleTransmittanceLUT_RayMarchStep(
 
 // Contains methods and overloads for raymarching the atmosphere
 
-//// FLAGS MULTISCATTERING ISOTROPIC_PHASE SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE HIGH_SAMPLE_COUNT SAMPLE_PATH_TRANSMITTANCE
 
 /*
 Flags explanation:
@@ -4343,6 +4645,7 @@ fn raycastAtmosphere(atmosphere: ptr<function, Atmosphere>, origin: vec3<f32>, d
 struct ScatteringResult
 {
     luminance: vec3<f32>,
+	transmittance: vec3<f32>,
     multiscattering_transfer: vec3<f32>,
 }
 
@@ -4373,10 +4676,12 @@ fn computeLuminanceScatteringIntegral(
 {
     var result: ScatteringResult;
     result.luminance = vec3<f32>(0.0);
+	result.transmittance = vec3<f32>(1.0);
     result.multiscattering_transfer = vec3<f32>(0.0);
 
 	if(sample_distance <= 0.0)
 	{
+		result.luminance = vec3<f32>(1.0, 1.0, 0.0);
 		return result;
 	}
 
@@ -4471,6 +4776,8 @@ fn computeLuminanceScatteringIntegral(
             transmittance_to_surface * transmittance_to_sun * normal_dot_light * diffuse
             * 1.0;
     }
+
+	result.transmittance = transmittance_accumulated;
 
     return result;
 }
@@ -4736,7 +5043,7 @@ fn sampleSkyViewLUT(
 	// The artifacts are caused by aliasing in the the ray-sphere intersection with the planet
 	// The horizon will be rounded, and when the edges step it reveals gaps where texels below the horizon can be sampled from the skyview LUT, leading to patches of black.
 	// This offset may require tweaking depending on the various resolutions
-	const V_SAFE_OFFSET = 1.5;
+	const V_SAFE_OFFSET = 2.5;
 	let v_safe = (0.5 * f32(SKYVIEW_LUT_HEIGHT) - V_SAFE_OFFSET) / f32(SKYVIEW_LUT_HEIGHT);
 	v = min(v, v_safe);
 
@@ -4856,6 +5163,7 @@ fn sampleSkyLuminance(
 fn sampleGeometryLuminance(
     atmosphere: ptr<function, Atmosphere>,
     light: ptr<function, CelestialLight>,
+	screen_texture_uv: vec2<f32>,
     material: PBRTexel,
     position: vec3<f32>,
     direction: vec3<f32>,
@@ -4872,39 +5180,32 @@ fn sampleGeometryLuminance(
     origin_step.nu = dot(direction, light_direction);
 
     let surface_step: RaymarchStep = stepRadiusMu(origin_step, distance);
-    let transmittance_to_surface = sampleTransmittanceLUT_Segment(
-        transmittance_lut,
-        lut_sampler,
-        atmosphere,
-        origin_step.radius,
-        origin_step.mu,
-        distance,
-        intersects_ground
-    );
 
-    var light_luminance_transfer = vec3<f32>(0.0);
+	let aerial_perspective_scale = f32(textureDimensions(aerial_perspective_lut).z)
+		* AERIAL_PERSPECTIVE_MM_PER_SLICE
+		* METERS_PER_MM;
+	let aerial_perspective = textureSampleLevel(
+		aerial_perspective_lut,
+		lut_sampler,
+		vec3<f32>(screen_texture_uv,clamp(distance / aerial_perspective_scale, 0.0, 1.0)),
+		0.0
+	);
+    let transmittance_to_surface = vec3<f32>(aerial_perspective.w);
 
+    var light_luminance_transfer = aerial_perspective.xyz;
+
+    /*
+	 * Model water as perfect reflections with some diffuse scattering to
+	 * emulate light coming up from underwater.
+	 * For now, no refraction, secondary bounces, or transmittance through
+	 * waves.
+	 */
 	// TODO: Better lighting model of the water
-
-    // Model water as perfect reflections with some diffuse scattering to emulate light coming up from underwater
 
     let surface_position = position + direction * distance;
 
-	// reflection image on ocean surface
-	//
-    // shift reflection vector up to make up for the lack of secondary bounces
-    // Otherwise, the environmental luminance will be 0 and we get random black patches
-    let reflection_direction = reflect(normalize(direction), normalize(material.normal));
-
-	let surface_transmittance_to_sun = sampleTransmittanceLUT_Ray(
-		transmittance_lut,
-        lut_sampler,
-		atmosphere,
-		surface_position,
-		light_direction
-	);
-
 	// Reflected luminance from the sky
+    let reflection_direction = reflect(normalize(direction), normalize(material.normal));
 	let sky_luminance = sampleSkyViewLUT(atmosphere, surface_position, reflection_direction);
 	light_luminance_transfer +=
 		transmittance_to_surface
@@ -4912,6 +5213,13 @@ fn sampleGeometryLuminance(
 		* computeFresnelPerfectReflection(material, reflection_direction);
 
 	// Reflected and scattered luminance directly from light
+	let surface_transmittance_to_sun = sampleTransmittanceLUT_Ray(
+		transmittance_lut,
+        lut_sampler,
+		atmosphere,
+		surface_position,
+		light_direction
+	);
 	let light_luminance = surface_transmittance_to_sun
 		* sunFractionOfRadianceVisible(atmosphere, light, surface_position, light_direction);
 	light_luminance_transfer +=
@@ -4928,27 +5236,6 @@ fn sampleGeometryLuminance(
 	let sky_indirect_luminance = sampleSkyViewLUT(atmosphere, surface_position, reflect(-light_direction, vec3<f32>(0.0,1.0,0.0)));
 	let sea_luminance = diffuseBRDF(material) * sky_visible_solid_angle * sky_indirect_luminance;
 	light_luminance_transfer += transmittance_to_surface * sea_luminance;
-
-	/*
-    {
-        // Aerial perspective, the light scattered by air between viewer and the surface
-		// Has very little effect while we have no geometry in the distance, and the camera is low to the ground.
-        // TODO: aerial perspective LUT
-        let include_ground = false;
-        light_luminance_transfer += computeLuminanceScatteringIntegral(
-            atmosphere,
-            light,
-            lut_sampler,
-            transmittance_lut,
-            multiscatter_lut,
-            position,
-            direction,
-            include_ground,
-			intersects_ground,
-			distance
-        ).luminance;
-    }
-	*/
 
     return light_luminance_transfer;
 }
@@ -4980,7 +5267,13 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
 
     let color_with_surface_world_depth_in_alpha = textureLoad(gbuffer_color_with_surface_world_depth_in_alpha, texel_coord, 0);
     let normal_with_surface_foam_strength_in_alpha = textureLoad(gbuffer_normal_with_surface_foam_strength_in_alpha, texel_coord, 0);
-	let normal = normal_with_surface_foam_strength_in_alpha.xyz;
+	var normal = normal_with_surface_foam_strength_in_alpha.xyz;
+	if(dot(normal, -direction_world) < 0.0)
+	{
+		// Hack to construct a plausible normal from a back-facing normal
+		normal -= 2.0 * dot(normal, -direction_world) * (-direction_world);
+	}
+
 	let foam_strength = normal_with_surface_foam_strength_in_alpha.w;
 
     let depth = color_with_surface_world_depth_in_alpha.a / METERS_PER_MM;
@@ -4994,7 +5287,14 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
 
     if (depth <= 0.0)
     {
-        // View of virtual environment: either the sky, or the floor
+		/*
+
+		/*
+		 * Our ocean surface *should* cover the entire planet, so taking this
+		 * path might lead to floating point errors and visible gaps at the
+		 * horizon.
+		 */
+
         if (intersects_ground)
         {
             let material: PBRTexel = convertPBRPropertiesWater(
@@ -5002,12 +5302,24 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
 				vec3<f32>(0.0,1.0,0.0),
 				1.0
 			);
-            luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, intersects_ground);
+            luminance_transfer = sampleGeometryLuminance(
+				&atmosphere,
+				&light,
+				uv,
+				material,
+				origin,
+				direction_world,
+				depth,
+				intersects_ground
+			);
         }
         else
         {
             luminance_transfer = sampleSkyLuminance(&atmosphere, &light, origin, direction_world);
         }
+		*/
+
+		luminance_transfer = sampleSkyLuminance(&atmosphere, &light, origin, direction_world);
     }
     else
     {
@@ -5018,7 +5330,16 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
 			normal.xyz,
 			foam_strength
 		);
-        luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, true);
+		luminance_transfer = sampleGeometryLuminance(
+			&atmosphere,
+			&light,
+			uv,
+			material,
+			origin,
+			direction_world,
+			depth,
+			true
+		);
     }
 
     let luminance = light.strength * light.color * luminance_transfer;
@@ -5027,18 +5348,20 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
 
     textureStore(output_color, texel_coord, output);
 }
-`,ne="rgba16float";class tt{constructor(e,t,r,s,i,n,o){a(this,"group0Layout");a(this,"group1Layout");a(this,"lutSampler");a(this,"group0");a(this,"group1");a(this,"outputColor");a(this,"outputColorView");a(this,"pipeline");this.group0Layout=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{format:ne}},{binding:1,visibility:GPUShaderStage.COMPUTE,sampler:{type:n?"filtering":"non-filtering"}},{binding:2,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:n?"float":"unfilterable-float",viewDimension:"2d"}},{binding:3,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:n?"float":"unfilterable-float",viewDimension:"2d"}},{binding:4,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:n?"float":"unfilterable-float",viewDimension:"2d"}}],label:"Atmosphere Camera Group 0"}),this.group1Layout=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{}}],label:"Atmosphere Camera Group 1"}),this.outputColor=e.createTexture({format:ne,size:{width:1,height:1},usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING,label:"Atmosphere Camera Output Color"}),this.outputColorView=this.outputColor.createView(),this.lutSampler=e.createSampler({label:"Atmosphere Camera LUT Sampler",magFilter:n?"linear":"nearest",minFilter:n?"linear":"nearest"}),this.group0=e.createBindGroup({layout:this.group0Layout,entries:[{binding:0,resource:this.outputColorView},{binding:1,resource:this.lutSampler},{binding:2,resource:r},{binding:3,resource:s},{binding:4,resource:i}],label:"Atmosphere Camera Group 0"}),this.group1=e.createBindGroup({layout:this.group1Layout,entries:[{binding:0,resource:{buffer:o.buffer}}],label:"Atmosphere Camera Group 1"});const u=e.createShaderModule({code:et,label:"Atmosphere Camera"});this.pipeline=e.createComputePipeline({compute:{module:u,entryPoint:"renderCompositedAtmosphere"},layout:e.createPipelineLayout({bindGroupLayouts:[this.group0Layout,this.group1Layout,t]}),label:"Atmosphere Camera"})}}const at=`// Call this in a render pass, passing in an index buffer [0, 1, 2, 0, 2, 3]
+`,oe="rgba16float";class it{constructor(e,t,r,i,n,s,o,l){a(this,"group0Layout");a(this,"group1Layout");a(this,"lutSampler");a(this,"group0");a(this,"group1");a(this,"outputColor");a(this,"outputColorView");a(this,"pipeline");this.group0Layout=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{format:oe}},{binding:1,visibility:GPUShaderStage.COMPUTE,sampler:{type:o?"filtering":"non-filtering"}},{binding:2,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:o?"float":"unfilterable-float",viewDimension:"2d"}},{binding:3,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:o?"float":"unfilterable-float",viewDimension:"2d"}},{binding:4,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:o?"float":"unfilterable-float",viewDimension:"2d"}},{binding:5,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:"float",viewDimension:"3d"}}],label:"Atmosphere Camera Group 0"}),this.group1Layout=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{}}],label:"Atmosphere Camera Group 1"}),this.outputColor=e.createTexture({format:oe,size:{width:1,height:1},usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING,label:"Atmosphere Camera Output Color"}),this.outputColorView=this.outputColor.createView(),this.lutSampler=e.createSampler({label:"Atmosphere Camera LUT Sampler",magFilter:o?"linear":"nearest",minFilter:o?"linear":"nearest"}),this.group0=e.createBindGroup({layout:this.group0Layout,entries:[{binding:0,resource:this.outputColorView},{binding:1,resource:this.lutSampler},{binding:2,resource:r},{binding:3,resource:i},{binding:4,resource:n},{binding:5,resource:s}],label:"Atmosphere Camera Group 0"}),this.group1=e.createBindGroup({layout:this.group1Layout,entries:[{binding:0,resource:{buffer:l.buffer}}],label:"Atmosphere Camera Group 1"});const u=e.createShaderModule({code:rt,label:"Atmosphere Camera"});this.pipeline=e.createComputePipeline({compute:{module:u,entryPoint:"renderCompositedAtmosphere"},layout:e.createPipelineLayout({bindGroupLayouts:[this.group0Layout,this.group1Layout,t]}),label:"Atmosphere Camera"})}resize(e,t,r,i,n,s){this.outputColor=t.createTexture({format:this.outputColor.format,size:e,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING}),this.outputColorView=this.outputColor.createView(),this.group0=t.createBindGroup({layout:this.group0Layout,entries:[{binding:0,resource:this.outputColorView},{binding:1,resource:this.lutSampler},{binding:2,resource:r},{binding:3,resource:i},{binding:4,resource:n},{binding:5,resource:s}],label:"Atmosphere Camera Group 0 Resized"})}record(e,t,r){const i=e.beginComputePass({timestampWrites:t!==void 0?{querySet:t.querySet,beginningOfPassWriteIndex:t.beginWriteIndex,endOfPassWriteIndex:t.endWriteIndex}:void 0,label:"Atmosphere Camera"});i.setPipeline(this.pipeline),i.setBindGroup(0,this.group0),i.setBindGroup(1,this.group1),i.setBindGroup(2,r.readGroup),i.dispatchWorkgroups(Math.ceil(this.outputColor.width/16),Math.ceil(this.outputColor.height/16)),i.end()}}const nt=`// Call this in a render pass, passing in an index buffer [0, 1, 2, 0, 2, 3]
 
 @group(0) @binding(0) var b_texture: texture_2d<f32>;
 @group(0) @binding(0) var b_texture_array: texture_2d_array<f32>;
+@group(0) @binding(0) var b_texture_3d: texture_3d<f32>;
 @group(0) @binding(1) var b_sampler: sampler;
 
 struct FullscreenQuadUBO
 {
     color_gain: vec4<f32>,
     vertex_scale: vec4<f32>,
-	padding0: vec2<f32>,
-	array_layer: u32,
+	swap_ba_rg: u32,
+	channel_mask: u32,
+	depth_or_array_layer: f32,
 	mip_level: u32,
 }
 
@@ -5071,18 +5394,912 @@ fn vertexMain(@builtin(vertex_index) index : u32) -> VertexOut
     return output;
 }
 
-@fragment
-fn fragmentMain(fragData: VertexOut) -> @location(0) vec4<f32>
+struct FragmentOut {
+	@location(0) color: vec4<f32>
+}
+
+fn doFragment(rgba: vec4<f32>) -> FragmentOut
 {
-    let color = u_fullscreen_quad.color_gain * textureSampleLevel(b_texture, b_sampler, fragData.uv, f32(u_fullscreen_quad.mip_level));
-    return vec4<f32>(color.xyz, 1.0);
+	var result: FragmentOut;
+	result.color = rgba;
+
+	if(u_fullscreen_quad.swap_ba_rg == 1)
+	{
+		result.color = result.color.barg;
+	}
+
+	result.color.r *= f32((u_fullscreen_quad.channel_mask & 1) > 0);
+	result.color.g *= f32((u_fullscreen_quad.channel_mask & 2) > 0);
+	result.color.b *= f32((u_fullscreen_quad.channel_mask & 4) > 0);
+
+	result.color *= u_fullscreen_quad.color_gain;
+
+	result.color.a = 1.0;
+
+	return result;
 }
 
 @fragment
-fn fragmentMainArray(fragData: VertexOut) -> @location(0) vec4<f32>
+fn fragmentMain(frag_interpolated: VertexOut) -> FragmentOut
 {
-    let color = u_fullscreen_quad.color_gain * textureSampleLevel(b_texture_array, b_sampler, fragData.uv, u_fullscreen_quad.array_layer, f32(u_fullscreen_quad.mip_level));
-    return vec4<f32>(color.xyz, 1.0);
+    return doFragment(
+		textureSampleLevel(
+			b_texture,
+			b_sampler,
+			frag_interpolated.uv,
+			f32(u_fullscreen_quad.mip_level)
+		)
+	);
 }
-`;class ue{constructor(){a(this,"color_gain",A.create(1,1,1,1));a(this,"vertex_scale",A.create(1,1,1,1));a(this,"padding0",b.create());a(this,"array_layer_u32",0);a(this,"mip_level_u32",0)}}class rt extends E{constructor(t){super(t,12,"Fullscreen Quad UBO");a(this,"data",new ue)}packed(){const t=new ArrayBuffer(this.buffer.size),r=new DataView(t);return new Float32Array(t).set(this.data.color_gain,0/4),new Float32Array(t).set(this.data.vertex_scale,16/4),r.setUint32(40,this.data.array_layer_u32,!0),r.setUint32(44,this.data.mip_level_u32,!0),t}}class it{constructor(e,t){a(this,"group0Layout");a(this,"group0LayoutArray");a(this,"group0ByOutputTexture");a(this,"group0Sampler");a(this,"ubo");a(this,"fullscreenQuadIndexBuffer");a(this,"group1");a(this,"pipeline");a(this,"arrayPipeline");const r=new Uint32Array([0,1,2,0,2,3]);this.fullscreenQuadIndexBuffer=e.createBuffer({size:r.byteLength,usage:GPUBufferUsage.INDEX|GPUBufferUsage.COPY_DST}),e.queue.writeBuffer(this.fullscreenQuadIndexBuffer,0,r,0,r.length),this.group0Layout=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:"unfilterable-float"}},{binding:1,visibility:GPUShaderStage.FRAGMENT,sampler:{type:"non-filtering"}}],label:"Fullscreen Quad Group 0"}),this.group0LayoutArray=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.FRAGMENT,texture:{viewDimension:"2d-array",sampleType:"unfilterable-float"}},{binding:1,visibility:GPUShaderStage.FRAGMENT,sampler:{type:"non-filtering"}}],label:"Fullscreen Quad Group 0 Array"}),this.group0ByOutputTexture=new Map,this.group0Sampler=e.createSampler({magFilter:"nearest",minFilter:"nearest"}),this.ubo=new rt(e);const s=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.FRAGMENT|GPUShaderStage.VERTEX,buffer:{type:"uniform"}}],label:"Fullscreen Quad Group 1"});this.group1=e.createBindGroup({layout:s,entries:[{binding:0,resource:{buffer:this.ubo.buffer}}]});const i=e.createShaderModule({code:at,label:"Fullscreen Quad"});this.pipeline=e.createRenderPipeline({vertex:{module:i,entryPoint:"vertexMain"},fragment:{module:i,entryPoint:"fragmentMain",targets:[{format:t}]},primitive:{topology:"triangle-list",cullMode:"none",frontFace:"ccw"},layout:e.createPipelineLayout({bindGroupLayouts:[this.group0Layout,s]}),label:"Fullscreen Quad"}),this.arrayPipeline=e.createRenderPipeline({vertex:{module:i,entryPoint:"vertexMain"},fragment:{module:i,entryPoint:"fragmentMainArray",targets:[{format:t}]},primitive:{topology:"triangle-list",cullMode:"none",frontFace:"ccw"},layout:e.createPipelineLayout({bindGroupLayouts:[this.group0LayoutArray,s]}),label:"Fullscreen Quad"})}setView(e,t,r,s){this.group0ByOutputTexture.set(t,{array:s,bindGroup:e.createBindGroup({layout:s?this.group0LayoutArray:this.group0Layout,entries:[{binding:0,resource:r},{binding:1,resource:this.group0Sampler}],label:`Fullscreen Quad Group 0 Texture '${r.label}'`})})}recordPresent(e,t,r,s,i,n){const o={r:0,g:0,b:0,a:1},u=this.group0ByOutputTexture.get(s);if(u===void 0){console.warn("FullscreenQuadPass: No texture to output.");return}const c=t.beginRenderPass({colorAttachments:[{clearValue:o,loadOp:"clear",storeOp:"store",view:r}],timestampWrites:n!==void 0?{querySet:n.querySet,beginningOfPassWriteIndex:n.beginWriteIndex,endOfPassWriteIndex:n.endWriteIndex}:void 0,label:"Fullscreen Pass"});this.ubo.data=i,this.ubo.writeToGPU(e.queue),c.setIndexBuffer(this.fullscreenQuadIndexBuffer,"uint32",0,this.fullscreenQuadIndexBuffer.size),c.setBindGroup(1,this.group1),c.setPipeline(u.array?this.arrayPipeline:this.pipeline),c.setBindGroup(0,u.bindGroup),c.drawIndexed(6,1,0,0,0),c.end()}}const k={width:2048,height:1024},q={width:1024,height:1024},V={width:1024,height:512};class H{constructor(){a(this,"flip",!1);a(this,"colorGain",{r:1,g:1,b:1});a(this,"mipLevel",0);a(this,"arrayLayer",0)}}const nt=[{id:m.Scene},{id:m.TransmittanceLUT,flip:!0},{id:m.MultiscatterLUT,flip:!0},{id:m.SkyviewLUT,colorGain:{r:8,g:8,b:8}},{id:m.GBufferColor},{id:m.GBufferNormal},{id:m.FFTWaveSpectrumGaussianNoise},{id:m.FFTWaveInitialAmplitude,colorGain:{r:100,g:100,b:100}},{id:m.FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude,colorGain:{r:100,g:100,b:100}},{id:m.FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,colorGain:{r:100,g:100,b:100}},{id:m.FFTWaveDx_Dy_Dz_Dxdz_Spatial},{id:m.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial}],P=[.25,.3333,.5,.75,1,1.5,2,4];var I=(l=>(l[l.DrawToDraw=0]="DrawToDraw",l[l.SkyviewLUT=1]="SkyviewLUT",l[l.FFTWaves=2]="FFTWaves",l[l.OceanSurface=3]="OceanSurface",l[l.AtmosphereCamera=4]="AtmosphereCamera",l[l.FullscreenQuad=5]="FullscreenQuad",l))(I||{});class se{constructor(e){a(this,"values");a(this,"sum",0);a(this,"average_",0);a(this,"count",0);a(this,"index",0);this.values=new Array(e).fill(0)}get average(){return this.average_}push(e){this.index>=this.values.length&&(this.index=0),this.index<this.count&&(this.sum-=this.values[this.index]),this.values[this.index]=e,this.sum+=e,this.count=Math.min(this.values.length,this.count+1),this.average_=this.sum/this.count,this.index+=1}}class st{constructor(e,t,r){a(this,"transmittanceLUTPassResources");a(this,"multiscatterLUTPassResources");a(this,"skyviewLUTPassResources");a(this,"fftWaveSpectrumResources");a(this,"waveSurfaceDisplacementPassResources");a(this,"atmosphereCameraPassResources");a(this,"fullscreenQuadPassResources");a(this,"gbuffer");a(this,"scaledSize");a(this,"rawSize");a(this,"renderOutputs");a(this,"settings");a(this,"uiReadonly");a(this,"globalUBO");a(this,"device");a(this,"presentFormat");a(this,"quit",!1);a(this,"frametimeQuery");a(this,"frametimeAverages");a(this,"startTime");a(this,"dummyFrameCounter");a(this,"probationFrameCounter");a(this,"targetFPS",0);a(this,"float32Filterable");if(this.device=e,this.float32Filterable=e.features.has("float32-filterable"),this.presentFormat=t,this.startTime=r,this.settings={outputTexture:m.Scene,oceanSurfaceSettings:{gerstner:!0,fft:!0,foamScale:15,foamBias:.25},fourierWavesSettings:{gravity:9.8,windSpeedMetersPerSeconds:15,windFetchMeters:40*1e3,waveSwell:.3},renderOutputTransforms:new Map,pauseGlobalTime:!1,currentRenderOutputTransform:new H,orbit:{timeHours:5.7,timeSpeedupFactor:400,paused:!1,reversed:!1,inclinationRadians:Math.PI/2,sunsetAzimuthRadians:0},renderScale:1.5},this.uiReadonly={averageFPS:0,frametimeControllers:new Map},this.scaledSize={width:1,height:1},this.rawSize={width:1,height:1},nt.reduce((o,{id:u,...c})=>(o.set(u,{...new H,...c}),o),this.settings.renderOutputTransforms),this.settings.renderOutputTransforms.has(this.settings.outputTexture)){const o=this.settings.renderOutputTransforms.get(this.settings.outputTexture);this.settings.currentRenderOutputTransform.flip=o.flip,this.settings.currentRenderOutputTransform.colorGain.r=o.colorGain.r,this.settings.currentRenderOutputTransform.colorGain.g=o.colorGain.g,this.settings.currentRenderOutputTransform.colorGain.b=o.colorGain.b}if(this.frametimeAverages=new Map,e.features.has("timestamp-query")){const u=2*Object.keys(I).map(c=>Number(c)).filter(isNaN).length;this.frametimeQuery={mappingLock:!1,querySet:e.createQuerySet({type:"timestamp",count:u}),writeBuffer:e.createBuffer({size:8*u,usage:GPUBufferUsage.COPY_SRC|GPUBufferUsage.QUERY_RESOLVE}),readBuffer:e.createBuffer({size:8*u,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ})},Object.keys(I).map(c=>Number(c)).filter(c=>!isNaN(c)).forEach(c=>{const _=c;this.frametimeAverages.set(_,new se(400)),Object.assign(this.uiReadonly,String(_),0)})}else console.warn("WebGPU feature 'timestamp-query' is not supported. Continuing, but without performance information about specific stages."),this.frametimeAverages.set(0,new se(400));this.dummyFrameCounter=10,this.probationFrameCounter=100,this.globalUBO=new Me(this.device),this.globalUBO.writeToGPU(this.device.queue),this.gbuffer=new ee(e,{width:1,height:1}),this.transmittanceLUTPassResources=new Pe(this.device,k,this.globalUBO),this.multiscatterLUTPassResources=new Ce(this.device,q,this.transmittanceLUTPassResources.view,this.float32Filterable,this.globalUBO),this.skyviewLUTPassResources=new Oe(this.device,V,this.transmittanceLUTPassResources.view,this.multiscatterLUTPassResources.view,this.float32Filterable,this.globalUBO),this.fftWaveSpectrumResources=new Xe(this.device,this.globalUBO);const s=this.fftWaveSpectrumResources.views();this.waveSurfaceDisplacementPassResources=new Ze(this.device,this.globalUBO,this.gbuffer.colorWithSurfaceWorldDepthInAlpha.format,this.gbuffer.normalWithSurfaceFoamStrengthInAlpha.format,this.gbuffer.depth.format,this.fftWaveSpectrumResources.displacementMaps()),this.atmosphereCameraPassResources=new tt(this.device,this.gbuffer.readGroupLayout,this.transmittanceLUTPassResources.view,this.multiscatterLUTPassResources.view,this.skyviewLUTPassResources.view,this.float32Filterable,this.globalUBO),this.fullscreenQuadPassResources=new it(this.device,this.presentFormat),this.renderOutputs=new Map([[m.Scene,new T(this.atmosphereCameraPassResources.outputColor)],[m.TransmittanceLUT,new T(this.transmittanceLUTPassResources.texture)],[m.MultiscatterLUT,new T(this.multiscatterLUTPassResources.texture)],[m.SkyviewLUT,new T(this.skyviewLUTPassResources.texture)],[m.GBufferColor,new T(this.gbuffer.colorWithSurfaceWorldDepthInAlpha)],[m.GBufferNormal,new T(this.gbuffer.normalWithSurfaceFoamStrengthInAlpha)],[m.FFTWaveSpectrumGaussianNoise,s.gaussianNoise],[m.FFTWaveInitialAmplitude,s.initialAmplitude],[m.FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude,s.packed_Dx_plus_iDy_Dz_iDxdz_Amplitude],[m.FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,s.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude],[m.FFTWaveTurbulenceJacobian,s.turbulenceJacobian],[m.FFTWaveDx_Dy_Dz_Dxdz_Spatial,s.Dx_Dy_Dz_Dxdz_Spatial],[m.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial,s.Dydx_Dydz_Dxdx_Dzdz_Spatial]]);for(const[o,u]of this.renderOutputs)this.fullscreenQuadPassResources.setView(e,o,u.view,u.depthOrArrayLayerCount>1);const i=e.createCommandEncoder();let n=i.beginComputePass();n.setPipeline(this.transmittanceLUTPassResources.pipeline),n.setBindGroup(0,this.transmittanceLUTPassResources.group0),n.setBindGroup(1,this.transmittanceLUTPassResources.group1),n.dispatchWorkgroups(Math.ceil(k.width/16),Math.ceil(k.height/16)),n.end(),n=i.beginComputePass(),n.setPipeline(this.multiscatterLUTPassResources.pipeline),n.setBindGroup(0,this.multiscatterLUTPassResources.group0),n.setBindGroup(1,this.multiscatterLUTPassResources.group1),n.dispatchWorkgroups(Math.ceil(q.width/16),Math.ceil(q.height/16)),n.end(),e.queue.submit([i.finish()])}setupUI(e){const t=e.add(this.settings,"outputTexture",{Scene:m.Scene,"Transmittance LUT":m.TransmittanceLUT,"Multiscatter LUT":m.MultiscatterLUT,"Skyview LUT":m.SkyviewLUT,"GBuffer Color":m.GBufferColor,"GBuffer Normal":m.GBufferNormal,"FFT Wave Gaussian Noise":m.FFTWaveSpectrumGaussianNoise,"FFT Wave Initial Amplitude":m.FFTWaveInitialAmplitude,"FFT Wave Frequency Domain (Dx + i * Dy, Dz + i * Dxdz)":m.FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude,"FFT Wave Frequency Domain (Dydx + i * Dydz, Dxdx + i * Dzdz)":m.FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,"FFT Wave (Turbulence, Jacobian)":m.FFTWaveTurbulenceJacobian,"FFT Wave Spatial Domain (Dx, Dy, Dz, Dxdz)":m.FFTWaveDx_Dy_Dz_Dxdz_Spatial,"FFT Wave Spatial Domain (Dydx, Dydz, Dxdx, Dzdx)":m.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial}).name("Render Output").listen();e.add(this.settings,"renderScale",P).name("Render Resolution Scale").decimals(1).onFinishChange(h=>{this.handleResize(this.rawSize.width,this.rawSize.height)}).listen(),e.add(this.uiReadonly,"averageFPS").decimals(1).disable().name("Average FPS").listen();const r=e.addFolder("Ocean Parameters").open();r.add(this.settings.oceanSurfaceSettings,"gerstner").name("Gerstner Waves"),r.add(this.settings.oceanSurfaceSettings,"fft").name("FFT Accelerated Waves"),r.add(this.settings,"pauseGlobalTime").name("Pause Waves"),r.add(this.settings.oceanSurfaceSettings,"foamScale").name("Foam Scale").min(-30).max(30),r.add(this.settings.oceanSurfaceSettings,"foamBias").name("Foam Bias").min(-1).max(1),r.add(this.settings.fourierWavesSettings,"gravity").name("Gravity (m / s^2)").min(.01).max(20),r.add(this.settings.fourierWavesSettings,"waveSwell").name("Wave Swell").min(.01).max(1),r.add(this.settings.fourierWavesSettings,"windFetchMeters").name("Wind Fetch (m)").min(1e3).max(100*1e3),r.add(this.settings.fourierWavesSettings,"windSpeedMetersPerSeconds").name("Wind Speed (m/s)").min(.01).max(100);const s=e.addFolder("Sun Parameters").open();s.add(this.settings.orbit,"timeHours").min(0).max(24).name("Time in Hours").listen(),s.add(this.settings.orbit,"timeSpeedupFactor").min(1).max(5e4).step(1).name("Time Multiplier"),s.add(this.settings.orbit,"paused").name("Pause Sun"),s.add({fn:()=>{this.settings.orbit.timeHours=this.settings.orbit.reversed?18+.5:6-.5}},"fn").name("Skip to Sunrise"),s.add({fn:()=>{this.settings.orbit.timeHours=this.settings.orbit.reversed?6+.5:18-.5}},"fn").name("Skip to Sunset"),s.add(this.settings.orbit,"reversed").name("Reverse Sun"),s.add(this.settings.orbit,"sunsetAzimuthRadians").name("Sun Azimuth").min(0).max(2*Math.PI),s.add(this.settings.orbit,"inclinationRadians").name("Sun Inclination").min(0).max(Math.PI);const i=e.addFolder("Output Transform").close();i.add(this.settings.currentRenderOutputTransform,"flip").name("Flip Image").listen();const n=i.add(this.settings.currentRenderOutputTransform,"mipLevel").min(0).max(0).step(1).name("Mip Level").listen(),o=i.add(this.settings.currentRenderOutputTransform,"arrayLayer").min(0).max(0).step(1).name("Array Layer").listen();i.add({gain:0},"gain").name("RGB").min(0).max(100).onChange(h=>{this.settings.currentRenderOutputTransform.colorGain.r=h,this.settings.currentRenderOutputTransform.colorGain.g=h,this.settings.currentRenderOutputTransform.colorGain.b=h});const u=i.add(this.settings.currentRenderOutputTransform.colorGain,"r").name("R").min(0).max(100).listen(),c=i.add(this.settings.currentRenderOutputTransform.colorGain,"g").name("G").min(0).max(100).listen(),_=i.add(this.settings.currentRenderOutputTransform.colorGain,"b").name("B").min(0).max(100).listen();t.onChange(h=>{const g=t._listenPrevValue;this.settings.renderOutputTransforms.set(g,structuredClone(this.settings.currentRenderOutputTransform)),Object.assign(this.settings.currentRenderOutputTransform,structuredClone(this.settings.renderOutputTransforms.get(h)??new H));const f=this.renderOutputs.get(h);f!==void 0&&(n.max(f.mipLevelCount-1),n.disable(f.mipLevelCount==1),f.mipLevelCount==1&&n.setValue(0),n.updateDisplay(),o.max(f.depthOrArrayLayerCount-1),o.disable(f.depthOrArrayLayerCount==1),f.depthOrArrayLayerCount==1&&o.setValue(0),o.updateDisplay()),u.object=this.settings.currentRenderOutputTransform.colorGain,c.object=this.settings.currentRenderOutputTransform.colorGain,_.object=this.settings.currentRenderOutputTransform.colorGain});const d=this.renderOutputs.get(t.getValue());d!==void 0&&(n.max(d.mipLevelCount-1),n.disable(d.mipLevelCount==1),d.mipLevelCount==1&&n.setValue(0),n.updateDisplay(),o.max(d.depthOrArrayLayerCount-1),o.disable(d.depthOrArrayLayerCount==1),d.depthOrArrayLayerCount==1&&o.setValue(0),o.updateDisplay());const p=e.addFolder("Performance").close();this.frametimeAverages.forEach((h,g)=>{this.uiReadonly.frametimeControllers.set(g,p.add({value:0},"value").name(`${I[g]} (ms)`).decimals(6).disable())})}updateOrbit(e){const t=this.settings.orbit;this.settings.orbit.paused||(t.timeHours+=(t.reversed?-1:1)*t.timeSpeedupFactor*e/36e5,t.timeHours=t.timeHours-Math.floor(t.timeHours/24)*24);const r=2*Math.PI/24,s=(12-t.timeHours)*r,i=x.create(-Math.sin(t.sunsetAzimuthRadians),0,Math.cos(t.sunsetAzimuthRadians)),n=x.create(Math.cos(t.sunsetAzimuthRadians)*Math.cos(t.inclinationRadians),Math.sin(t.inclinationRadians),Math.sin(t.sunsetAzimuthRadians)*Math.cos(t.inclinationRadians)),o=x.add(x.scale(i,Math.sin(s)),x.scale(n,Math.cos(s)));x.scale(o,-1,this.globalUBO.data.light.forward)}updateFPSValues(e){var t,r,s,i;e>.01&&((t=this.frametimeAverages.get(0))==null||t.push(e),this.uiReadonly.averageFPS=1e3/(((r=this.frametimeAverages.get(0))==null?void 0:r.average)??1e3),(i=this.uiReadonly.frametimeControllers.get(0))==null||i.setValue(((s=this.frametimeAverages.get(0))==null?void 0:s.average)??-1))}updateCamera(e){const t=60*Math.PI/180,i=M.perspective(t,e,.1,1e3),n=[0,10,-20],o=M.lookAt(n,[0,0,400],[0,1,0]);Object.assign(this.globalUBO.data.camera,{invProj:M.inverse(i),invView:M.inverse(o),projView:M.mul(i,o),position:A.create(n[0],n[1],n[2],1)})}updateTime(e){const t=this.globalUBO.data.time;this.settings.pauseGlobalTime?t.deltaTimeSeconds=0:(t.deltaTimeSeconds=e/1e3,t.timeSeconds+=t.deltaTimeSeconds);const i=this.settings.oceanSurfaceSettings.fft?100:60;t.timeSeconds-=Math.floor(t.timeSeconds/i)*i}draw(e,t,r,s){if(this.dummyFrameCounter>0){this.dummyFrameCounter-=1;return}const i=e.createView();if(this.updateFPSValues(s),this.probationFrameCounter>49){this.probationFrameCounter-=1,this.probationFrameCounter<50&&(console.log(`Average FPS without load is ${this.uiReadonly.averageFPS}`),this.targetFPS=this.uiReadonly.averageFPS);return}if(this.probationFrameCounter>0&&(this.probationFrameCounter-=1,this.probationFrameCounter<1)){console.log(`Average FPS with load is ${this.uiReadonly.averageFPS}`);const d=this.uiReadonly.averageFPS/this.targetFPS;this.settings.renderScale=P[0],P.forEach(p=>{Math.abs(p-d)<Math.abs(this.settings.renderScale-d)&&(this.settings.renderScale=p)}),this.handleResize(this.rawSize.width,this.rawSize.height)}this.updateCamera(t),this.updateTime(s),this.updateOrbit(s),this.globalUBO.writeToGPU(this.device.queue);const n=this.device.createCommandEncoder({label:"Main"}),o=new Map;let u=0;o.set(2,u),this.fftWaveSpectrumResources.record(this.device,n,this.settings.fourierWavesSettings,this.frametimeQuery!==void 0?{querySet:this.frametimeQuery.querySet,beginWriteIndex:u++,endWriteIndex:u++}:void 0),o.set(3,u),this.waveSurfaceDisplacementPassResources.record(this.device,n,this.frametimeQuery!==void 0?{querySet:this.frametimeQuery.querySet,beginWriteIndex:u++,endWriteIndex:u++}:void 0,this.fftWaveSpectrumResources.turbulenceMapIndex,{gerstner:this.settings.oceanSurfaceSettings.gerstner,fft:this.settings.oceanSurfaceSettings.fft,foamBias:this.settings.oceanSurfaceSettings.foamBias,foamScale:this.settings.oceanSurfaceSettings.foamScale},{extent:b.create(this.gbuffer.colorWithSurfaceWorldDepthInAlpha.width,this.gbuffer.colorWithSurfaceWorldDepthInAlpha.height),colorWithSurfaceWorldDepthInAlpha:this.gbuffer.colorWithSurfaceWorldDepthInAlphaView,normalWithSurfaceFoamInAlpha:this.gbuffer.normalWithSurfaceFoamStrengthInAlphaView,depth:this.gbuffer.depthView}),o.set(1,u);const c=n.beginComputePass({timestampWrites:this.frametimeQuery!==void 0?{querySet:this.frametimeQuery.querySet,beginningOfPassWriteIndex:u++,endOfPassWriteIndex:u++}:void 0,label:"Skyview LUT"});c.setPipeline(this.skyviewLUTPassResources.pipeline),c.setBindGroup(0,this.skyviewLUTPassResources.group0),c.setBindGroup(1,this.skyviewLUTPassResources.group1),c.dispatchWorkgroups(Math.ceil(V.width/16),Math.ceil(V.height/(16*1.9))),c.end(),o.set(4,u);const _=n.beginComputePass({timestampWrites:this.frametimeQuery!==void 0?{querySet:this.frametimeQuery.querySet,beginningOfPassWriteIndex:u++,endOfPassWriteIndex:u++}:void 0,label:"Atmosphere Camera"});_.setPipeline(this.atmosphereCameraPassResources.pipeline),_.setBindGroup(0,this.atmosphereCameraPassResources.group0),_.setBindGroup(1,this.atmosphereCameraPassResources.group1),_.setBindGroup(2,this.gbuffer.readGroup),_.dispatchWorkgroups(Math.ceil(this.atmosphereCameraPassResources.outputColor.width/16),Math.ceil(this.atmosphereCameraPassResources.outputColor.height/16)),_.end();{const d=this.settings.currentRenderOutputTransform,p=new ue;p.color_gain=A.create(d.colorGain.r,d.colorGain.g,d.colorGain.b,1),p.vertex_scale=A.create(1,d.flip?-1:1,1,1),p.mip_level_u32=Math.round(d.mipLevel),p.array_layer_u32=Math.round(d.arrayLayer),o.set(5,u),this.fullscreenQuadPassResources.recordPresent(this.device,n,i,this.settings.outputTexture,p,this.frametimeQuery!==void 0?{querySet:this.frametimeQuery.querySet,beginWriteIndex:u++,endWriteIndex:u++}:void 0)}if(this.frametimeQuery!=null&&!this.frametimeQuery.mappingLock&&(n.resolveQuerySet(this.frametimeQuery.querySet,0,2*o.size,this.frametimeQuery.writeBuffer,0),n.copyBufferToBuffer(this.frametimeQuery.writeBuffer,0,this.frametimeQuery.readBuffer,0,this.frametimeQuery.readBuffer.size)),this.device.queue.submit([n.finish()]),this.frametimeQuery!==void 0&&!this.frametimeQuery.mappingLock){const d=this.frametimeQuery;this.frametimeQuery.mappingLock=!0,this.frametimeQuery.readBuffer.mapAsync(GPUMapMode.READ,0,this.frametimeQuery.readBuffer.size).then(()=>{const p=new BigInt64Array(d.readBuffer.getMappedRange(0,d.readBuffer.size));o.forEach((h,g)=>{var v,D,S;const y=Number(p.at(h+1)-p.at(h))/1e6;(v=this.frametimeAverages.get(g))==null||v.push(y),(S=this.uiReadonly.frametimeControllers.get(g))==null||S.setValue(((D=this.frametimeAverages.get(g))==null?void 0:D.average)??-1)}),d.readBuffer.unmap(),d.mappingLock=!1}).catch(p=>{console.error("Failed while retrieving frametime values from GPU:"),console.error(p)})}}handleResize(e,t){const r={width:e*this.settings.renderScale,height:t*this.settings.renderScale},s=8192,i=268435456,n=16,o=(u,c)=>u<s&&c<s&&u*c*n<i;o(r.width,r.height)?this.scaledSize=r:(P.slice().reverse().some(u=>{if(o(e*u,t*u))return this.settings.renderScale=u,!0}),console.warn(`During resize: Texture size (${r.width},${r.height}) exceeds WebGPU guaranteed limit (8192, 8192).
-								Defaulting to highest possible render scale of ${this.settings.renderScale}`),this.scaledSize={width:e*this.settings.renderScale,height:t*this.settings.renderScale}),console.log(`Resizing to (${this.scaledSize.width},${this.scaledSize.height})`),this.rawSize={width:e,height:t},this.gbuffer=new ee(this.device,this.scaledSize,this.gbuffer),this.renderOutputs.set(m.GBufferColor,new T(this.gbuffer.colorWithSurfaceWorldDepthInAlpha)),this.renderOutputs.set(m.GBufferNormal,new T(this.gbuffer.normalWithSurfaceFoamStrengthInAlpha)),this.atmosphereCameraPassResources.outputColor=this.device.createTexture({format:this.atmosphereCameraPassResources.outputColor.format,size:this.scaledSize,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING}),this.atmosphereCameraPassResources.outputColorView=this.atmosphereCameraPassResources.outputColor.createView(),this.renderOutputs.set(m.Scene,new T(this.atmosphereCameraPassResources.outputColor)),this.atmosphereCameraPassResources.group0=this.device.createBindGroup({layout:this.atmosphereCameraPassResources.group0Layout,entries:[{binding:0,resource:this.atmosphereCameraPassResources.outputColorView},{binding:1,resource:this.atmosphereCameraPassResources.lutSampler},{binding:2,resource:this.transmittanceLUTPassResources.view},{binding:3,resource:this.multiscatterLUTPassResources.view},{binding:4,resource:this.skyviewLUTPassResources.view}],label:"Atmosphere Camera Group 0"}),this.renderOutputs.forEach((u,c)=>{this.fullscreenQuadPassResources.setView(this.device,c,u.view,u.depthOrArrayLayerCount>1)})}}const ut=(l,e,t)=>new st(l,e,t);export{ut as SkySeaAppConstructor};
+
+@fragment
+fn fragmentMainArray(frag_interpolated: VertexOut) -> FragmentOut
+{
+	return doFragment(
+		textureSampleLevel(
+			b_texture_array,
+			b_sampler,
+			frag_interpolated.uv,
+			u32(u_fullscreen_quad.depth_or_array_layer),
+			f32(u_fullscreen_quad.mip_level)
+		)
+	);
+}
+
+@fragment
+fn fragmentMain3D(frag_interpolated: VertexOut) -> FragmentOut
+{
+	let coord = vec3<f32>(frag_interpolated.uv, u_fullscreen_quad.depth_or_array_layer / f32(textureDimensions(b_texture_3d).z));
+	return doFragment(
+		textureSampleLevel(
+			b_texture_3d,
+			b_sampler,
+			coord,
+			f32(u_fullscreen_quad.mip_level)
+		)
+	);
+}
+`;class _e{constructor(){a(this,"color_gain",S.create(1,1,1,1));a(this,"vertex_scale",S.create(1,1,1,1));a(this,"swap_ba_rg",!1);a(this,"channel_mask",7);a(this,"depth_or_array_layer",0);a(this,"mip_level_u32",0)}}class st extends P{constructor(t){super(t,12,"Fullscreen Quad UBO");a(this,"data",new _e)}packed(){const t=new ArrayBuffer(this.buffer.size),r=new DataView(t);return new Float32Array(t).set(this.data.color_gain,0/4),new Float32Array(t).set(this.data.vertex_scale,16/4),r.setUint32(32,this.data.swap_ba_rg?1:0,!0),r.setUint32(36,this.data.channel_mask,!0),r.setFloat32(40,this.data.depth_or_array_layer,!0),r.setUint32(44,this.data.mip_level_u32,!0),t}}class ot{constructor(e,t){a(this,"group0Layout");a(this,"group0LayoutArray");a(this,"group0Layout3D");a(this,"group0ByOutputTexture");a(this,"group0Sampler");a(this,"ubo");a(this,"fullscreenQuadIndexBuffer");a(this,"group1");a(this,"pipeline");a(this,"pipelineArray");a(this,"pipeline3D");const r=new Uint32Array([0,1,2,0,2,3]);this.fullscreenQuadIndexBuffer=e.createBuffer({size:r.byteLength,usage:GPUBufferUsage.INDEX|GPUBufferUsage.COPY_DST}),e.queue.writeBuffer(this.fullscreenQuadIndexBuffer,0,r,0,r.length),this.group0Layout=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:"unfilterable-float"}},{binding:1,visibility:GPUShaderStage.FRAGMENT,sampler:{type:"non-filtering"}}],label:"Fullscreen Quad Group 0"}),this.group0LayoutArray=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.FRAGMENT,texture:{viewDimension:"2d-array",sampleType:"unfilterable-float"}},{binding:1,visibility:GPUShaderStage.FRAGMENT,sampler:{type:"non-filtering"}}],label:"Fullscreen Quad Group 0 Array"}),this.group0Layout3D=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.FRAGMENT,texture:{viewDimension:"3d",sampleType:"unfilterable-float"}},{binding:1,visibility:GPUShaderStage.FRAGMENT,sampler:{type:"non-filtering"}}],label:"Fullscreen Quad Group 0 3D"}),this.group0ByOutputTexture=new Map,this.group0Sampler=e.createSampler({magFilter:"nearest",minFilter:"nearest"}),this.ubo=new st(e);const i=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.FRAGMENT|GPUShaderStage.VERTEX,buffer:{type:"uniform"}}],label:"Fullscreen Quad Group 1"});this.group1=e.createBindGroup({layout:i,entries:[{binding:0,resource:{buffer:this.ubo.buffer}}]});const n=e.createShaderModule({code:nt,label:"Fullscreen Quad"});this.pipeline=e.createRenderPipeline({vertex:{module:n,entryPoint:"vertexMain"},fragment:{module:n,entryPoint:"fragmentMain",targets:[{format:t}]},primitive:{topology:"triangle-list",cullMode:"none",frontFace:"ccw"},layout:e.createPipelineLayout({bindGroupLayouts:[this.group0Layout,i]}),label:"Fullscreen Quad 2D"}),this.pipelineArray=e.createRenderPipeline({vertex:{module:n,entryPoint:"vertexMain"},fragment:{module:n,entryPoint:"fragmentMainArray",targets:[{format:t}]},primitive:{topology:"triangle-list",cullMode:"none",frontFace:"ccw"},layout:e.createPipelineLayout({bindGroupLayouts:[this.group0LayoutArray,i]}),label:"Fullscreen Quad 2D Array"}),this.pipeline3D=e.createRenderPipeline({vertex:{module:n,entryPoint:"vertexMain"},fragment:{module:n,entryPoint:"fragmentMain3D",targets:[{format:t}]},primitive:{topology:"triangle-list",cullMode:"none",frontFace:"ccw"},layout:e.createPipelineLayout({bindGroupLayouts:[this.group0Layout3D,i]}),label:"Fullscreen Quad 3D"})}setView(e,t,r,i){let n=this.group0Layout;switch(i){case"2d":{n=this.group0Layout;break}case"2d-array":{n=this.group0LayoutArray;break}case"3d":{n=this.group0Layout3D;break}default:throw new RangeError(`Unsupported texture dimension '${i}'`)}this.group0ByOutputTexture.set(t,{dimension:i,bindGroup:e.createBindGroup({layout:n,entries:[{binding:0,resource:r},{binding:1,resource:this.group0Sampler}],label:`Fullscreen Quad Group 0 Texture '${r.label}'`})})}recordPresent(e,t,r,i,n,s){const o={r:0,g:0,b:0,a:1},l=this.group0ByOutputTexture.get(i);if(l===void 0){console.warn("FullscreenQuadPass: No texture to output.");return}const u=t.beginRenderPass({colorAttachments:[{clearValue:o,loadOp:"clear",storeOp:"store",view:r}],timestampWrites:s!==void 0?{querySet:s.querySet,beginningOfPassWriteIndex:s.beginWriteIndex,endOfPassWriteIndex:s.endWriteIndex}:void 0,label:"Fullscreen Pass"});switch(this.ubo.data=n,this.ubo.writeToGPU(e.queue),u.setIndexBuffer(this.fullscreenQuadIndexBuffer,"uint32",0,this.fullscreenQuadIndexBuffer.size),u.setBindGroup(1,this.group1),l.dimension){case"2d":{u.setPipeline(this.pipeline);break}case"2d-array":{u.setPipeline(this.pipelineArray);break}case"3d":{u.setPipeline(this.pipeline3D);break}default:throw new Error(`Unsupported texture dimension '${l.dimension}'`)}u.setBindGroup(0,l.bindGroup),u.drawIndexed(6,1,0,0,0),u.end()}}const lt=`// Sizeof(Atmosphere) = 8 * 16 = 128
+// Alignof(Atmosphere) = 16
+struct Atmosphere
+{
+    scattering_rayleigh_per_Mm : vec3<f32>,
+    density_scale_rayleigh_Mm : f32,
+    absorption_rayleigh_per_Mm : vec3<f32>,
+
+    planet_radius_Mm : f32,
+
+    scattering_mie_per_Mm : vec3<f32>,
+    density_scale_mie_Mm : f32,
+    absorption_mie_per_Mm : vec3<f32>,
+
+    atmosphere_radius_Mm : f32,
+
+    ground_albedo : vec3<f32>,
+    padding0 : f32,
+
+    scattering_ozone_per_Mm : vec3<f32>,
+    padding1 : f32,
+
+    absorption_ozone_per_Mm : vec3<f32>,
+    padding2 : f32,
+
+    padding3 : vec4<f32>,
+}
+
+// Sizeof(CelestialLight) = 2 * 16 = 32
+// Alignof(CelestialLight) = 16
+struct CelestialLight
+{
+    color: vec3<f32>,
+    strength: f32,
+
+	forward: vec3<f32>,
+    angular_radius: f32,
+}
+
+// Sizeof(Camera) = 4 * 64 = 256
+// Alignof(Camera) = 16
+struct Camera
+{
+    inv_proj: mat4x4<f32>,
+
+	inv_view: mat4x4<f32>,
+
+	proj_view: mat4x4<f32>,
+
+    position: vec4<f32>,
+	forward: vec4<f32>,
+	padding0: mat2x4<f32>,
+}
+
+// Sizeof(Time) = 16
+// Alignof(Time) = 16
+struct Time
+{
+	padding0: vec2<f32>,
+	time_seconds: f32,
+	delta_time_seconds: f32,
+}
+
+// All of these uniform values have identical lifetimes: they update before rendering for the frame, and are constant throughout
+// Thus we store everything together to simplify the bindings
+// Sizeof(GlobalUBO) = 672 + 16 = 688 (as of writing)
+// Alignof(GlobalUBO) = 16
+struct GlobalUBO
+{
+	camera: Camera,           // offsets
+	ocean_camera: Camera,     // 0   + 256 = 256
+	atmosphere: Atmosphere,   // 256 + 256 = 512
+	light: CelestialLight,    // 512 + 128 = 640
+	time: Time,               // 640 + 32  = 672
+}
+
+struct RaySphereHit
+{
+    hit: bool,
+    t0: f32,
+    t1: f32,
+}
+
+// t1 > t0, values can be negative. Function returns true even if the sphere is behind the ray.
+// If this returns false, t0 and t1 are unchanged.
+fn raySphereIntersection(
+    ray_origin: vec3<f32>,
+    ray_direction_normalized: vec3<f32>,
+    radius: f32
+) -> RaySphereHit
+{
+    // Method taken from "Precision Improvements for Ray/Sphere Intersection"
+    // by Eric Haines, Johannes Günther, and Tomas Akenine-Möller
+    //
+    // The method includes tricks to reduce float point inaccuracy errors.
+
+    let f: vec3<f32> = ray_origin;
+    let d: vec3<f32> = ray_direction_normalized;
+    let b: f32 = -1.0 * dot(f, d);
+    let center_to_intersection_chord: vec3<f32> = f + b * d;
+    let discriminant: f32 = radius * radius - dot(center_to_intersection_chord, center_to_intersection_chord);
+    let c: f32 = dot(f, f) - radius * radius;
+
+    var output : RaySphereHit;
+    output.hit = false;
+    output.t0 = 0.0;
+    output.t1 = 0.0;
+
+    if (discriminant < 0.0)
+    {
+        return output;
+    }
+
+    var q: f32 = b;
+    if (b < 0.0)
+    {
+        q -= sqrt(discriminant);
+    }
+    else
+    {
+        q += sqrt(discriminant);
+    }
+
+    output.hit = true;
+    output.t0 = c / q;
+    output.t1 = q;
+
+    if (output.t0 > output.t1)
+    {
+        let temp: f32 = output.t0;
+        output.t0 = output.t1;
+        output.t1 = temp;
+    }
+
+    return output;
+}
+
+struct RayPlaneHit {
+	hit: bool,
+	t: f32,
+}
+
+fn rayPlaneIntersection(
+	ray_origin: vec3<f32>,
+	ray_direction: vec3<f32>,
+	plane_origin: vec3<f32>,
+	plane_normal: vec3<f32>
+) -> RayPlaneHit
+{
+	var result: RayPlaneHit;
+
+	let perp = dot(plane_normal, ray_direction);
+	result.t = dot(plane_origin - ray_origin, plane_normal) / perp;
+	result.hit = (abs(perp) > 0.00001) && (result.t > 0.0);
+
+	return result;
+}
+
+
+@group(0) @binding(0) var aerial_perspective_lut: texture_storage_3d<rgba16float, write>;
+@group(0) @binding(1) var lut_sampler: sampler;
+@group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
+@group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
+
+@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+
+// This file contains shared methods and definitions for raymarching the atmosphere and generating the lookup tables
+
+// Based on:
+// "A Scalable and Production Ready Sky and Atmosphere Rendering Technique" by Sébastien Hillaire (2020)
+// https://sebh.github.io/publications/egsr2020.pdf
+//
+// "Precomputed Atmospheric Scattering: a New Implementation" by Eric Bruneton (2017)
+// https://ebruneton.github.io/precomputed_atmospheric_scattering
+
+const TRANSMITTANCE_LUT_WIDTH = 2048u;
+const TRANSMITTANCE_LUT_HEIGHT = 1024u;
+
+const MULTISCATTER_LUT_WIDTH = 1024u;
+const MULTISCATTER_LUT_HEIGHT = 1024u;
+
+const SKYVIEW_LUT_WIDTH = 1024u;
+const SKYVIEW_LUT_HEIGHT = 512u;
+
+const AERIAL_PERSPECTIVE_MM_PER_SLICE = 0.001;
+
+const METERS_PER_MM: f32 = 1000000;
+const PI: f32 = 3.141592653589793;
+
+// Transmittance LUT UV mapping based on Bruneton et al. 2017 method
+// https://ebruneton.github.io/precomputed_atmospheric_scattering/atmosphere/functions.glsl#transmittance_lookup
+
+fn safeSqrt(value: f32) -> f32 { return sqrt(max(value, 0.0)); }
+
+// Squeeze in UV values by half a texel, so the bounds of our sampled function can be stored precisely at the edge of
+// the texture
+fn textureCoordFromUnitRange(value: f32, length: u32) -> f32
+{
+    return 0.5 / f32(length) + value * (1.0 - 1.0 / f32(length));
+}
+fn unitRangeFromTextureCoord(coord: f32 , length: u32) -> f32
+{
+    return (coord - 0.5 / f32(length)) / (1.0 - 1.0 / f32(length));
+}
+
+// Radius is the distance in Mm from the center of the planet, aka length of position vector
+// Mu is the cosine of the angle between the position vector and the direction vector we want to sample the
+// transmittance in
+fn transmittanceLUT_RMu_to_UV(
+    atmosphere: ptr<function,Atmosphere>,
+    radius: f32,
+    mu: f32
+) -> vec2<f32>
+{
+    let atmosphere_radius_Mm_squared: f32 = (*atmosphere).atmosphere_radius_Mm * (*atmosphere).atmosphere_radius_Mm;
+    let planet_radius_Mm_squared: f32 = (*atmosphere).planet_radius_Mm * (*atmosphere).planet_radius_Mm;
+
+    // Ground level, horizontal ray distance to atmospheric boundary
+    let h: f32 = safeSqrt(atmosphere_radius_Mm_squared - planet_radius_Mm_squared);
+
+    // Distance to horizon, which is also the exact position the previous horizontal ray starts at
+    let rho: f32 = safeSqrt(radius * radius - planet_radius_Mm_squared);
+
+    // rho + H = distance to atmosphere boundary when looking at the horizon
+    // It represents the distance along the biggest angle (most negative mu) that has nonzero transmittance,
+    // since any lower and we intersect the planet
+    // This angle changes as the radius does, so this mapping seeks to compress a different range of mu values
+    // at any given radius value
+
+    // Distance to edge of atmosphere, with both its min and max values at this given radius.
+    let d: f32 = max(-radius * mu + safeSqrt(radius * radius * (mu * mu - 1.0) + atmosphere_radius_Mm_squared), 0.0);
+    let d_min: f32 = (*atmosphere).atmosphere_radius_Mm - radius;
+    let d_max: f32 = rho + h;
+
+    let x_mu: f32 = (d - d_min) / (d_max - d_min);
+    let x_radius: f32 = rho / h;
+
+    return vec2<f32>(
+        textureCoordFromUnitRange(x_mu, TRANSMITTANCE_LUT_WIDTH),
+        textureCoordFromUnitRange(x_radius, TRANSMITTANCE_LUT_HEIGHT)
+    );
+}
+
+// Inverse of transmittanceLUT_RMu_to_UV
+// Allocates more texture space to interesting rays near the horizon.
+fn transmittanceLUT_UV_to_RMu(
+    atmosphere: ptr<function,Atmosphere>,
+    uv: vec2<f32>
+) -> vec2<f32>
+{
+    let x_mu : f32 = unitRangeFromTextureCoord(uv.x, TRANSMITTANCE_LUT_WIDTH);
+    let x_radius : f32 = unitRangeFromTextureCoord(uv.y, TRANSMITTANCE_LUT_HEIGHT);
+
+    let atmosphere_radius_Mm_squared : f32 = (*atmosphere).atmosphere_radius_Mm * (*atmosphere).atmosphere_radius_Mm;
+    let planet_radius_Mm_squared : f32 = (*atmosphere).planet_radius_Mm * (*atmosphere).planet_radius_Mm;
+
+    // Ground level, horizontal ray distance to atmospheric boundary
+    let h : f32 = safeSqrt(atmosphere_radius_Mm_squared - planet_radius_Mm_squared);
+
+    let rho : f32 = h * x_radius;
+
+    let radius : f32 = safeSqrt(rho * rho + planet_radius_Mm_squared);
+
+    let d_min : f32 = (*atmosphere).atmosphere_radius_Mm - radius;
+    let d_max : f32 = rho + h;
+
+    let d : f32 = (d_max - d_min) * x_mu + d_min;
+
+    // This boundary condition is important depending on floating point errors
+    // We don't need to check radius since it is bounded below by planet radius, and that shouldn't be near 0
+    let D_EPSILON: f32 = 0.000000001;
+    if (d < D_EPSILON)
+    {
+        // mu is ambiguous since we are at the very edge of the atmosphere, where no angle produces valid transmittance
+        // values
+        return vec2<f32>(radius, 1.0);
+    }
+
+    let mu : f32 = (h * h - rho * rho - d * d) / (2.0 * radius * d);
+    // Equivalently, mu = (atmosphere_radius_Mm_squared - radius * radius - d*d) / (2.0 * radius * d)
+    // But atmosphere_radius_Mm_squared and radius * radius are large, so this avoids floating point errors from adding
+    // these to the much smaller d * d
+
+    // This clamp is very important
+    return vec2<f32>(radius, clamp(mu, -1.0, 1.0));
+}
+
+fn multiscatterLUT_RMu_to_UV(
+    atmosphere: ptr<function,Atmosphere>,
+    radius: f32,
+    mu_light: f32
+) -> vec2<f32>
+{
+    let u_unit: f32 = 0.5 + 0.5 * mu_light;
+    let v_unit: f32 = clamp(
+        (radius - (*atmosphere).planet_radius_Mm)
+            / ((*atmosphere).atmosphere_radius_Mm - (*atmosphere).planet_radius_Mm),
+        0.0, 1.0
+    );
+
+    return vec2<f32>(
+        textureCoordFromUnitRange(u_unit, MULTISCATTER_LUT_WIDTH),
+        textureCoordFromUnitRange(v_unit, MULTISCATTER_LUT_HEIGHT)
+    );
+}
+
+fn multiscatterLUT_UV_to_RMu(
+    atmosphere: ptr<function,Atmosphere>,
+    uv: vec2<f32>,
+) -> vec2<f32>
+{
+    let u_unit: f32 = unitRangeFromTextureCoord(uv.x, MULTISCATTER_LUT_WIDTH);
+    let v_unit: f32 = unitRangeFromTextureCoord(uv.y, MULTISCATTER_LUT_HEIGHT);
+
+    let mu_light: f32 = 2.0 * (u_unit - 0.5);
+
+    // The exact radius is not too critical, and multiscattering is sensitive to being out of range, so we squeeze into
+    // a slightly smaller planet radius to ensure we are valid.
+    let radius: f32 = mix(
+        (*atmosphere).planet_radius_Mm * (1.0002),
+        (*atmosphere).atmosphere_radius_Mm * (0.9998),
+        v_unit
+    );
+
+    return vec2<f32>(radius, mu_light);
+}
+
+fn sampleMultiscatterLUT(
+    lut: texture_2d<f32>,
+    s: sampler,
+    atmosphere: ptr<function,Atmosphere>,
+    radius: f32,
+    mu_light: f32
+) -> vec3<f32>
+{
+    let uv: vec2<f32> = multiscatterLUT_RMu_to_UV(atmosphere, radius, mu_light);
+
+    return textureSampleLevel(lut, s, uv, 0.0).xyz;
+}
+
+fn sampleTransmittanceLUT_RadiusMu(
+    lut: texture_2d<f32>,
+    s: sampler,
+    atmosphere: ptr<function,Atmosphere>,
+    radius: f32,
+    mu: f32
+) -> vec3<f32>
+{
+    let uv: vec2<f32> = transmittanceLUT_RMu_to_UV(atmosphere, radius, mu);
+
+    let sample = textureSampleLevel(lut, s, uv, 0.0).xyz;
+
+    return sample;
+}
+
+fn sampleTransmittanceLUT_Ray(
+    lut: texture_2d<f32>,
+    s: sampler,
+    atmosphere: ptr<function,Atmosphere>,
+    position: vec3<f32>,
+    direction: vec3<f32>
+) -> vec3<f32>
+{
+    let radius: f32 = length(position);
+    let mu: f32 = (dot(position, direction) / (length(position) * length(direction)));
+
+    return sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, radius, mu);
+
+}
+
+fn sampleTransmittanceLUT_Segment(
+    lut: texture_2d<f32>,
+    s: sampler,
+    atmosphere: ptr<function,Atmosphere>,
+    r_start: f32,
+    mu_start: f32,
+    d: f32,
+    intersects_ground: bool
+) -> vec3<f32>
+{
+    let r_end = clamp(
+        safeSqrt(d * d + 2.0 * r_start * mu_start * d + r_start * r_start),
+        (*atmosphere).planet_radius_Mm, (*atmosphere).atmosphere_radius_Mm
+    );
+    let mu_end = clamp((r_start * mu_start + d) / r_end, -1.0, 1.0);
+
+    if(intersects_ground)
+    {
+        return min(
+            sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, r_end, -mu_end)
+            / sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, r_start, -mu_start),
+            vec3<f32>(1.0)
+        );
+    }
+    else
+    {
+        return min(
+            sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, r_start, mu_start)
+            / sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, r_end, mu_end),
+            vec3<f32>(1.0)
+        );
+    }
+}
+
+struct ExtinctionSample
+{
+    scattering_rayleigh: vec3<f32>,
+    scattering_mie: vec3<f32>,
+    scattering_ozone: vec3<f32>,
+
+    absorption_rayleigh: vec3<f32>,
+    absorption_mie: vec3<f32>,
+    absorption_ozone: vec3<f32>,
+
+    // This parameter is redundant, but convenient.
+    // It is the sum of all scattering values.
+    scattering: vec3<f32>,
+
+    extinction: vec3<f32>,
+}
+
+// Ensure altitude and density_scale are the same units.
+fn densityExponential(altitude: f32, density_scale: f32) -> f32
+{ return exp(-altitude / density_scale); }
+
+// Hardcoded with values for ozone
+fn densityTent(altitude_km: f32) -> f32
+{ return max(0.0, 1.0 - abs(altitude_km - 25.0) / 15.0); }
+
+// Returned units are per Mm. Take care that this function takes in altitude, NOT radius.
+// radius := altitude + planetRadius
+fn sampleExtinction(atmosphere: ptr<function,Atmosphere>, altitude_Mm: f32) -> ExtinctionSample
+{
+    let density_rayleigh: f32 = densityExponential(altitude_Mm, (*atmosphere).density_scale_rayleigh_Mm);
+    let scattering_rayleigh: vec3<f32> = (*atmosphere).scattering_rayleigh_per_Mm * density_rayleigh;
+    let absorption_rayleigh: vec3<f32> = (*atmosphere).absorption_rayleigh_per_Mm * density_rayleigh;
+
+    let density_mie: f32 = densityExponential(altitude_Mm, (*atmosphere).density_scale_mie_Mm);
+    let scattering_mie: vec3<f32> = (*atmosphere).scattering_mie_per_Mm * density_mie;
+    let absorption_mie: vec3<f32> = (*atmosphere).absorption_mie_per_Mm * density_mie;
+
+    let density_ozone: f32 = densityTent(altitude_Mm * 1000.0);
+    let scattering_ozone: vec3<f32> = (*atmosphere).scattering_ozone_per_Mm * density_ozone;
+    let absorption_ozone: vec3<f32> = (*atmosphere).absorption_ozone_per_Mm * density_ozone;
+
+    var extinction_sample: ExtinctionSample;
+    extinction_sample.scattering_rayleigh = scattering_rayleigh;
+    extinction_sample.scattering_mie = scattering_mie;
+    extinction_sample.scattering_ozone = scattering_ozone;
+
+    extinction_sample.absorption_rayleigh = absorption_rayleigh;
+    extinction_sample.absorption_mie = absorption_mie;
+    extinction_sample.absorption_ozone = absorption_ozone;
+
+    extinction_sample.scattering = scattering_rayleigh + scattering_mie + scattering_ozone;
+    extinction_sample.extinction = extinction_sample.scattering + absorption_rayleigh + absorption_mie + absorption_ozone;
+
+    return extinction_sample;
+}
+
+// Input cosine is the cosine of the angle between incident and outgoing scattering directions
+fn phaseRayleigh(cosine: f32) -> f32
+{
+    let scalar: f32 = 3.0 / (16.0 * PI);
+    let numerator: f32 = (1.0 + cosine * cosine);
+
+    return scalar * numerator;
+}
+
+// Input cosine is the cosine of the angle between incident and outgoing scattering directions
+// Input g is a value from -1 to 1 that controls the concentration of back vs forward scattering.
+// Note: g = 0 reduces to the case of our rayleigh phase function
+fn phaseMie(cosine: f32, g: f32) -> f32
+{
+    let scalar: f32 = 3.0 / (8.0 * PI);
+    let numerator: f32 = (1.0 - g * g) * (1.0 + cosine * cosine);
+    let denominator: f32 = (2.0 + g * g) * pow(1.0 + g * g - 2.0 * g * cosine, 1.5);
+    return scalar * numerator / denominator;
+}
+
+// (float, float) 2d encoding of position + direction
+struct RaymarchStep
+{
+    // Distance from origin, represents (0, radius, 0)
+    radius: f32,
+    // Cosine of the angle between (0, radius, 0) and implicit direction vector
+    mu: f32,
+    // Cosine of the angle with the direction to the light
+    mu_light: f32,
+    // Cosine of travel direction vector and light direction vector
+    nu: f32,
+};
+
+// Returns 'start' moved 'step_distance' units along the implicit direction vector
+// nu is the dot product between normalized direction and light direction vector
+fn stepRadiusMu(
+    start: RaymarchStep,
+    step_distance: f32,
+) -> RaymarchStep
+{
+    // Consider starting position (0, radius, 0)
+    // and step vector of d * (sqrt(1 - mu * mu), mu, 0)
+
+    // When computing changes in radii and mu, we use this method everywhere since norm is preserved upon rotation
+    // and all cases of stepping can be reduced to the above two vectors
+
+    var result: RaymarchStep;
+    result.radius = safeSqrt(
+        step_distance * step_distance + 2.0 * start.radius * start.mu * step_distance
+            + start.radius * start.radius
+    );
+    result.mu = (start.radius * start.mu + step_distance) / result.radius;
+    result.nu = start.nu;
+    result.mu_light = (start.radius * start.mu_light + step_distance * start.nu) / result.radius;
+
+    return result;
+}
+
+// Samples a segment, given in RMu coordinates
+fn sampleTransmittanceLUT_RayMarchStep(
+    lut: texture_2d<f32>,
+    s: sampler,
+    atmosphere: ptr<function,Atmosphere>,
+    start: RaymarchStep,
+    step_distance: f32
+) -> vec3<f32>
+{
+    const STEP_DISTANCE_EPSILON = 0.0000001;
+    if (step_distance < STEP_DISTANCE_EPSILON)
+    {
+        return vec3<f32>(1.0);
+    }
+
+    let end: RaymarchStep = stepRadiusMu(start, step_distance);
+
+    var transmittance = vec3<f32>(0.0);
+    if (start.mu > 0.0)
+    {
+        // Oriented up into atmosphere, so we directly sample LUT
+        transmittance = sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, start.radius, start.mu)
+                      / sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, end.radius, end.mu);
+    }
+    else
+    {
+        // Oriented down towards planet, so direct samples would be invalid
+        // Instead, we flip the direction
+        transmittance = sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, end.radius, -end.mu)
+                      / sampleTransmittanceLUT_RadiusMu(lut, s, atmosphere, start.radius, -start.mu);
+    }
+
+    return clamp(transmittance, vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
+// Contains methods and overloads for raymarching the atmosphere
+
+
+/*
+Flags explanation:
+
+MULTISCATTERING
+- read from a multiscattering texture when computing the in-scattering path integral
+- Should be disabled when calculating multiscattering, and enabled otherwise
+
+ISOTROPIC_PHASE
+- Use an isotropic phase function when calculating out-scattering at each point
+- Should be enabled when calculating multiscattering, and disabled otherwise
+
+SCATTERING_NONLINEAR_SAMPLE
+- Helps with small sample counts, by concentrating more samples closer to the ray origin
+
+LIGHT_ILLUMINANCE_IS_ONE
+- When computing luminance using a light, use 1 instead of the strength.
+- This converts the returned luminance into a transfer value, which can be scaled by solar illuminance whenever
+
+HIGH_SAMPLE_COUNT
+- Whether to use a much higher sample count. Useful for one time renders, like the multiscattering LUT.
+
+SAMPLE_PATH_TRANSMITTANCE
+- Instead of accumulating transmittance along the raymarched path, sample the transmittance LUT.
+- This adds ~ 6 * N + 2 samples of the transmittance LUT texture, where N is the sample count
+- The results are subtly different, the transmittance LUT has precision issues when trying to sample intervals due to needing to multiply and divide by nearly zero floats when near the horizon
+- By default this should be left off, we're raymarching extinction samples while integrating so sampling the transmittance LUT for the main path ends up being wasteful
+*/
+
+// Make sure to include atmosphere_common first
+
+const T_SUBSTEP_NONLINEAR = 0.4;
+const T_SUBSTEP_LINEAR = 0.2;
+
+struct AtmosphereRaycastResult
+{
+	// Whether or not the raycast resulted in hitting the planet
+	// This is important for sampling the transmittance lut
+	intersects_ground: bool,
+
+	// The origin of the raycast can be outside the atmosphere, inside the planet, etc so we get an interval
+	t_min: f32,
+	t_max: f32,
+}
+
+fn raycastAtmosphere(atmosphere: ptr<function, Atmosphere>, origin: vec3<f32>, direction: vec3<f32>) -> AtmosphereRaycastResult
+{
+	var result: AtmosphereRaycastResult;
+
+    let planet_hit = raySphereIntersection(origin, direction, (*atmosphere).planet_radius_Mm);
+    let atmosphere_hit = raySphereIntersection(origin, direction, (*atmosphere).atmosphere_radius_Mm);
+
+    let inside_planet = planet_hit.hit && planet_hit.t0 < 0.0 && planet_hit.t1 > 0.0;
+    let intersects_atmosphere = atmosphere_hit.hit && atmosphere_hit.t1 > 0.0;
+    if (!intersects_atmosphere || inside_planet)
+    {
+		result.intersects_ground = true;
+		result.t_min = 0.0;
+		result.t_max = 0.0;
+        return result;
+    }
+
+	// Optimistic, assume we don't hit planet and take the atmosphere_hit interval as-is
+	result.t_min = max(atmosphere_hit.t0, 0.0);
+	result.t_max = atmosphere_hit.t1;
+
+    // Assuming the planet was hit, we have atmosphere_hit.t0 < planet_hit.t0 < planet_hit.t1 < atmosphere_hit.t1
+    // If this assumption ever fails (such as 0 atmosphere?), this method needs to be reworked anyway to skip some
+    // calculations
+
+    if (planet_hit.hit && planet_hit.t0 > 0.0)
+    {
+		result.intersects_ground = true;
+
+		// We assume the planet, if hit, is ALWAYS closer than the further edge of the atmosphere
+		// So the next line is redundant and we use the simpler, uncommented form
+		// result.t_max = min(planet_hit.t0, result.t_max)
+
+        result.t_max = planet_hit.t0;
+    }
+
+	return result;
+}
+
+struct ScatteringResult
+{
+    luminance: vec3<f32>,
+	transmittance: vec3<f32>,
+    multiscattering_transfer: vec3<f32>,
+}
+
+// TODO: should compile-time optional parameters just be accessed by the global resource introduced before this file is included?
+
+// Returns the computed single-scattered luminance from origin to origin + direction * sample_distance
+//
+// include_ground: Whether to include the luminance from the planet's virtual surface
+//
+// intersects_ground: Whether or not the provided origin/direction intersect the planet's surface.
+// 	This could just be computed internally, but often the calling code is more informed and passing this avoids redundant calculations.
+//
+// If include_ground is TRUE, then sample_distance is assumed to go to the planet's surface.
+// If include_ground is TRUE, intersects_ground must also be true for out-scattering of surface to be included.
+// A misuse of 'include_ground', 'intersects_ground', and 'sample_distance' (such as the wrong distance) will lead to incorrect results.
+fn computeLuminanceScatteringIntegral(
+    atmosphere: ptr<function, Atmosphere>,
+    light:  ptr<function, CelestialLight>,
+    lut_sampler: sampler,
+    transmittance_lut: texture_2d<f32>,
+    multiscatter_lut: texture_2d<f32>,
+    origin: vec3<f32>,
+    direction: vec3<f32>,
+    include_ground: bool,
+	intersects_ground: bool,
+	sample_distance: f32,
+) -> ScatteringResult
+{
+    var result: ScatteringResult;
+    result.luminance = vec3<f32>(0.0);
+	result.transmittance = vec3<f32>(1.0);
+    result.multiscattering_transfer = vec3<f32>(0.0);
+
+	if(sample_distance <= 0.0)
+	{
+		result.luminance = vec3<f32>(1.0, 1.0, 0.0);
+		return result;
+	}
+
+    // This is the direction of the incoming light, which is the light we are interested in computing the magnitude of.
+    // This is the parameter of the phase functions
+	let incident_cosine = dot((*light).forward, -direction);
+
+    let start_radius: f32 = length(origin);
+    let start_mu: f32 = dot(origin, direction) / (length(origin) * length(direction));
+    let start_mu_light: f32 = dot(origin, -(*light).forward) / (length(origin) * length((*light).forward));
+    let nu: f32 = dot(-(*light).forward, direction) / (length((*light).forward) * length(direction));
+
+    let origin_step = RaymarchStep(start_radius, start_mu, start_mu_light, nu);
+
+	var transmittance_accumulated = vec3<f32>(1.0);
+
+    // We estimate the integral in Equation (1) of Hillaire's paper.
+
+    const ISOTROPIC_PHASE: f32 = 1.0 / (4.0 * PI);
+
+    const SAMPLE_COUNT = 64.0;
+
+	var t: f32 = 0.0;
+	var d_t: f32 = 0.0;
+    for (var s = 0.0; s < SAMPLE_COUNT; s += 1.0)
+    {
+		{
+			// quadratic distribution
+        	var t_begin = s / SAMPLE_COUNT;
+        	var t_end = (s + 1.0) / SAMPLE_COUNT;
+			t_begin = sample_distance * t_begin * t_begin;
+			t_end = sample_distance * t_end * t_end;
+			d_t = t_end - t_begin;
+			t = mix(t_begin, t_end, T_SUBSTEP_NONLINEAR);
+		}
+
+        let sample_step: RaymarchStep = stepRadiusMu(origin_step, t);
+
+        let altitude = sample_step.radius - (*atmosphere).planet_radius_Mm;
+        let extinction_sample: ExtinctionSample = sampleExtinction(atmosphere, altitude);
+
+        // Terms of Equation (3) we assume to not vary over the path segment
+
+	    let transmittance_to_t_begin = transmittance_accumulated;
+		let transmittance_along_path = exp(-extinction_sample.extinction * d_t);
+		transmittance_accumulated *= transmittance_along_path;
+
+        // Ozone does not scatter light normally, so we arbitrarily use rayleigh's phase function in case ozone's scattering
+        // coefficient is nonzero
+        let phase_times_scattering: vec3<f32> =
+            extinction_sample.scattering_rayleigh * phaseRayleigh(incident_cosine)
+            + extinction_sample.scattering_mie * phaseMie(incident_cosine, 0.8)
+            + extinction_sample.scattering_ozone * phaseRayleigh(incident_cosine);
+
+        let multiscatter = sampleMultiscatterLUT(multiscatter_lut, lut_sampler, atmosphere, sample_step.radius, sample_step.mu_light);
+
+        var occlusion_planet: f32 = 0.0;
+        {
+            let horizon_sin = (*atmosphere).planet_radius_Mm / sample_step.radius;
+            let horizon_cos = -safeSqrt(1.0 - horizon_sin * horizon_sin);
+
+            occlusion_planet = f32(sample_step.mu_light < horizon_cos);
+        }
+
+        let transmittance_to_sun = sampleTransmittanceLUT_RadiusMu(transmittance_lut, lut_sampler, atmosphere, sample_step.radius, sample_step.mu_light);
+        var shadowing = vec3<f32>(transmittance_to_sun * (1.0 - f32(occlusion_planet)));
+
+        // Integrate transmittance := e^(-extinction(x) * ||x - begin||) from begin to end
+        // This is a single interval of the integral in Equation (1) from Hillaire's paper,
+        // with all constant terms factored out above
+        let scattering_illuminance_integral = (vec3(1.0) - transmittance_along_path) / extinction_sample.extinction;
+
+        result.luminance +=
+            (phase_times_scattering * shadowing + multiscatter * extinction_sample.scattering)
+            * scattering_illuminance_integral * transmittance_to_t_begin
+            * 1.0;
+        result.multiscattering_transfer += extinction_sample.scattering * scattering_illuminance_integral * transmittance_to_t_begin;
+    }
+
+    if (include_ground && intersects_ground)
+    {
+        let sample_step: RaymarchStep = stepRadiusMu(origin_step, sample_distance);
+
+        let transmittance_to_surface = sampleTransmittanceLUT_RayMarchStep(transmittance_lut, lut_sampler, atmosphere, origin_step, sample_distance);
+        let transmittance_to_sun = sampleTransmittanceLUT_RadiusMu(transmittance_lut, lut_sampler, atmosphere, sample_step.radius, sample_step.mu_light);
+
+        let normal_dot_light = clamp(sample_step.mu_light, 0.0, 1.0);
+
+        let diffuse = (*atmosphere).ground_albedo / PI;
+
+        result.luminance +=
+            transmittance_to_surface * transmittance_to_sun * normal_dot_light * diffuse
+            * 1.0;
+    }
+
+	result.transmittance = transmittance_accumulated;
+
+    return result;
+}
+
+
+// See 'atmosphere_common.inc.wgsl' for sources on what this method is based on.
+
+// Aerial Perspective LUT
+//
+// This map is very similar to the Skyview LUT (see skyview_LUT.wgsl), in that it stores camera in-scattering to be sampled later
+// However, the aerial perspective LUT is 3D and represents slices of in-scattering
+// This makes it possible to sample the in-scattering at various distances to be applied on top of geometry
+//
+// The LUT is mapped to the camera frustum and must be generated each time the camera/atmosphere parameters change
+//
+// The dimensions of the LUT can be very low (32 x 32 x 32 texels) due to the low variance of the atmosphere over the cameras FOV
+
+@compute @workgroup_size(16,16,1)
+fn computeAerialPerspective(@builtin(global_invocation_id) global_id : vec3<u32>,)
+{
+    let texel_coord = vec3<u32>(global_id.xyz);
+    let size = textureDimensions(aerial_perspective_lut);
+    if(texel_coord.x >= size.x || texel_coord.y >= size.y || texel_coord.z >= size.z)
+    {
+        return;
+    }
+
+    var atmosphere = u_global.atmosphere;
+    var light = u_global.light;
+	var camera = u_global.camera;
+
+    let offset = vec2<f32>(0.5, 0.5);
+    let uv = (vec2<f32>(texel_coord.xy) + offset) / vec2<f32>(size.xy);
+
+    const METERS_PER_MM = 1000000.0;
+    let origin = vec3<f32>(0.0, atmosphere.planet_radius_Mm, 0.0) + camera.position.xyz / METERS_PER_MM;
+
+    let ndc_space_coord = (uv - vec2<f32>(0.5)) * 2.0 * vec2<f32>(1.0, -1.0);
+    let near_plane_depth = 1.0;
+    let direction_view_space = camera.inv_proj * vec4(ndc_space_coord, near_plane_depth, 1.0);
+    let direction_world = normalize((camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
+
+	let atmosphere_raycast = raycastAtmosphere(&atmosphere, origin, direction_world);
+
+	let sample_distance = min(
+		atmosphere_raycast.t_max - atmosphere_raycast.t_min,
+		f32(texel_coord.z + 1u) * AERIAL_PERSPECTIVE_MM_PER_SLICE
+	);
+
+    let include_ground = false;
+    let result = computeLuminanceScatteringIntegral(
+        &atmosphere,
+        &light,
+        lut_sampler,
+        transmittance_lut,
+        multiscatter_lut,
+        origin + direction_world * atmosphere_raycast.t_min,
+        direction_world,
+        include_ground,
+		atmosphere_raycast.intersects_ground,
+		sample_distance
+    );
+
+	let in_scattering = result.luminance;
+	let mean_transmittance = dot(result.transmittance, vec3<f32>(1.0)) / 3.0;
+    textureStore(aerial_perspective_lut, texel_coord, vec4(in_scattering, mean_transmittance));
+}
+`,le="rgba16float";class ut{constructor(e,t,r,i,n,s){a(this,"texture");a(this,"view");a(this,"group0");a(this,"group1");a(this,"pipeline");this.texture=e.createTexture({size:t,dimension:"3d",format:le,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING,label:"Aerial Perspective LUT"}),this.view=this.texture.createView({label:this.texture.label,dimension:"3d"});const o=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:"write-only",viewDimension:"3d",format:le}},{binding:1,visibility:GPUShaderStage.COMPUTE,sampler:{type:n?"filtering":"non-filtering"}},{binding:2,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:n?"float":"unfilterable-float"}},{binding:3,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:n?"float":"unfilterable-float"}}],label:"Aerial Perspective LUT"});this.group0=e.createBindGroup({layout:o,entries:[{binding:0,resource:this.view},{binding:1,resource:e.createSampler({magFilter:n?"linear":"nearest",minFilter:n?"linear":"nearest"})},{binding:2,resource:r},{binding:3,resource:i}],label:"Aerial Perspective LUT Group 0"});const l=e.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{}}],label:"Aerial Perspective LUT Group 1"});this.group1=e.createBindGroup({layout:l,entries:[{binding:0,resource:{buffer:s.buffer}}],label:"Aerial Perspective LUT Group 1"});const u=e.createShaderModule({code:lt});this.pipeline=e.createComputePipeline({compute:{module:u,entryPoint:"computeAerialPerspective"},layout:e.createPipelineLayout({bindGroupLayouts:[o,l]}),label:"Aerial Perspective LUT"})}record(e,t){const r=e.beginComputePass({timestampWrites:t!==void 0?{querySet:t.querySet,beginningOfPassWriteIndex:t.beginWriteIndex,endOfPassWriteIndex:t.endWriteIndex}:void 0,label:"Aerial Perspective LUT"});r.setPipeline(this.pipeline),r.setBindGroup(0,this.group0),r.setBindGroup(1,this.group1),r.dispatchWorkgroups(Math.ceil(this.texture.width/16),Math.ceil(this.texture.height/16),Math.ceil(this.texture.depthOrArrayLayers/1)),r.end()}}const k={width:2048,height:1024},q={width:1024,height:1024},ct={width:1024,height:512},dt={width:32,height:32,depthOrArrayLayers:32};class H{constructor(){a(this,"flip",!1);a(this,"colorGain",{r:1,g:1,b:1});a(this,"channelMasks",{r:!0,g:!0,b:!0});a(this,"swapBARG",!1);a(this,"mipLevel",0);a(this,"arrayLayer",0)}}const _t=[{id:_.Scene},{id:_.AtmosphereTransmittanceLUT,flip:!0},{id:_.AtmosphereMultiscatterLUT,flip:!0,colorGain:{r:20,g:20,b:20}},{id:_.AtmosphereSkyviewLUT,colorGain:{r:8,g:8,b:8}},{id:_.AtmosphereAerialPerspectiveLUT,colorGain:{r:8,g:8,b:8}},{id:_.GBufferColor},{id:_.GBufferNormal},{id:_.FFTWaveSpectrumGaussianNoise},{id:_.FFTWaveInitialAmplitude,colorGain:{r:100,g:100,b:100}},{id:_.FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude,colorGain:{r:100,g:100,b:100}},{id:_.FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,colorGain:{r:100,g:100,b:100}},{id:_.FFTWaveDx_Dy_Dz_Dxdz_Spatial},{id:_.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial}],I=[.25,.3333,.5,.75,1,1.5,2,4];var C=(c=>(c[c.DrawToDraw=0]="DrawToDraw",c[c.SkyviewLUT=1]="SkyviewLUT",c[c.AerialPerspectiveLUT=2]="AerialPerspectiveLUT",c[c.FFTWaves=3]="FFTWaves",c[c.OceanSurface=4]="OceanSurface",c[c.AtmosphereCamera=5]="AtmosphereCamera",c[c.FullscreenQuad=6]="FullscreenQuad",c))(C||{});class ue{constructor(e){a(this,"values");a(this,"sum",0);a(this,"average_",0);a(this,"count",0);a(this,"index",0);this.values=new Array(e).fill(0)}get average(){return this.average_}push(e){this.index>=this.values.length&&(this.index=0),this.index<this.count&&(this.sum-=this.values[this.index]),this.values[this.index]=e,this.sum+=e,this.count=Math.min(this.values.length,this.count+1),this.average_=this.sum/this.count,this.index+=1}}class mt{constructor(e,t,r){a(this,"transmittanceLUTPassResources");a(this,"multiscatterLUTPassResources");a(this,"skyviewLUTPassResources");a(this,"aerialPerspectiveLUTPassResources");a(this,"fftWaveSpectrumResources");a(this,"waveSurfaceDisplacementPassResources");a(this,"atmosphereCameraPassResources");a(this,"fullscreenQuadPassResources");a(this,"gbuffer");a(this,"scaledSize");a(this,"rawSize");a(this,"renderOutputs");a(this,"settings");a(this,"uiReadonly");a(this,"globalUBO");a(this,"device");a(this,"presentFormat");a(this,"quit",!1);a(this,"frametimeQuery");a(this,"frametimeAverages");a(this,"startTime");a(this,"dummyFrameCounter");a(this,"probationFrameCounter");a(this,"targetFPS",0);a(this,"float32Filterable");if(this.device=e,this.float32Filterable=e.features.has("float32-filterable"),this.presentFormat=t,this.startTime=r,this.settings={outputTexture:_.Scene,oceanSurfaceSettings:{gerstner:!0,fft:!0,foamScale:15,foamBias:.25},cameraSettings:{renderFromOceanPOV:!0,oceanCamera:{translationX:0,translationY:20,translationZ:0,eulerAnglesX:-.2,eulerAnglesY:0,eulerAnglesZ:0},debugCamera:{translationX:0,translationY:40,translationZ:-20,eulerAnglesX:-.4,eulerAnglesY:0,eulerAnglesZ:0}},fourierWavesSettings:{gravity:9.8,windSpeedMetersPerSeconds:15,windFetchMeters:40*1e3,waveSwell:.3},renderOutputTransforms:new Map,pauseGlobalTime:!1,currentRenderOutputTransform:new H,orbit:{timeHours:5.7,timeSpeedupFactor:400,paused:!1,reversed:!1,inclinationRadians:Math.PI/2,sunsetAzimuthRadians:Math.PI},renderScale:1.5},this.uiReadonly={averageFPS:0,frametimeControllers:new Map},this.scaledSize={width:1,height:1},this.rawSize={width:1,height:1},_t.reduce((o,{id:l,...u})=>(o.set(l,{...new H,...u}),o),this.settings.renderOutputTransforms),this.settings.renderOutputTransforms.has(this.settings.outputTexture)){const o=this.settings.renderOutputTransforms.get(this.settings.outputTexture);this.settings.currentRenderOutputTransform.flip=o.flip,this.settings.currentRenderOutputTransform.colorGain.r=o.colorGain.r,this.settings.currentRenderOutputTransform.colorGain.g=o.colorGain.g,this.settings.currentRenderOutputTransform.colorGain.b=o.colorGain.b}if(this.frametimeAverages=new Map,e.features.has("timestamp-query")){const l=2*Object.keys(C).map(u=>Number(u)).filter(isNaN).length;this.frametimeQuery={mappingLock:!1,querySet:e.createQuerySet({type:"timestamp",count:l}),writeBuffer:e.createBuffer({size:8*l,usage:GPUBufferUsage.COPY_SRC|GPUBufferUsage.QUERY_RESOLVE}),readBuffer:e.createBuffer({size:8*l,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ})},Object.keys(C).map(u=>Number(u)).filter(u=>!isNaN(u)).forEach(u=>{const d=u;this.frametimeAverages.set(d,new ue(400)),Object.assign(this.uiReadonly,String(d),0)})}else console.warn("WebGPU feature 'timestamp-query' is not supported. Continuing, but without performance information about specific stages."),this.frametimeAverages.set(0,new ue(400));this.dummyFrameCounter=10,this.probationFrameCounter=100,this.globalUBO=new Ue(this.device),this.globalUBO.writeToGPU(this.device.queue),this.gbuffer=new ee(e,{width:1,height:1}),this.transmittanceLUTPassResources=new Ie(this.device,k,this.globalUBO),this.multiscatterLUTPassResources=new Ge(this.device,q,this.transmittanceLUTPassResources.view,this.float32Filterable,this.globalUBO),this.skyviewLUTPassResources=new Fe(this.device,ct,this.transmittanceLUTPassResources.view,this.multiscatterLUTPassResources.view,this.float32Filterable,this.globalUBO),this.aerialPerspectiveLUTPassResources=new ut(this.device,dt,this.transmittanceLUTPassResources.view,this.multiscatterLUTPassResources.view,this.float32Filterable,this.globalUBO),this.fftWaveSpectrumResources=new Ze(this.device,this.globalUBO);const i=this.fftWaveSpectrumResources.views();this.waveSurfaceDisplacementPassResources=new at(this.device,this.globalUBO,this.gbuffer.colorWithSurfaceWorldDepthInAlpha.format,this.gbuffer.normalWithSurfaceFoamStrengthInAlpha.format,this.gbuffer.depth.format,this.fftWaveSpectrumResources.displacementMaps()),this.atmosphereCameraPassResources=new it(this.device,this.gbuffer.readGroupLayout,this.transmittanceLUTPassResources.view,this.multiscatterLUTPassResources.view,this.skyviewLUTPassResources.view,this.aerialPerspectiveLUTPassResources.view,this.float32Filterable,this.globalUBO),this.fullscreenQuadPassResources=new ot(this.device,this.presentFormat),this.renderOutputs=new Map([[_.Scene,new w(this.atmosphereCameraPassResources.outputColor)],[_.AtmosphereTransmittanceLUT,new w(this.transmittanceLUTPassResources.texture)],[_.AtmosphereMultiscatterLUT,new w(this.multiscatterLUTPassResources.texture)],[_.AtmosphereSkyviewLUT,new w(this.skyviewLUTPassResources.texture)],[_.AtmosphereAerialPerspectiveLUT,new w(this.aerialPerspectiveLUTPassResources.texture)],[_.GBufferColor,new w(this.gbuffer.colorWithSurfaceWorldDepthInAlpha)],[_.GBufferNormal,new w(this.gbuffer.normalWithSurfaceFoamStrengthInAlpha)],[_.FFTWaveSpectrumGaussianNoise,i.gaussianNoise],[_.FFTWaveInitialAmplitude,i.initialAmplitude],[_.FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude,i.packed_Dx_plus_iDy_Dz_iDxdz_Amplitude],[_.FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,i.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude],[_.FFTWaveTurbulenceJacobian,i.turbulenceJacobian],[_.FFTWaveDx_Dy_Dz_Dxdz_Spatial,i.Dx_Dy_Dz_Dxdz_Spatial],[_.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial,i.Dydx_Dydz_Dxdx_Dzdz_Spatial]]);for(const[o,l]of this.renderOutputs)this.fullscreenQuadPassResources.setView(e,o,l.view,l.viewDimension);const n=e.createCommandEncoder();let s=n.beginComputePass();s.setPipeline(this.transmittanceLUTPassResources.pipeline),s.setBindGroup(0,this.transmittanceLUTPassResources.group0),s.setBindGroup(1,this.transmittanceLUTPassResources.group1),s.dispatchWorkgroups(Math.ceil(k.width/16),Math.ceil(k.height/16)),s.end(),s=n.beginComputePass(),s.setPipeline(this.multiscatterLUTPassResources.pipeline),s.setBindGroup(0,this.multiscatterLUTPassResources.group0),s.setBindGroup(1,this.multiscatterLUTPassResources.group1),s.dispatchWorkgroups(Math.ceil(q.width/16),Math.ceil(q.height/16)),s.end(),e.queue.submit([n.finish()])}setupUI(e){const t=e.add(this.settings,"outputTexture",{"Final Scene":_.Scene,"[GBuffer] Color":_.GBufferColor,"[GBuffer] Normal":_.GBufferNormal,"[Atmosphere] Transmittance LUT":_.AtmosphereTransmittanceLUT,"[Atmosphere] Multiscatter LUT":_.AtmosphereMultiscatterLUT,"[Atmosphere] Skyview LUT":_.AtmosphereSkyviewLUT,"[Atmosphere] Aerial Perspective LUT":_.AtmosphereAerialPerspectiveLUT,"[FFT Waves] Gaussian Noise":_.FFTWaveSpectrumGaussianNoise,"[FFT Waves] Initial Amplitude":_.FFTWaveInitialAmplitude,"[FFT Waves] Frequency Domain (Dx + i * Dy, Dz + i * Dxdz)":_.FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude,"[FFT Waves] Frequency Domain (Dydx + i * Dydz, Dxdx + i * Dzdz)":_.FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,"[FFT Waves] (Turbulence, Jacobian)":_.FFTWaveTurbulenceJacobian,"[FFT Waves] Spatial Domain (Dx, Dy, Dz, Dxdz)":_.FFTWaveDx_Dy_Dz_Dxdz_Spatial,"[FFT Waves] Spatial Domain (Dydx, Dydz, Dxdx, Dzdx)":_.FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial}).name("Render Output").listen();e.add(this.settings,"renderScale",I).name("Render Resolution Scale").decimals(1).onFinishChange(p=>{this.handleResize(this.rawSize.width,this.rawSize.height)}).listen(),e.add(this.uiReadonly,"averageFPS").decimals(1).disable().name("Average FPS").listen();const r=e.addFolder("Camera").open();r.add(this.settings.cameraSettings.oceanCamera,"translationX").name("Camera X").min(-100).max(100),r.add(this.settings.cameraSettings.oceanCamera,"translationY").name("Camera Y").min(10).max(2e3),r.add(this.settings.cameraSettings.oceanCamera,"translationZ").name("Camera Z").min(-100).max(100);const i=.01;r.add(this.settings.cameraSettings.oceanCamera,"eulerAnglesX").name("Camera Pitch").min(-Math.PI/2+i).max(Math.PI/2-i),r.add(this.settings.cameraSettings.oceanCamera,"eulerAnglesY").name("Camera Yaw").min(-Math.PI).max(Math.PI);const n=e.addFolder("Sun").open();n.add(this.settings.orbit,"timeHours").min(0).max(24).name("Time in Hours").listen(),n.add(this.settings.orbit,"timeSpeedupFactor").min(1).max(5e4).step(1).name("Time Multiplier"),n.add(this.settings.orbit,"paused").name("Pause Sun"),n.add({fn:()=>{this.settings.orbit.timeHours=this.settings.orbit.reversed?18+.5:6-.5}},"fn").name("Skip to Sunrise"),n.add({fn:()=>{this.settings.orbit.timeHours=this.settings.orbit.reversed?6+.5:18-.5}},"fn").name("Skip to Sunset"),n.add(this.settings.orbit,"reversed").name("Reverse Sun"),n.add(this.settings.orbit,"sunsetAzimuthRadians").name("Sun Azimuth").min(0).max(2*Math.PI),n.add(this.settings.orbit,"inclinationRadians").name("Sun Inclination").min(0).max(Math.PI);const s=e.addFolder("Ocean").close();s.add(this.settings.oceanSurfaceSettings,"gerstner").name("Gerstner Waves"),s.add(this.settings.oceanSurfaceSettings,"fft").name("FFT Accelerated Waves"),s.add(this.settings,"pauseGlobalTime").name("Pause Waves"),s.add(this.settings.oceanSurfaceSettings,"foamScale").name("Foam Scale").min(-30).max(30),s.add(this.settings.oceanSurfaceSettings,"foamBias").name("Foam Bias").min(-1).max(1),s.add(this.settings.fourierWavesSettings,"gravity").name("Gravity (m / s^2)").min(.01).max(20),s.add(this.settings.fourierWavesSettings,"waveSwell").name("Wave Swell").min(.01).max(1),s.add(this.settings.fourierWavesSettings,"windFetchMeters").name("Wind Fetch (m)").min(10*1e3).max(100*1e3),s.add(this.settings.fourierWavesSettings,"windSpeedMetersPerSeconds").name("Wind Speed (m/s)").min(.01).max(50);const o=e.addFolder("Output Transform").close();o.add(this.settings.currentRenderOutputTransform,"flip").name("Flip Image").listen();const l=o.add(this.settings.currentRenderOutputTransform,"mipLevel").min(0).max(0).step(1).name("Mip Level").listen(),u=o.add(this.settings.currentRenderOutputTransform,"arrayLayer").min(0).max(0).step(1).name("Array Layer").listen();o.add({gain:0},"gain").name("Uniform Scale").min(-1e4).max(1e4).onChange(p=>{this.settings.currentRenderOutputTransform.colorGain.r=p,this.settings.currentRenderOutputTransform.colorGain.g=p,this.settings.currentRenderOutputTransform.colorGain.b=p});const d=o.add(this.settings.currentRenderOutputTransform.channelMasks,"r").name("R").listen(),m=o.add(this.settings.currentRenderOutputTransform.colorGain,"r").name("").min(0).max(1e4).listen(),v=o.add(this.settings.currentRenderOutputTransform.channelMasks,"g").name("G").listen(),b=o.add(this.settings.currentRenderOutputTransform.colorGain,"g").name("").min(0).max(1e4).listen(),T=o.add(this.settings.currentRenderOutputTransform.channelMasks,"b").name("B").listen(),x=o.add(this.settings.currentRenderOutputTransform.colorGain,"b").name("").min(0).max(1e4).listen();o.add(this.settings.currentRenderOutputTransform,"swapBARG").name("Swap Blue-Alpha and Red-Green Pairs").listen(),t.onChange(p=>{const R=t._listenPrevValue;this.settings.renderOutputTransforms.set(R,structuredClone(this.settings.currentRenderOutputTransform)),Object.assign(this.settings.currentRenderOutputTransform,structuredClone(this.settings.renderOutputTransforms.get(p)??new H));const A=this.renderOutputs.get(p);A!==void 0&&(l.max(A.mipLevelCount-1),l.disable(A.mipLevelCount==1),A.mipLevelCount==1&&l.setValue(0),l.updateDisplay(),u.max(A.depthOrArrayLayerCount-1),u.disable(A.depthOrArrayLayerCount==1),A.depthOrArrayLayerCount==1&&u.setValue(0),u.updateDisplay()),m.object=this.settings.currentRenderOutputTransform.colorGain,b.object=this.settings.currentRenderOutputTransform.colorGain,x.object=this.settings.currentRenderOutputTransform.colorGain,d.object=this.settings.currentRenderOutputTransform.channelMasks,v.object=this.settings.currentRenderOutputTransform.channelMasks,T.object=this.settings.currentRenderOutputTransform.channelMasks});const f=this.renderOutputs.get(t.getValue());f!==void 0&&(l.max(f.mipLevelCount-1),l.disable(f.mipLevelCount==1),f.mipLevelCount==1&&l.setValue(0),l.updateDisplay(),u.max(f.depthOrArrayLayerCount-1),u.disable(f.depthOrArrayLayerCount==1),f.depthOrArrayLayerCount==1&&u.setValue(0),u.updateDisplay());const g=e.addFolder("Performance").close();this.frametimeAverages.forEach((p,R)=>{this.uiReadonly.frametimeControllers.set(R,g.add({value:0},"value").name(`${C[R]} (ms)`).decimals(6).disable())});const y=e.addFolder("Debug").close(),U=[];y.add(this.settings.cameraSettings,"renderFromOceanPOV").name("Render from Ocean POV").onFinishChange(p=>{U.forEach(R=>{R.enable(!p)})}),U.push(y.add(this.settings.cameraSettings.debugCamera,"translationX").name("Camera X").min(-100).max(100),y.add(this.settings.cameraSettings.debugCamera,"translationY").name("Camera Y").min(10).max(1e3),y.add(this.settings.cameraSettings.debugCamera,"translationZ").name("Camera Z").min(-100).max(100),y.add(this.settings.cameraSettings.debugCamera,"eulerAnglesX").name("Camera Pitch").min(-Math.PI/2+i).max(Math.PI/2-i),y.add(this.settings.cameraSettings.debugCamera,"eulerAnglesY").name("Camera Yaw").min(-Math.PI).max(Math.PI),y.add({fn:()=>{Object.assign(this.settings.cameraSettings.debugCamera,structuredClone(this.settings.cameraSettings.oceanCamera)),y.controllers.forEach(p=>{p.updateDisplay()})}},"fn").name("Reset to match main camera")),U.forEach(p=>p.enable(!1))}updateOrbit(e){const t=this.settings.orbit;this.settings.orbit.paused||(t.timeHours+=(t.reversed?-1:1)*t.timeSpeedupFactor*e/36e5,t.timeHours=t.timeHours-Math.floor(t.timeHours/24)*24);const r=2*Math.PI/24,i=(12-t.timeHours)*r,n=z.create(-Math.sin(t.sunsetAzimuthRadians),0,Math.cos(t.sunsetAzimuthRadians)),s=z.create(Math.cos(t.sunsetAzimuthRadians)*Math.cos(t.inclinationRadians),Math.sin(t.inclinationRadians),Math.sin(t.sunsetAzimuthRadians)*Math.cos(t.inclinationRadians)),o=z.add(z.scale(n,Math.sin(i)),z.scale(s,Math.cos(i)));z.scale(o,-1,this.globalUBO.data.light.forward)}updateFPSValues(e){var t,r,i,n;e>.01&&((t=this.frametimeAverages.get(0))==null||t.push(e),this.uiReadonly.averageFPS=1e3/(((r=this.frametimeAverages.get(0))==null?void 0:r.average)??1e3),(n=this.uiReadonly.frametimeControllers.get(0))==null||n.setValue(((i=this.frametimeAverages.get(0))==null?void 0:i.average)??-1))}updateCameras(e){const t=60*Math.PI/180,n=h.perspective(t,e,.1,1e3);{const s=this.settings.cameraSettings.oceanCamera,o=[s.translationX,s.translationY,s.translationZ,1],l=h.rotationX(s.eulerAnglesX),u=h.rotationY(s.eulerAnglesY),d=h.rotationZ(s.eulerAnglesZ),m=h.mul(h.translation(S.create(...o)),h.mul(u,h.mul(l,d))),v=h.inverse(m);Object.assign(this.globalUBO.data.ocean_camera,{invProj:h.inverse(n),invView:m,projView:h.mul(n,v),position:S.create(...o),forward:S.create(...h.multiply(m,S.create(0,0,-1,0)))})}if(this.settings.cameraSettings.renderFromOceanPOV)Object.assign(this.globalUBO.data.camera,structuredClone(this.globalUBO.data.ocean_camera));else{const s=this.settings.cameraSettings.debugCamera,o=[s.translationX,s.translationY,s.translationZ,1],l=h.rotationX(s.eulerAnglesX),u=h.rotationY(s.eulerAnglesY),d=h.rotationZ(s.eulerAnglesZ),m=h.mul(h.translation(S.create(...o)),h.mul(u,h.mul(l,d))),v=h.inverse(m);Object.assign(this.globalUBO.data.camera,{invProj:h.inverse(n),invView:m,projView:h.mul(n,v),position:S.create(...o),forward:S.create(...h.multiply(m,S.create(0,0,-1,0)))})}}updateTime(e){const t=this.globalUBO.data.time;this.settings.pauseGlobalTime?t.deltaTimeSeconds=0:(t.deltaTimeSeconds=e/1e3,t.timeSeconds+=t.deltaTimeSeconds);const n=this.settings.oceanSurfaceSettings.fft?100:60;t.timeSeconds-=Math.floor(t.timeSeconds/n)*n}draw(e,t,r,i){if(this.dummyFrameCounter>0){this.dummyFrameCounter-=1;return}const n=e.createView();if(this.updateFPSValues(i),this.probationFrameCounter>49){this.probationFrameCounter-=1,this.probationFrameCounter<50&&(console.log(`Average FPS without load is ${this.uiReadonly.averageFPS}`),this.targetFPS=this.uiReadonly.averageFPS);return}if(this.probationFrameCounter>0&&(this.probationFrameCounter-=1,this.probationFrameCounter<1)){console.log(`Average FPS with load is ${this.uiReadonly.averageFPS}`);const u=this.uiReadonly.averageFPS/this.targetFPS;this.settings.renderScale=I[0],I.forEach(d=>{Math.abs(d-u)<Math.abs(this.settings.renderScale-u)&&(this.settings.renderScale=d)}),this.handleResize(this.rawSize.width,this.rawSize.height)}this.updateCameras(t),this.updateTime(i),this.updateOrbit(i),this.globalUBO.writeToGPU(this.device.queue);const s=this.device.createCommandEncoder({label:"Main"}),o=new Map;let l=0;o.set(3,l),this.fftWaveSpectrumResources.record(this.device,s,this.settings.fourierWavesSettings,this.frametimeQuery!==void 0?{querySet:this.frametimeQuery.querySet,beginWriteIndex:l++,endWriteIndex:l++}:void 0),o.set(4,l),this.waveSurfaceDisplacementPassResources.record(this.device,s,this.frametimeQuery!==void 0?{querySet:this.frametimeQuery.querySet,beginWriteIndex:l++,endWriteIndex:l++}:void 0,this.fftWaveSpectrumResources.turbulenceMapIndex,{gerstner:this.settings.oceanSurfaceSettings.gerstner,fft:this.settings.oceanSurfaceSettings.fft,foamBias:this.settings.oceanSurfaceSettings.foamBias,foamScale:this.settings.oceanSurfaceSettings.foamScale},{extent:M.create(this.gbuffer.colorWithSurfaceWorldDepthInAlpha.width,this.gbuffer.colorWithSurfaceWorldDepthInAlpha.height),colorWithSurfaceWorldDepthInAlpha:this.gbuffer.colorWithSurfaceWorldDepthInAlphaView,normalWithSurfaceFoamInAlpha:this.gbuffer.normalWithSurfaceFoamStrengthInAlphaView,depth:this.gbuffer.depthView}),o.set(1,l),this.skyviewLUTPassResources.record(s,this.frametimeQuery!==void 0?{querySet:this.frametimeQuery.querySet,beginWriteIndex:l++,endWriteIndex:l++}:void 0),o.set(2,l),this.aerialPerspectiveLUTPassResources.record(s,this.frametimeQuery!==void 0?{querySet:this.frametimeQuery.querySet,beginWriteIndex:l++,endWriteIndex:l++}:void 0),o.set(5,l),this.atmosphereCameraPassResources.record(s,this.frametimeQuery!==void 0?{querySet:this.frametimeQuery.querySet,beginWriteIndex:l++,endWriteIndex:l++}:void 0,this.gbuffer);{const u=this.settings.currentRenderOutputTransform,d=new _e;d.color_gain=S.create(u.colorGain.r,u.colorGain.g,u.colorGain.b,1),d.vertex_scale=S.create(1,u.flip?-1:1,1,1),d.mip_level_u32=Math.round(u.mipLevel),d.depth_or_array_layer=u.arrayLayer,d.channel_mask=(u.channelMasks.r?1:0)+(u.channelMasks.g?2:0)+(u.channelMasks.b?4:0),d.swap_ba_rg=u.swapBARG,o.set(6,l),this.fullscreenQuadPassResources.recordPresent(this.device,s,n,this.settings.outputTexture,d,this.frametimeQuery!==void 0?{querySet:this.frametimeQuery.querySet,beginWriteIndex:l++,endWriteIndex:l++}:void 0)}if(this.frametimeQuery!=null&&!this.frametimeQuery.mappingLock&&(s.resolveQuerySet(this.frametimeQuery.querySet,0,2*o.size,this.frametimeQuery.writeBuffer,0),s.copyBufferToBuffer(this.frametimeQuery.writeBuffer,0,this.frametimeQuery.readBuffer,0,this.frametimeQuery.readBuffer.size)),this.device.queue.submit([s.finish()]),this.frametimeQuery!==void 0&&!this.frametimeQuery.mappingLock){const u=this.frametimeQuery;this.frametimeQuery.mappingLock=!0,this.frametimeQuery.readBuffer.mapAsync(GPUMapMode.READ,0,this.frametimeQuery.readBuffer.size).then(()=>{const d=new BigInt64Array(u.readBuffer.getMappedRange(0,u.readBuffer.size));o.forEach((m,v)=>{var x,f,g;const T=Number(d.at(m+1)-d.at(m))/1e6;(x=this.frametimeAverages.get(v))==null||x.push(T),(g=this.uiReadonly.frametimeControllers.get(v))==null||g.setValue(((f=this.frametimeAverages.get(v))==null?void 0:f.average)??-1)}),u.readBuffer.unmap(),u.mappingLock=!1}).catch(d=>{console.error("Failed while retrieving frametime values from GPU:"),console.error(d)})}}handleResize(e,t){const r={width:e*this.settings.renderScale,height:t*this.settings.renderScale},i=8192,n=268435456,s=16,o=(l,u)=>l<i&&u<i&&l*u*s<n;o(r.width,r.height)?this.scaledSize=r:(I.slice().reverse().some(l=>{if(o(e*l,t*l))return this.settings.renderScale=l,!0}),console.warn(`During resize: Texture size (${r.width},${r.height}) exceeds WebGPU guaranteed limit (8192, 8192).
+								Defaulting to highest possible render scale of ${this.settings.renderScale}`),this.scaledSize={width:e*this.settings.renderScale,height:t*this.settings.renderScale}),console.log(`Resizing to (${this.scaledSize.width},${this.scaledSize.height})`),this.rawSize={width:e,height:t},this.gbuffer=new ee(this.device,this.scaledSize,this.gbuffer),this.renderOutputs.set(_.GBufferColor,new w(this.gbuffer.colorWithSurfaceWorldDepthInAlpha)),this.renderOutputs.set(_.GBufferNormal,new w(this.gbuffer.normalWithSurfaceFoamStrengthInAlpha)),this.atmosphereCameraPassResources.resize(this.scaledSize,this.device,this.transmittanceLUTPassResources.view,this.multiscatterLUTPassResources.view,this.skyviewLUTPassResources.view,this.aerialPerspectiveLUTPassResources.view),this.renderOutputs.set(_.Scene,new w(this.atmosphereCameraPassResources.outputColor)),this.renderOutputs.forEach((l,u)=>{this.fullscreenQuadPassResources.setView(this.device,u,l.view,l.viewDimension)})}}const ft=(c,e,t)=>new mt(c,e,t);export{ft as SkySeaAppConstructor};

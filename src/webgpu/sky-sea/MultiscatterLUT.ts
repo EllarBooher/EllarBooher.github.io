@@ -5,20 +5,20 @@ import MultiscatterLUTPak from "../../shaders/sky-sea/multiscatter_LUT.wgsl";
 const MULTISCATTER_LUT_FORMAT: GPUTextureFormat = "rgba32float";
 
 export class MultiscatterLUTPassResources {
-	texture: GPUTexture;
-	view: GPUTextureView;
+	readonly texture: GPUTexture;
+	readonly view: GPUTextureView;
 
 	/*
-		@group(0) @binding(0) var multiscatter_lut: texture_storage_2d<rgba32float, write>;
-		@group(0) @binding(1) var lut_sampler: sampler;
-		@group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
+	 * @group(0) @binding(0) var multiscatter_lut: texture_storage_2d<rgba32float, write>;
+	 * @group(0) @binding(1) var lut_sampler: sampler;
+	 * @group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
+	 *
+	 * @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+	 */
+	private pipeline: GPUComputePipeline;
 
-		@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
-	*/
-	group0: GPUBindGroup;
-	group1: GPUBindGroup;
-
-	pipeline: GPUComputePipeline;
+	private group0: GPUBindGroup;
+	private group1: GPUBindGroup;
 
 	constructor(
 		device: GPUDevice,
@@ -127,5 +127,19 @@ export class MultiscatterLUTPassResources {
 			}),
 			label: "Multiscatter LUT",
 		});
+	}
+
+	record(commandEncoder: GPUCommandEncoder) {
+		const passEncoder = commandEncoder.beginComputePass({
+			label: "Multiscatter LUT",
+		});
+		passEncoder.setPipeline(this.pipeline);
+		passEncoder.setBindGroup(0, this.group0);
+		passEncoder.setBindGroup(1, this.group1);
+		passEncoder.dispatchWorkgroups(
+			Math.ceil(this.texture.width / 16),
+			Math.ceil(this.texture.height / 16)
+		);
+		passEncoder.end();
 	}
 }

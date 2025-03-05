@@ -912,27 +912,11 @@ class SkySeaApp implements RendererApp {
 			);
 		}
 
-		const commandEncoder = device.createCommandEncoder();
-
-		let passEncoder = commandEncoder.beginComputePass();
-		passEncoder.setPipeline(this.transmittanceLUTPassResources.pipeline);
-		passEncoder.setBindGroup(0, this.transmittanceLUTPassResources.group0);
-		passEncoder.setBindGroup(1, this.transmittanceLUTPassResources.group1);
-		passEncoder.dispatchWorkgroups(
-			Math.ceil(TRANSMITTANCE_LUT_EXTENT.width / 16),
-			Math.ceil(TRANSMITTANCE_LUT_EXTENT.height / 16)
-		);
-		passEncoder.end();
-
-		passEncoder = commandEncoder.beginComputePass();
-		passEncoder.setPipeline(this.multiscatterLUTPassResources.pipeline);
-		passEncoder.setBindGroup(0, this.multiscatterLUTPassResources.group0);
-		passEncoder.setBindGroup(1, this.multiscatterLUTPassResources.group1);
-		passEncoder.dispatchWorkgroups(
-			Math.ceil(MULTISCATTER_LUT_EXTENT.width / 16),
-			Math.ceil(MULTISCATTER_LUT_EXTENT.height / 16)
-		);
-		passEncoder.end();
+		const commandEncoder = device.createCommandEncoder({
+			label: "Atmosphere LUT Initialization",
+		});
+		this.transmittanceLUTPassResources.record(commandEncoder);
+		this.multiscatterLUTPassResources.record(commandEncoder);
 
 		device.queue.submit([commandEncoder.finish()]);
 	}

@@ -1,6 +1,6 @@
 //// INCLUDE types.inc.wgsl
 
-@group(0) @binding(0) var aerial_perspective_lut: texture_storage_3d<rgba32float, write>;
+@group(0) @binding(0) var aerial_perspective_lut: texture_storage_3d<rgba16float, write>;
 @group(0) @binding(1) var lut_sampler: sampler;
 @group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
 @group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
@@ -49,7 +49,6 @@ fn computeAerialPerspective(@builtin(global_invocation_id) global_id : vec3<u32>
 
 	let atmosphere_raycast = raycastAtmosphere(&atmosphere, origin, direction_world);
 
-	const AERIAL_PERSPECTIVE_MM_PER_SLICE = 0.001;
 	let sample_distance = min(
 		atmosphere_raycast.t_max - atmosphere_raycast.t_min,
 		f32(texel_coord.z + 1u) * AERIAL_PERSPECTIVE_MM_PER_SLICE

@@ -5,6 +5,7 @@
 @group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
 @group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
 @group(0) @binding(4) var skyview_lut: texture_2d<f32>;
+@group(0) @binding(5) var aerial_perspective_lut: texture_3d<f32>;
 
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
@@ -204,6 +205,7 @@ fn sampleSkyLuminance(
 fn sampleGeometryLuminance(
     atmosphere: ptr<function, Atmosphere>,
     light: ptr<function, CelestialLight>,
+	screen_texture_uv: vec2<f32>,
     material: PBRTexel,
     position: vec3<f32>,
     direction: vec3<f32>,
@@ -220,39 +222,32 @@ fn sampleGeometryLuminance(
     origin_step.nu = dot(direction, light_direction);
 
     let surface_step: RaymarchStep = stepRadiusMu(origin_step, distance);
-    let transmittance_to_surface = sampleTransmittanceLUT_Segment(
-        transmittance_lut,
-        lut_sampler,
-        atmosphere,
-        origin_step.radius,
-        origin_step.mu,
-        distance,
-        intersects_ground
-    );
 
-    var light_luminance_transfer = vec3<f32>(0.0);
+	let aerial_perspective_scale = f32(textureDimensions(aerial_perspective_lut).z)
+		* AERIAL_PERSPECTIVE_MM_PER_SLICE
+		* METERS_PER_MM;
+	let aerial_perspective = textureSampleLevel(
+		aerial_perspective_lut,
+		lut_sampler,
+		vec3<f32>(screen_texture_uv,clamp(distance / aerial_perspective_scale, 0.0, 1.0)),
+		0.0
+	);
+    let transmittance_to_surface = vec3<f32>(aerial_perspective.w);
 
+    var light_luminance_transfer = aerial_perspective.xyz;
+
+    /*
+	 * Model water as perfect reflections with some diffuse scattering to
+	 * emulate light coming up from underwater.
+	 * For now, no refraction, secondary bounces, or transmittance through
+	 * waves.
+	 */
 	// TODO: Better lighting model of the water
-
-    // Model water as perfect reflections with some diffuse scattering to emulate light coming up from underwater
 
     let surface_position = position + direction * distance;
 
-	// reflection image on ocean surface
-	//
-    // shift reflection vector up to make up for the lack of secondary bounces
-    // Otherwise, the environmental luminance will be 0 and we get random black patches
-    let reflection_direction = reflect(normalize(direction), normalize(material.normal));
-
-	let surface_transmittance_to_sun = sampleTransmittanceLUT_Ray(
-		transmittance_lut,
-        lut_sampler,
-		atmosphere,
-		surface_position,
-		light_direction
-	);
-
 	// Reflected luminance from the sky
+    let reflection_direction = reflect(normalize(direction), normalize(material.normal));
 	let sky_luminance = sampleSkyViewLUT(atmosphere, surface_position, reflection_direction);
 	light_luminance_transfer +=
 		transmittance_to_surface
@@ -260,6 +255,13 @@ fn sampleGeometryLuminance(
 		* computeFresnelPerfectReflection(material, reflection_direction);
 
 	// Reflected and scattered luminance directly from light
+	let surface_transmittance_to_sun = sampleTransmittanceLUT_Ray(
+		transmittance_lut,
+        lut_sampler,
+		atmosphere,
+		surface_position,
+		light_direction
+	);
 	let light_luminance = surface_transmittance_to_sun
 		* sunFractionOfRadianceVisible(atmosphere, light, surface_position, light_direction);
 	light_luminance_transfer +=
@@ -276,27 +278,6 @@ fn sampleGeometryLuminance(
 	let sky_indirect_luminance = sampleSkyViewLUT(atmosphere, surface_position, reflect(-light_direction, vec3<f32>(0.0,1.0,0.0)));
 	let sea_luminance = diffuseBRDF(material) * sky_visible_solid_angle * sky_indirect_luminance;
 	light_luminance_transfer += transmittance_to_surface * sea_luminance;
-
-	/*
-    {
-        // Aerial perspective, the light scattered by air between viewer and the surface
-		// Has very little effect while we have no geometry in the distance, and the camera is low to the ground.
-        // TODO: aerial perspective LUT
-        let include_ground = false;
-        light_luminance_transfer += computeLuminanceScatteringIntegral(
-            atmosphere,
-            light,
-            lut_sampler,
-            transmittance_lut,
-            multiscatter_lut,
-            position,
-            direction,
-            include_ground,
-			intersects_ground,
-			distance
-        ).luminance;
-    }
-	*/
 
     return light_luminance_transfer;
 }
@@ -356,7 +337,16 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
 				vec3<f32>(0.0,1.0,0.0),
 				1.0
 			);
-            luminance_transfer = sampleGeometryLuminance(&atmosphere, &light, material, origin, direction_world, depth, intersects_ground);
+            luminance_transfer = sampleGeometryLuminance(
+				&atmosphere,
+				&light,
+				uv,
+				material,
+				origin,
+				direction_world,
+				depth,
+				intersects_ground
+			);
         }
         else
         {
@@ -375,6 +365,7 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
 		luminance_transfer = sampleGeometryLuminance(
 			&atmosphere,
 			&light,
+			uv,
 			material,
 			origin,
 			direction_world,

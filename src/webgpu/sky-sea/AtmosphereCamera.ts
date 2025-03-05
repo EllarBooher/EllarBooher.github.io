@@ -1,6 +1,6 @@
 import { GlobalUBO } from "./UBO";
 import AtmosphereCameraPak from "../../shaders/sky-sea/atmosphere_camera.wgsl";
-import { TimestampQueryInterval } from "./Common";
+import { Extent2D, TimestampQueryInterval } from "./Common";
 import { GBuffer } from "./GBuffer";
 
 const ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT: GPUTextureFormat = "rgba16float";
@@ -12,6 +12,7 @@ export class AtmosphereCameraPassResources {
 		@group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
 		@group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
 		@group(0) @binding(4) var skyview_lut: texture_2d<f32>;
+		@group(0) @binding(5) var aerial_perspective_lut: texture_3d<f32>;
 
 		@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
@@ -37,6 +38,7 @@ export class AtmosphereCameraPassResources {
 		transmittanceLUTView: GPUTextureView,
 		multiscatterLUTView: GPUTextureView,
 		skyviewLUTView: GPUTextureView,
+		aerialPerspectiveLUTView: GPUTextureView,
 		filterableLUT: boolean,
 		globalUBO: GlobalUBO
 	) {
@@ -89,6 +91,15 @@ export class AtmosphereCameraPassResources {
 							? "float"
 							: "unfilterable-float",
 						viewDimension: "2d",
+					},
+				},
+				{
+					// aerial perspective
+					binding: 5,
+					visibility: GPUShaderStage.COMPUTE,
+					texture: {
+						sampleType: "float",
+						viewDimension: "3d",
 					},
 				},
 			],
@@ -144,6 +155,10 @@ export class AtmosphereCameraPassResources {
 					binding: 4,
 					resource: skyviewLUTView,
 				},
+				{
+					binding: 5,
+					resource: aerialPerspectiveLUTView,
+				},
 			],
 			label: "Atmosphere Camera Group 0",
 		});
@@ -176,6 +191,55 @@ export class AtmosphereCameraPassResources {
 				],
 			}),
 			label: "Atmosphere Camera",
+		});
+	}
+
+	resize(
+		size: Extent2D,
+		device: GPUDevice,
+		transmittanceLUTView: GPUTextureView,
+		multiscatterLUTView: GPUTextureView,
+		skyviewLUTView: GPUTextureView,
+		aerialPerspectiveLUTView: GPUTextureView
+	) {
+		this.outputColor = device.createTexture({
+			format: this.outputColor.format,
+			size: size,
+			usage:
+				GPUTextureUsage.STORAGE_BINDING |
+				GPUTextureUsage.TEXTURE_BINDING,
+		});
+		this.outputColorView = this.outputColor.createView();
+
+		this.group0 = device.createBindGroup({
+			layout: this.group0Layout,
+			entries: [
+				{
+					binding: 0,
+					resource: this.outputColorView,
+				},
+				{
+					binding: 1,
+					resource: this.lutSampler,
+				},
+				{
+					binding: 2,
+					resource: transmittanceLUTView,
+				},
+				{
+					binding: 3,
+					resource: multiscatterLUTView,
+				},
+				{
+					binding: 4,
+					resource: skyviewLUTView,
+				},
+				{
+					binding: 5,
+					resource: aerialPerspectiveLUTView,
+				},
+			],
+			label: "Atmosphere Camera Group 0 Resized",
 		});
 	}
 

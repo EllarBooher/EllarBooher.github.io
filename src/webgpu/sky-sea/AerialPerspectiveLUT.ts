@@ -2,14 +2,14 @@ import { GlobalUBO } from "./UBO.ts";
 import AerialPerspectiveLUTPak from "../../shaders/sky-sea/aerial_perspective_LUT.wgsl";
 import { TimestampQueryInterval } from "./Common.ts";
 
-const AERIAL_PERSPECTIVE_LUT_FORMAT: GPUTextureFormat = "rgba32float";
+const AERIAL_PERSPECTIVE_LUT_FORMAT: GPUTextureFormat = "rgba16float";
 
 export class AerialPerspectiveLUTPassResources {
 	texture: GPUTexture;
 	view: GPUTextureView;
 
 	/*
-	 * @group(0) @binding(0) var aerial_perspective_lut: texture_storage_3d<rgba32float, write>;
+	 * @group(0) @binding(0) var aerial_perspective_lut: texture_storage_3d<rgba16float, write>;
 	 * @group(0) @binding(1) var lut_sampler: sampler;
 	 * @group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
 	 * @group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;

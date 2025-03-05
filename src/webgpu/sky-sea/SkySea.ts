@@ -823,6 +823,7 @@ class SkySeaApp implements RendererApp {
 			this.transmittanceLUTPassResources.view,
 			this.multiscatterLUTPassResources.view,
 			this.skyviewLUTPassResources.view,
+			this.aerialPerspectiveLUTPassResources.view,
 			this.float32Filterable,
 			this.globalUBO
 		);
@@ -1432,52 +1433,19 @@ class SkySeaApp implements RendererApp {
 			)
 		);
 
-		this.atmosphereCameraPassResources.outputColor =
-			this.device.createTexture({
-				format: this.atmosphereCameraPassResources.outputColor.format,
-				size: this.scaledSize,
-				usage:
-					GPUTextureUsage.STORAGE_BINDING |
-					GPUTextureUsage.TEXTURE_BINDING,
-			});
-		this.atmosphereCameraPassResources.outputColorView =
-			this.atmosphereCameraPassResources.outputColor.createView();
-
+		this.atmosphereCameraPassResources.resize(
+			this.scaledSize,
+			this.device,
+			this.transmittanceLUTPassResources.view,
+			this.multiscatterLUTPassResources.view,
+			this.skyviewLUTPassResources.view,
+			this.aerialPerspectiveLUTPassResources.view
+		);
 		this.renderOutputs.set(
 			RenderOutput.Scene,
 			new RenderOutputTexture(
 				this.atmosphereCameraPassResources.outputColor
 			)
-		);
-
-		this.atmosphereCameraPassResources.group0 = this.device.createBindGroup(
-			{
-				layout: this.atmosphereCameraPassResources.group0Layout,
-				entries: [
-					{
-						binding: 0,
-						resource:
-							this.atmosphereCameraPassResources.outputColorView,
-					},
-					{
-						binding: 1,
-						resource: this.atmosphereCameraPassResources.lutSampler,
-					},
-					{
-						binding: 2,
-						resource: this.transmittanceLUTPassResources.view,
-					},
-					{
-						binding: 3,
-						resource: this.multiscatterLUTPassResources.view,
-					},
-					{
-						binding: 4,
-						resource: this.skyviewLUTPassResources.view,
-					},
-				],
-				label: "Atmosphere Camera Group 0",
-			}
 		);
 
 		this.renderOutputs.forEach((value, key) => {

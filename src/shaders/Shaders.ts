@@ -10,6 +10,7 @@ const includeFilenames = [
 	"sky-sea/atmosphere_raymarch.inc.wgsl",
 	"sky-sea/tonemap.inc.wgsl",
 	"sky-sea/pbr.inc.wgsl",
+	"sky-sea/raycast.inc.wgsl",
 ];
 
 interface ShaderInclude {

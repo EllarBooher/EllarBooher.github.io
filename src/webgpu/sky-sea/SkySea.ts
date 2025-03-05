@@ -274,7 +274,7 @@ class SkySeaApp implements RendererApp {
 			.add(this.settings.cameraSettings.oceanCamera, "translationY")
 			.name("Camera Y")
 			.min(10.0)
-			.max(5000.0);
+			.max(2000.0);
 		cameraParameters
 			.add(this.settings.cameraSettings.oceanCamera, "translationZ")
 			.name("Camera Z")
@@ -419,7 +419,7 @@ class SkySeaApp implements RendererApp {
 		outputTextureFolder
 			.add({ gain: 0.0 }, "gain")
 			.name("Uniform Scale")
-			.min(0.0)
+			.min(-10000.0)
 			.max(10000.0)
 			.onChange((v: number) => {
 				this.settings.currentRenderOutputTransform.colorGain.r = v;
@@ -568,7 +568,7 @@ class SkySeaApp implements RendererApp {
 				.add(this.settings.cameraSettings.debugCamera, "translationY")
 				.name("Camera Y")
 				.min(10.0)
-				.max(5000.0),
+				.max(1000.0),
 			debugFolder
 				.add(this.settings.cameraSettings.debugCamera, "translationZ")
 				.name("Camera Z")

@@ -1,6 +1,7 @@
 // Displace a grid of vertices representing the ocean surface, then rasterize into the gbuffer with a graphics pass
 
 //// INCLUDE types.inc.wgsl
+//// INCLUDE raycast.inc.wgsl
 
 struct PlaneWave
 {
@@ -159,27 +160,7 @@ fn getOceanSurfaceDisplacement(
 	return result;
 }
 
-struct RayPlaneHit {
-	hit: bool,
-	t: f32,
-}
-
-fn rayPlaneIntersection(
-	ray_origin: vec3<f32>,
-	ray_direction: vec3<f32>,
-	plane_origin: vec3<f32>,
-	plane_normal: vec3<f32>
-) -> RayPlaneHit
-{
-	var result: RayPlaneHit;
-
-	let perp = dot(plane_normal, ray_direction);
-	result.t = dot(plane_origin - ray_origin, plane_normal) / perp;
-	result.hit = (abs(perp) > 0.00001) && (result.t > 0.0);
-
-	return result;
-}
-
+const METERS_PER_MM: f32 = 1000000;
 fn projectNDCToOceanSurface(
 	ndc: vec2<f32>,
 	ndc_offset: vec2<f32>,
@@ -199,12 +180,19 @@ fn projectNDCToOceanSurface(
 	let ocean_origin = vec3<f32>(0.0, height, 0.0);
 	let ocean_normal = vec3<f32>(0.0, 1.0, 0.0);
 
-	let ocean_plane_hit = rayPlaneIntersection(camera.position.xyz, direction_world, ocean_origin, ocean_normal);
-	let t = mix(1000.0, ocean_plane_hit.t, f32(ocean_plane_hit.hit));
-	var world_position = camera.position.xyz + t * direction_world;
-	world_position.y = ocean_origin.y;
+	let ocean_hit = raySphereIntersection(
+		camera.position.xyz + vec3<f32>(0.0, u_global.atmosphere.planet_radius_Mm * METERS_PER_MM, 0.0),
+		direction_world,
+		u_global.atmosphere.planet_radius_Mm * METERS_PER_MM
+	);
+	let t = mix(10000.0, ocean_hit.t0, f32(ocean_hit.hit && ocean_hit.t0 > 0.0));
 
-	return world_position;
+	if (ocean_hit.hit && ocean_hit.t0 > 0.0)
+	{
+		return camera.position.xyz + ocean_hit.t0 * direction_world;
+	}
+
+	return normalize(camera.position.xyz + 10000.0 * direction_world) * u_global.atmosphere.planet_radius_Mm * METERS_PER_MM - vec3<f32>(0.0, u_global.atmosphere.planet_radius_Mm * METERS_PER_MM, 0.0);
 }
 fn projectNDCToOceanSurfaceWithPivot(
 	ndc: vec2<f32>,
@@ -253,11 +241,12 @@ fn projectNDCToOceanSurfaceWithPivot(
 }
 
 struct VertexOut {
-    @builtin(position) position : vec4<f32>,
-    @location(1) color : vec3<f32>,
-    @location(2) camera_distance : f32,
+    @builtin(position) position             : vec4<f32>,
+	@location(0) surface_normal             : vec3<f32>,
+    @location(1) color                      : vec3<f32>,
+    @location(2) camera_distance            : f32,
 	@location(3) cascade_1234_normal_weights: vec4<f32>,
-	@location(5) global_uv: vec2<f32>,
+	@location(5) global_uv                  : vec2<f32>,
 }
 
 /*
@@ -430,6 +419,11 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	// output.color = vec3<f32>(step(fract(50 * ndc_space_coord), vec2<f32>(0.1)),0.0);
  	// output.color = vec3<f32>(step(fract(1.0 * world_position.x), 0.05),0.0,0.0);
 
+
+	output.surface_normal = normalize(
+		world_position
+		+ vec3<f32>(0.0, u_global.atmosphere.planet_radius_Mm * METERS_PER_MM, 0.0)
+	);
 
 	output.cascade_1234_normal_weights = vec4<f32>(
 		cascade_normal_weights[0],
@@ -652,10 +646,22 @@ fn rasterizationFragment(frag_interpolated: VertexOut) -> FragmentOut
 		frag_interpolated.global_uv,
 		cascade_normal_weights,
 	);
-
 	// reverse left-handed WGSL coordinates
 	let normal = normalize(-cross(surface.tangent, surface.bitangent));
 
-    output.world_normal_with_surface_foam_strength_in_alpha = vec4<f32>(normal, surface.foam_strength);
+	// This probably falls apart in the general case, but the distance surface
+	// should be near flat anyway, with the surface normal close to planet
+	// normal
+	let surface_normal = normalize(frag_interpolated.surface_normal);
+	let tangent = normalize(-cross(vec3<f32>(0.0,0.0,1.0), surface_normal));
+	let bitangent = normalize(-cross(surface_normal, tangent));
+	let perturbed_normal = normal.x * tangent + normal.y * surface_normal + normal.z * bitangent;
+
+	//output.world_normal_with_surface_foam_strength_in_alpha = vec4<f32>(normal, surface.foam_strength);
+	output.world_normal_with_surface_foam_strength_in_alpha = vec4<f32>(
+		normalize(perturbed_normal),
+		surface.foam_strength
+	);
+
     return output;
 }

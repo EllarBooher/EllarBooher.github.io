@@ -1,4 +1,5 @@
 //// INCLUDE types.inc.wgsl
+//// INCLUDE raycast.inc.wgsl
 
 @group(0) @binding(0) var output_color: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(1) var lut_sampler: sampler;
@@ -329,7 +330,14 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
 
     if (depth <= 0.0)
     {
-        // View of virtual environment: either the sky, or the floor
+		/*
+
+		/*
+		 * Our ocean surface *should* cover the entire planet, so taking this
+		 * path might lead to floating point errors and visible gaps at the
+		 * horizon.
+		 */
+
         if (intersects_ground)
         {
             let material: PBRTexel = convertPBRPropertiesWater(
@@ -352,6 +360,9 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
         {
             luminance_transfer = sampleSkyLuminance(&atmosphere, &light, origin, direction_world);
         }
+		*/
+
+		luminance_transfer = sampleSkyLuminance(&atmosphere, &light, origin, direction_world);
     }
     else
     {

@@ -292,67 +292,6 @@ fn sampleExtinction(atmosphere: ptr<function,Atmosphere>, altitude_Mm: f32) -> E
     return extinction_sample;
 }
 
-struct RaySphereHit
-{
-    hit: bool,
-    t0: f32,
-    t1: f32,
-}
-
-// t1 > t0, values can be negative. Function returns true even if the sphere is behind the ray.
-// If this returns false, t0 and t1 are unchanged.
-fn raySphereIntersection(
-    ray_origin: vec3<f32>,
-    ray_direction_normalized: vec3<f32>,
-    radius: f32
-) -> RaySphereHit
-{
-    // Method taken from "Precision Improvements for Ray/Sphere Intersection"
-    // by Eric Haines, Johannes Günther, and Tomas Akenine-Möller
-    //
-    // The method includes tricks to reduce float point inaccuracy errors.
-
-    let f: vec3<f32> = ray_origin;
-    let d: vec3<f32> = ray_direction_normalized;
-    let b: f32 = -1.0 * dot(f, d);
-    let center_to_intersection_chord: vec3<f32> = f + b * d;
-    let discriminant: f32 = radius * radius - dot(center_to_intersection_chord, center_to_intersection_chord);
-    let c: f32 = dot(f, f) - radius * radius;
-
-    var output : RaySphereHit;
-    output.hit = false;
-    output.t0 = 0.0;
-    output.t1 = 0.0;
-
-    if (discriminant < 0.0)
-    {
-        return output;
-    }
-
-    var q: f32 = b;
-    if (b < 0.0)
-    {
-        q -= sqrt(discriminant);
-    }
-    else
-    {
-        q += sqrt(discriminant);
-    }
-
-    output.hit = true;
-    output.t0 = c / q;
-    output.t1 = q;
-
-    if (output.t0 > output.t1)
-    {
-        let temp: f32 = output.t0;
-        output.t0 = output.t1;
-        output.t1 = temp;
-    }
-
-    return output;
-}
-
 // Input cosine is the cosine of the angle between incident and outgoing scattering directions
 fn phaseRayleigh(cosine: f32) -> f32
 {

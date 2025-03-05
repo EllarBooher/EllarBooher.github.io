@@ -1,4 +1,5 @@
 //// INCLUDE types.inc.wgsl
+//// INCLUDE raycast.inc.wgsl
 
 @group(0) @binding(0) var transmittance_lut: texture_storage_2d<rgba32float, write>;
 

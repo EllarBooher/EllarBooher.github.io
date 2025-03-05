@@ -1,4 +1,5 @@
 //// INCLUDE types.inc.wgsl
+//// INCLUDE raycast.inc.wgsl
 
 @group(0) @binding(0) var aerial_perspective_lut: texture_storage_3d<rgba16float, write>;
 @group(0) @binding(1) var lut_sampler: sampler;

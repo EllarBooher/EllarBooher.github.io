@@ -296,8 +296,10 @@ export class WaveSurfaceDisplacementPassResources {
 						label: "Wave Surface Displacement Group 1 Sampler",
 						minFilter: "linear",
 						magFilter: "linear",
+						mipmapFilter: "linear",
 						addressModeU: "repeat",
 						addressModeV: "repeat",
+						maxAnisotropy: 10.0,
 					}),
 				},
 				{

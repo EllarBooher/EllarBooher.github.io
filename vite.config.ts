@@ -46,5 +46,14 @@ const wgslIncludeWatcher = () => {
 
 // https://vite.dev/config/
 export default defineConfig({
-	plugins: [wgslPlugin(), react(), eslint(), wgslIncludeWatcher()],
+	plugins: [
+		wgslPlugin(),
+		react(),
+		eslint({
+			eslintOptions: {
+				cacheLocation: "./node_modules/@eslint/.eslintcache",
+			},
+		}),
+		wgslIncludeWatcher(),
+	],
 });

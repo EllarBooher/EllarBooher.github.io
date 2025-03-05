@@ -1,4 +1,4 @@
-import { Extent2D } from "./Common.ts";
+import { Extent2D, TimestampQueryInterval } from "./Common.ts";
 import { GlobalUBO } from "./UBO.ts";
 import SkyViewLUTPak from "../../shaders/sky-sea/skyview_LUT.wgsl";
 
@@ -141,5 +141,38 @@ export class SkyViewLUTPassResources {
 			}),
 			label: "Skyview LUT",
 		});
+	}
+
+	record(
+		commandEncoder: GPUCommandEncoder,
+		timestampInterval: TimestampQueryInterval | undefined
+	) {
+		const skyviewLUTPassEncoder = commandEncoder.beginComputePass({
+			timestampWrites:
+				timestampInterval !== undefined
+					? {
+							querySet: timestampInterval.querySet,
+							beginningOfPassWriteIndex:
+								timestampInterval.beginWriteIndex,
+							endOfPassWriteIndex:
+								timestampInterval.endWriteIndex,
+					  }
+					: undefined,
+			label: "Skyview LUT",
+		});
+		skyviewLUTPassEncoder.setPipeline(this.pipeline);
+		skyviewLUTPassEncoder.setBindGroup(0, this.group0);
+		skyviewLUTPassEncoder.setBindGroup(1, this.group1);
+
+		/*
+		 * We trim lower half of skyview lut to save roughly half of the work.
+		 * We render the ocean over the entirety and are at a lower altitude,
+		 * so our use case is a bit specific.
+		 */
+		skyviewLUTPassEncoder.dispatchWorkgroups(
+			Math.ceil(this.texture.width / 16),
+			Math.ceil(this.texture.height / (16 * 1.9))
+		);
+		skyviewLUTPassEncoder.end();
 	}
 }

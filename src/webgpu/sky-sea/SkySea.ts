@@ -91,6 +91,7 @@ const RENDER_SCALES = [0.25, 0.3333, 0.5, 0.75, 1.0, 1.5, 2.0, 4.0];
 enum FrametimeCategory {
 	DrawToDraw,
 	SkyviewLUT,
+	AerialPerspectiveLUT,
 	FFTWaves,
 	OceanSurface,
 	AtmosphereCamera,
@@ -1218,107 +1219,47 @@ class SkySeaApp implements RendererApp {
 			FrametimeCategory.SkyviewLUT,
 			timestampQueryIndex
 		);
-		{
-			const skyviewLUTPassEncoder = commandEncoder.beginComputePass({
-				timestampWrites:
-					this.frametimeQuery !== undefined
-						? {
-								querySet: this.frametimeQuery.querySet,
-								beginningOfPassWriteIndex:
-									timestampQueryIndex++,
-								endOfPassWriteIndex: timestampQueryIndex++,
-						  }
-						: undefined,
-				label: "Skyview LUT",
-			});
-			skyviewLUTPassEncoder.setPipeline(
-				this.skyviewLUTPassResources.pipeline
-			);
-			skyviewLUTPassEncoder.setBindGroup(
-				0,
-				this.skyviewLUTPassResources.group0
-			);
-			skyviewLUTPassEncoder.setBindGroup(
-				1,
-				this.skyviewLUTPassResources.group1
-			);
-			skyviewLUTPassEncoder.dispatchWorkgroups(
-				Math.ceil(SKYVIEW_LUT_EXTENT.width / 16),
-				// Trim lower half of skyview lut to save roughly half of the work. We render the ocean over the entirety and are at a lower altitude, so our use case is a bit specific
-				Math.ceil(SKYVIEW_LUT_EXTENT.height / (16 * 1.9))
-			);
-			skyviewLUTPassEncoder.end();
-		}
-		{
-			const aerialPerspectiveLUTPassEncoder =
-				commandEncoder.beginComputePass({
-					timestampWrites: /*
-					this.frametimeQuery !== undefined
-						? {
-								querySet: this.frametimeQuery.querySet,
-								beginningOfPassWriteIndex:
-									timestampQueryIndex++,
-								endOfPassWriteIndex: timestampQueryIndex++,
-						  }
-						: */ undefined,
-					label: "Aerial Perspective LUT",
-				});
-			aerialPerspectiveLUTPassEncoder.setPipeline(
-				this.aerialPerspectiveLUTPassResources.pipeline
-			);
-			aerialPerspectiveLUTPassEncoder.setBindGroup(
-				0,
-				this.aerialPerspectiveLUTPassResources.group0
-			);
-			aerialPerspectiveLUTPassEncoder.setBindGroup(
-				1,
-				this.aerialPerspectiveLUTPassResources.group1
-			);
-			aerialPerspectiveLUTPassEncoder.dispatchWorkgroups(
-				Math.ceil(AERIAL_PERSPECTIVE_LUT_EXTENT.width / 16),
-				// Trim lower half of skyview lut to save roughly half of the work. We render the ocean over the entirety and are at a lower altitude, so our use case is a bit specific
-				Math.ceil(AERIAL_PERSPECTIVE_LUT_EXTENT.height / 16),
-				Math.ceil(AERIAL_PERSPECTIVE_LUT_EXTENT.depthOrArrayLayers / 1)
-			);
-			aerialPerspectiveLUTPassEncoder.end();
-		}
+		this.skyviewLUTPassResources.record(
+			commandEncoder,
+			this.frametimeQuery !== undefined
+				? {
+						querySet: this.frametimeQuery.querySet,
+						beginWriteIndex: timestampQueryIndex++,
+						endWriteIndex: timestampQueryIndex++,
+				  }
+				: undefined
+		);
+
+		timestampIndexMapping.set(
+			FrametimeCategory.AerialPerspectiveLUT,
+			timestampQueryIndex
+		);
+		this.aerialPerspectiveLUTPassResources.record(
+			commandEncoder,
+			this.frametimeQuery !== undefined
+				? {
+						querySet: this.frametimeQuery.querySet,
+						beginWriteIndex: timestampQueryIndex++,
+						endWriteIndex: timestampQueryIndex++,
+				  }
+				: undefined
+		);
 
 		timestampIndexMapping.set(
 			FrametimeCategory.AtmosphereCamera,
 			timestampQueryIndex
 		);
-		const atmosphereCameraPassEncoder = commandEncoder.beginComputePass({
-			timestampWrites:
-				this.frametimeQuery !== undefined
-					? {
-							querySet: this.frametimeQuery.querySet,
-							beginningOfPassWriteIndex: timestampQueryIndex++,
-							endOfPassWriteIndex: timestampQueryIndex++,
-					  }
-					: undefined,
-			label: "Atmosphere Camera",
-		});
-		atmosphereCameraPassEncoder.setPipeline(
-			this.atmosphereCameraPassResources.pipeline
+		this.atmosphereCameraPassResources.record(
+			commandEncoder,
+			this.frametimeQuery !== undefined
+				? {
+						querySet: this.frametimeQuery.querySet,
+						beginWriteIndex: timestampQueryIndex++,
+						endWriteIndex: timestampQueryIndex++,
+				  }
+				: undefined,
+			this.gbuffer
 		);
-		atmosphereCameraPassEncoder.setBindGroup(
-			0,
-			this.atmosphereCameraPassResources.group0
-		);
-		atmosphereCameraPassEncoder.setBindGroup(
-			1,
-			this.atmosphereCameraPassResources.group1
-		);
-		atmosphereCameraPassEncoder.setBindGroup(2, this.gbuffer.readGroup);
-		atmosphereCameraPassEncoder.dispatchWorkgroups(
-			Math.ceil(
-				this.atmosphereCameraPassResources.outputColor.width / 16
-			),
-			Math.ceil(
-				this.atmosphereCameraPassResources.outputColor.height / 16
-			)
-		);
-		atmosphereCameraPassEncoder.end();
 
 		{
 			const renderOutputTransform =

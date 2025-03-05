@@ -1,5 +1,7 @@
 import { GlobalUBO } from "./UBO";
 import AtmosphereCameraPak from "../../shaders/sky-sea/atmosphere_camera.wgsl";
+import { TimestampQueryInterval } from "./Common";
+import { GBuffer } from "./GBuffer";
 
 const ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT: GPUTextureFormat = "rgba16float";
 
@@ -175,5 +177,34 @@ export class AtmosphereCameraPassResources {
 			}),
 			label: "Atmosphere Camera",
 		});
+	}
+
+	record(
+		commandEncoder: GPUCommandEncoder,
+		timestampInterval: TimestampQueryInterval | undefined,
+		gbuffer: GBuffer
+	) {
+		const atmosphereCameraPassEncoder = commandEncoder.beginComputePass({
+			timestampWrites:
+				timestampInterval !== undefined
+					? {
+							querySet: timestampInterval.querySet,
+							beginningOfPassWriteIndex:
+								timestampInterval.beginWriteIndex,
+							endOfPassWriteIndex:
+								timestampInterval.endWriteIndex,
+					  }
+					: undefined,
+			label: "Atmosphere Camera",
+		});
+		atmosphereCameraPassEncoder.setPipeline(this.pipeline);
+		atmosphereCameraPassEncoder.setBindGroup(0, this.group0);
+		atmosphereCameraPassEncoder.setBindGroup(1, this.group1);
+		atmosphereCameraPassEncoder.setBindGroup(2, gbuffer.readGroup);
+		atmosphereCameraPassEncoder.dispatchWorkgroups(
+			Math.ceil(this.outputColor.width / 16),
+			Math.ceil(this.outputColor.height / 16)
+		);
+		atmosphereCameraPassEncoder.end();
 	}
 }

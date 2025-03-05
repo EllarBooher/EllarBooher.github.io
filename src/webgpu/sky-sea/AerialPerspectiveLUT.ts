@@ -1,5 +1,6 @@
 import { GlobalUBO } from "./UBO.ts";
 import AerialPerspectiveLUTPak from "../../shaders/sky-sea/aerial_perspective_LUT.wgsl";
+import { TimestampQueryInterval } from "./Common.ts";
 
 const AERIAL_PERSPECTIVE_LUT_FORMAT: GPUTextureFormat = "rgba32float";
 
@@ -144,5 +145,35 @@ export class AerialPerspectiveLUTPassResources {
 			}),
 			label: "Aerial Perspective LUT",
 		});
+	}
+
+	record(
+		commandEncoder: GPUCommandEncoder,
+		timestampInterval: TimestampQueryInterval | undefined
+	) {
+		const aerialPerspectiveLUTPassEncoder = commandEncoder.beginComputePass(
+			{
+				timestampWrites:
+					timestampInterval !== undefined
+						? {
+								querySet: timestampInterval.querySet,
+								beginningOfPassWriteIndex:
+									timestampInterval.beginWriteIndex,
+								endOfPassWriteIndex:
+									timestampInterval.endWriteIndex,
+						  }
+						: undefined,
+				label: "Aerial Perspective LUT",
+			}
+		);
+		aerialPerspectiveLUTPassEncoder.setPipeline(this.pipeline);
+		aerialPerspectiveLUTPassEncoder.setBindGroup(0, this.group0);
+		aerialPerspectiveLUTPassEncoder.setBindGroup(1, this.group1);
+		aerialPerspectiveLUTPassEncoder.dispatchWorkgroups(
+			Math.ceil(this.texture.width / 16),
+			Math.ceil(this.texture.height / 16),
+			Math.ceil(this.texture.depthOrArrayLayers / 1)
+		);
+		aerialPerspectiveLUTPassEncoder.end();
 	}
 }

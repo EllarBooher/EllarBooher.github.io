@@ -14,8 +14,6 @@
 // This map builds a transmittance LUT, a map of the transmittance of light interacting with the atmosphere parameterized by altitude and facing direction.
 // This map depends entirely on the atmosphere's parameters, and NOT on any lights, cameras, or geometry.
 
-const SAMPLE_COUNT: u32 = 500;
-
 @compute @workgroup_size(16, 16, 1)
 fn computeTransmittance(@builtin(global_invocation_id) global_id : vec3<u32>,)
 {
@@ -50,6 +48,7 @@ fn computeTransmittance(@builtin(global_invocation_id) global_id : vec3<u32>,)
 
     var transmittance: vec3<f32> = vec3<f32>(1.0);
 
+	const SAMPLE_COUNT = 500u;
     let dt: f32 = distance / f32(SAMPLE_COUNT);
     for(var i: u32 = 0; i < SAMPLE_COUNT; i++)
     {

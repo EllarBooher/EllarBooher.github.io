@@ -5,6 +5,7 @@ const shaderRoot = "src/shaders/";
 
 // TODO: Load includes upon every shader compile, but cache them and check if the version on disk is newer. This is needed for hot reloading
 const includeFilenames = [
+	"sky-sea/constants.inc.wgsl",
 	"sky-sea/types.inc.wgsl",
 	"sky-sea/atmosphere_common.inc.wgsl",
 	"sky-sea/atmosphere_raymarch.inc.wgsl",
@@ -83,7 +84,7 @@ function replaceConditionalBlocks(
 	filename: string,
 	source: ShaderInclude,
 	enabledConditions: string[] = []
-) {
+): string[] {
 	const IF_PREFIX = "#ifdef ";
 	const ELSE_PREFIX = "#else";
 	const ENDIF_PREFIX = "#endif";
@@ -93,9 +94,10 @@ function replaceConditionalBlocks(
 	console.log(
 		`Including '${filename}' with ${
 			enabledConditions.length
-		} flag(s) '${enabledConditions.join(",")}'`
+		} flag(s) '${enabledConditions.join(
+			","
+		)}'. Possible flag(s) are '${source.flags.join(",")}'`
 	);
-	console.log(`Possible flag(s) are '${source.flags.join(",")}'`);
 	const invalidFlags = enabledConditions.filter((flag) => {
 		return !source.flags.includes(flag);
 	});
@@ -204,8 +206,7 @@ function replaceConditionalBlocks(
 			}
 
 			return keepLines && prefix == LinePrefix.None;
-		})
-		.join("\n");
+		});
 
 	if (step != ConditionalState.Outside) {
 		console.error(
@@ -226,53 +227,70 @@ export function packShaders(id: string, source: string): string {
 
 	let logIncludes = false;
 
-	const sourceOut = source
-		.split("\n")
-		.map((line) => {
-			if (line.startsWith(INCLUDE_PREFIX)) {
-				const fragments = line
-					.trim()
-					.substring(INCLUDE_PREFIX.length)
-					.split(" ")
-					.map((value) => {
-						return value.trim();
-					})
-					.filter((value) => {
-						return value.length > 0;
-					});
-				if (fragments.length == 0) {
-					return "";
-				}
+	// TODO: detect loops
+	const visitedIncludes = new Set<string>();
 
-				const includeFilename = fragments.shift()!;
-				const resolvedPath = path.resolve(
-					includeWorkingPrefix,
-					includeFilename
+	let lineIndex = 0;
+	const lines = source.split("\n");
+	while (lineIndex < lines.length) {
+		const line = lines[lineIndex];
+		if (line.startsWith(INCLUDE_PREFIX)) {
+			lines.splice(lineIndex, 1);
+
+			const fragments = line
+				.trim()
+				.substring(INCLUDE_PREFIX.length)
+				.split(" ")
+				.map((value) => {
+					return value.trim();
+				})
+				.filter((value) => {
+					return value.length > 0;
+				});
+			if (fragments.length == 0) {
+				return "";
+			}
+
+			const includeFilename = fragments.shift()!;
+			const resolvedPath = path.resolve(
+				includeWorkingPrefix,
+				includeFilename
+			);
+			if (visitedIncludes.has(resolvedPath)) {
+				console.warn(
+					`Skipping duplicated include ${includeFilename} which resolved to ${resolvedPath}.\n Note that deduplication is based on the resolved path, and not the identifier or file contents of the include.`
 				);
+				continue;
+			}
+			visitedIncludes.add(resolvedPath);
 
-				const includeSource = includeMappings.get(resolvedPath);
-				if (includeSource === undefined) {
-					console.error(
-						`Unrecognized WGSL include: ${resolvedPath} \n     Resolved as: ${resolvedPath}`
-					);
-					logIncludes = true;
-					return "";
-				}
+			const includeSource = includeMappings.get(resolvedPath);
+			if (includeSource == undefined) {
+				console.error(
+					`Unrecognized WGSL include: ${includeFilename} \n Resolved as: ${resolvedPath}`
+				);
+				logIncludes = true;
+				continue;
+			}
 
-				return replaceConditionalBlocks(
+			lines.splice(
+				lineIndex,
+				0,
+				...replaceConditionalBlocks(
 					includeFilename,
 					includeSource,
 					fragments
-				);
-			}
-
-			return line;
-		})
-		.join("\n");
+				)
+			);
+		} else {
+			lineIndex += 1;
+		}
+	}
+	const sourceOut = lines.join("\n");
 
 	if (logIncludes) {
 		console.error(`Absolute paths of known include(s) are:`);
-		includeMappings.forEach((value, key) => {
+		includeMappings.forEach((_value, key) => {
 			console.error(`    ${key}`);
 		});
 	}

@@ -1,10 +1,9 @@
 // Displace a grid of vertices representing the ocean surface, then rasterize into the gbuffer with a graphics pass
 
+#include constants.inc.wgsl
 #include types.inc.wgsl
 #include raycast.inc.wgsl
 
-const PI = 3.141592653589793;
-const WATER_COLOR = 0.3 * vec3<f32>(16.0 / 255.0, 97.0 / 255.0, 171.0 / 255.0);
 const CASCADE_CAPACITY = 4u;
 
 struct PlaneWave
@@ -160,7 +159,6 @@ fn getOceanSurfaceDisplacement(
 	return result;
 }
 
-const METERS_PER_MM: f32 = 1000000;
 fn projectNDCToOceanSurface(
 	ndc: vec2<f32>,
 	ndc_offset: vec2<f32>,
@@ -225,12 +223,12 @@ fn projectNDCToOceanSurfaceWithPivot(
 	{
 		return world_position;
 	}
-	const STRETCH_ABSOLUTE_BIAS = 80.0;
 	let stretch_parameter = smoothstep(
 		STRETCH_THRESHOLDS.x,
 		STRETCH_THRESHOLDS.y,
 		pivot_distance
 	);
+	const STRETCH_ABSOLUTE_BIAS = 80.0;
 	let stretch = ((pivot_distance + stretch_parameter * STRETCH_ABSOLUTE_BIAS) / pivot_distance);
 	return pivot + pivot_offset * stretch;
 }
@@ -385,7 +383,7 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	// Unclipped depth didn't work (and requires a feature) so this is a workaround
 	output.position.z /= 1.001;
 
-	output.color = vec3<f32>(WATER_COLOR);
+	output.color = 0.3 * vec3<f32>(16.0 / 255.0, 97.0 / 255.0, 171.0 / 255.0);
 
 	// Test screen-space density of vertices
 	// output.color = vec3<f32>(step(fract(50 * ndc_space_coord), vec2<f32>(0.1)),0.0);

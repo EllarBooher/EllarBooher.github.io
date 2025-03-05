@@ -1,4 +1,4 @@
-const PI = 3.141592653589793;
+const TWO_PI = 6.28318530717958647693;
 
 /*
 * Decimation-in-time Cooley-Tukey Inverse Discrete Fast Fourier Transform
@@ -65,7 +65,7 @@ fn precomputeDFFTInstructions(@builtin(global_invocation_id) global_id: vec3<u32
 		let n = major_index % u32(dft_size / 2u);
 
 		var lower_twiddle: TwoPointDFT;
-		lower_twiddle.twiddle = complexExp(-2.0 * PI * f32(n) / f32(dft_size));
+		lower_twiddle.twiddle = complexExp(-TWO_PI * f32(n) / f32(dft_size));
 		lower_twiddle.lower_index = dft + n * 2u * dft_count;
 		lower_twiddle.upper_index = lower_twiddle.lower_index + dft_count;
 

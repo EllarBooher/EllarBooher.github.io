@@ -1,5 +1,7 @@
 // This file contains shared methods and definitions for raymarching the atmosphere and generating the lookup tables
 
+#include constants.inc.wgsl
+
 // Based on:
 // "A Scalable and Production Ready Sky and Atmosphere Rendering Technique" by Sébastien Hillaire (2020)
 // https://sebh.github.io/publications/egsr2020.pdf
@@ -18,8 +20,7 @@ const SKYVIEW_LUT_HEIGHT = 512u;
 
 const AERIAL_PERSPECTIVE_MM_PER_SLICE = 0.001;
 
-const METERS_PER_MM: f32 = 1000000;
-const PI: f32 = 3.141592653589793;
+const ISOTROPIC_PHASE = 1.0 / (4.0 * PI);
 
 // Transmittance LUT UV mapping based on Bruneton et al. 2017 method
 // https://ebruneton.github.io/precomputed_atmospheric_scattering/atmosphere/functions.glsl#transmittance_lookup

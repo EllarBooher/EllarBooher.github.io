@@ -1,7 +1,8 @@
 // Textures must have the same dimension
+
+#include constants.inc.wgsl
 #include types.inc.wgsl
 
-const PI = 3.141592653589793;
 const CASCADE_CAPACITY = 4u;
 
 struct CascadeUBO

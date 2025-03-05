@@ -300,7 +300,6 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
     let offset = vec2<f32>(0.5, 0.5);
     let uv = (vec2<f32>(texel_coord) + offset) / vec2<f32>(size);
 
-    const METERS_PER_MM = 1000000.0;
     let origin = vec3<f32>(0.0, atmosphere.planet_radius_Mm, 0.0) + camera.position.xyz / METERS_PER_MM;
 
     let ndc_space_coord = (uv - vec2<f32>(0.5)) * 2.0 * vec2<f32>(1.0, -1.0);

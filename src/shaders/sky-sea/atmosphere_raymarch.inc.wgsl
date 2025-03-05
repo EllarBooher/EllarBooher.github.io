@@ -32,9 +32,6 @@ SAMPLE_PATH_TRANSMITTANCE
 
 // Make sure to include atmosphere_common first
 
-const T_SUBSTEP_NONLINEAR = 0.4;
-const T_SUBSTEP_LINEAR = 0.2;
-
 struct AtmosphereRaycastResult
 {
 	// Whether or not the raycast resulted in hitting the planet
@@ -148,12 +145,16 @@ fn computeLuminanceScatteringIntegral(
 
     // We estimate the integral in Equation (1) of Hillaire's paper.
 
-    const ISOTROPIC_PHASE: f32 = 1.0 / (4.0 * PI);
-
 #ifdef HIGH_SAMPLE_COUNT
     const SAMPLE_COUNT = 256.0;
 #else
     const SAMPLE_COUNT = 64.0;
+#endif
+
+#ifdef SCATTERING_NONLINEAR_SAMPLE
+	const T_SUBSTEP = 0.4;
+#else
+	const T_SUBSTEP = 0.2;
 #endif
 
 	var t: f32 = 0.0;
@@ -168,12 +169,12 @@ fn computeLuminanceScatteringIntegral(
 			t_begin = sample_distance * t_begin * t_begin;
 			t_end = sample_distance * t_end * t_end;
 			d_t = t_end - t_begin;
-			t = mix(t_begin, t_end, T_SUBSTEP_NONLINEAR);
+			t = mix(t_begin, t_end, T_SUBSTEP);
 		}
 #else
 		{
 			// linear distribution
-			let t_new = sample_distance * (s + T_SUBSTEP_LINEAR) / SAMPLE_COUNT;
+			let t_new = sample_distance * (s + T_SUBSTEP) / SAMPLE_COUNT;
 			d_t = t_new - t;
 			t = t_new;
 		}

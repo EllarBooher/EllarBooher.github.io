@@ -84,9 +84,6 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var luminance_second_order = vec3<f32>(0.0);
     var multiscattering_transfer = vec3<f32>(0.0);
 
-    const SPHERE_SOLID_ANGLE = 4.0 * PI;
-    const ISOTROPIC_PHASE = 1.0 / (4.0 * PI);
-
     // There is an accumulated constant bias in sample directions, but it is quite small and does not matter for the
     // small sample counts we shall be using
     // TODO: mitigate the artifacts that seem to occur due to how we are sampling the directions. For some reason
@@ -133,6 +130,7 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id: vec3<u32>) {
         // let scattering = ScatteringResult(vec3<f32>(0.0), vec3<f32>(0.0));
 
         // dw in equations (5) and (7) in Hillaire 2020
+    	const SPHERE_SOLID_ANGLE = 4.0 * PI;
         let sample_solid_angle = SPHERE_SOLID_ANGLE / f32(SAMPLE_COUNT);
 
         // Equations (6) and (8)

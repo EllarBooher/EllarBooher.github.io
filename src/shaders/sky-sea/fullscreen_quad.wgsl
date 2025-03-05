@@ -99,11 +99,12 @@ fn fragmentMainArray(frag_interpolated: VertexOut) -> FragmentOut
 @fragment
 fn fragmentMain3D(frag_interpolated: VertexOut) -> FragmentOut
 {
+	let coord = vec3<f32>(frag_interpolated.uv, u_fullscreen_quad.depth_or_array_layer / f32(textureDimensions(b_texture_3d).z));
 	return doFragment(
 		textureSampleLevel(
 			b_texture_3d,
 			b_sampler,
-			vec3<f32>(frag_interpolated.uv, u_fullscreen_quad.depth_or_array_layer),
+			coord,
 			f32(u_fullscreen_quad.mip_level)
 		)
 	);

@@ -165,7 +165,6 @@ fn projectNDCToOceanSurface(
 	ndc: vec2<f32>,
 	ndc_offset: vec2<f32>,
 	camera: Camera,
-	height: f32,
 ) -> vec3<f32>
 {
 	let near_plane = 1.0;
@@ -176,9 +175,6 @@ fn projectNDCToOceanSurface(
 	);
 
 	let direction_world = normalize((camera.inv_view * vec4<f32>(direction_view_space.xyz, 0.0)).xyz);
-
-	let ocean_origin = vec3<f32>(0.0, height, 0.0);
-	let ocean_normal = vec3<f32>(0.0, 1.0, 0.0);
 
 	let ocean_hit = raySphereIntersection(
 		camera.position.xyz + vec3<f32>(0.0, u_global.atmosphere.planet_radius_Mm * METERS_PER_MM, 0.0),
@@ -198,11 +194,10 @@ fn projectNDCToOceanSurfaceWithPivot(
 	ndc: vec2<f32>,
 	ndc_offset: vec2<f32>,
 	camera: Camera,
-	height: f32,
 	pivot: vec3<f32>,
 ) -> vec3<f32>
 {
-	let world_position = projectNDCToOceanSurface(ndc, ndc_offset, camera, height);
+	let world_position = projectNDCToOceanSurface(ndc, ndc_offset, camera);
 	let pivot_offset = world_position - pivot;
 	let pivot_distance = length(pivot_offset);
 
@@ -224,13 +219,13 @@ fn projectNDCToOceanSurfaceWithPivot(
 	 *		  is messy since it is predicated on camera FOV, aspect ratio,
 	 *		  position, etc.
 	 */
-	const STRETCH_THRESHOLDS = vec2<f32>(1.0,10.0);
-	// Avoid the singularity near the pivot
-	if(pivot_distance < STRETCH_THRESHOLDS.x)
+	const STRETCH_THRESHOLDS = vec2<f32>(2.0,20.0);
+	// Avoid the singularity near the pivot, and drop out when this fix is less necessary
+	if(pivot_distance < STRETCH_THRESHOLDS.x || camera.position.y > 100.0)
 	{
 		return world_position;
 	}
-	const STRETCH_ABSOLUTE_BIAS = 40.0;
+	const STRETCH_ABSOLUTE_BIAS = 80.0;
 	let stretch_parameter = smoothstep(
 		STRETCH_THRESHOLDS.x,
 		STRETCH_THRESHOLDS.y,
@@ -309,28 +304,24 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 		mix(ndc_min, ndc_max, 0.5),
 		vec2<f32>(0.0,0.0),
 		ocean_camera,
-		WAVE_NEUTRAL_PLANE,
 	);
 
 	let cell_world_position = projectNDCToOceanSurfaceWithPivot(
 		ndc_space_coord,
 		vec2<f32>(0.0,0.0),
 		ocean_camera,
-		WAVE_NEUTRAL_PLANE,
 		center_position
 	);
 	let neighbor_world_position = projectNDCToOceanSurfaceWithPivot(
 		ndc_space_coord,
 		vec2<f32>(1.0) / f32(VERTEX_DIMENSION - 1u),
 		ocean_camera,
-		WAVE_NEUTRAL_PLANE,
 		center_position
 	);
 	let pixel_neighbor_world_position = projectNDCToOceanSurfaceWithPivot(
 		ndc_space_coord,
 		vec2<f32>(1.0) / u_settings.gbuffer_extent,
 		ocean_camera,
-		WAVE_NEUTRAL_PLANE,
 		center_position
 	);
 

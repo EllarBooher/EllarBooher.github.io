@@ -1,11 +1,11 @@
-//// INCLUDE types.inc.wgsl
-//// INCLUDE raycast.inc.wgsl
+#include types.inc.wgsl
+#include raycast.inc.wgsl
 
 @group(0) @binding(0) var transmittance_lut: texture_storage_2d<rgba32float, write>;
 
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
-//// INCLUDE atmosphere_common.inc.wgsl
+#include atmosphere_common.inc.wgsl
 
 // See 'atmosphere_common.inc.wgsl' for sources on what this method is based on.
 

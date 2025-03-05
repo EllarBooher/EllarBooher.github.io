@@ -1,5 +1,5 @@
-//// INCLUDE types.inc.wgsl
-//// INCLUDE raycast.inc.wgsl
+#include types.inc.wgsl
+#include raycast.inc.wgsl
 
 @group(0) @binding(0) var output_color: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(1) var lut_sampler: sampler;
@@ -16,11 +16,11 @@
 // vertex state NOT included
 // Render a quad and use this as the fragment stage
 
-//// INCLUDE atmosphere_common.inc.wgsl
-//// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE
+#include atmosphere_common.inc.wgsl
+#include atmosphere_raymarch.inc.wgsl MULTISCATTERING SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE
 
-//// INCLUDE tonemap.inc.wgsl
-//// INCLUDE pbr.inc.wgsl
+#include tonemap.inc.wgsl
+#include pbr.inc.wgsl
 
 fn sampleSkyViewLUT(
     atmosphere: ptr<function, Atmosphere>,

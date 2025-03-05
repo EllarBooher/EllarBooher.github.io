@@ -1,7 +1,7 @@
 // Displace a grid of vertices representing the ocean surface, then rasterize into the gbuffer with a graphics pass
 
-//// INCLUDE types.inc.wgsl
-//// INCLUDE raycast.inc.wgsl
+#include types.inc.wgsl
+#include raycast.inc.wgsl
 
 struct PlaneWave
 {

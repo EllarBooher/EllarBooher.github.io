@@ -1,5 +1,5 @@
 // Textures must have the same dimension
-//// INCLUDE types.inc.wgsl
+#include types.inc.wgsl
 
 const PI = 3.141592653589793;
 const CASCADE_CAPACITY = 4u;

@@ -1,6 +1,6 @@
 // Contains methods and overloads for raymarching the atmosphere
 
-//// FLAGS MULTISCATTERING ISOTROPIC_PHASE SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE HIGH_SAMPLE_COUNT SAMPLE_PATH_TRANSMITTANCE
+#flags MULTISCATTERING ISOTROPIC_PHASE SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE HIGH_SAMPLE_COUNT SAMPLE_PATH_TRANSMITTANCE
 
 /*
 Flags explanation:
@@ -109,9 +109,9 @@ fn computeLuminanceScatteringIntegral(
     light:  ptr<function, CelestialLight>,
     lut_sampler: sampler,
     transmittance_lut: texture_2d<f32>,
-//// IF MULTISCATTERING
+#ifdef MULTISCATTERING
     multiscatter_lut: texture_2d<f32>,
-//// ENDIF
+#endif
     origin: vec3<f32>,
     direction: vec3<f32>,
     include_ground: bool,
@@ -141,26 +141,26 @@ fn computeLuminanceScatteringIntegral(
 
     let origin_step = RaymarchStep(start_radius, start_mu, start_mu_light, nu);
 
-//// IF SAMPLE_PATH_TRANSMITTANCE
-//// ELSE
+#ifdef SAMPLE_PATH_TRANSMITTANCE
+#else
 	var transmittance_accumulated = vec3<f32>(1.0);
-//// ENDIF
+#endif
 
     // We estimate the integral in Equation (1) of Hillaire's paper.
 
     const ISOTROPIC_PHASE: f32 = 1.0 / (4.0 * PI);
 
-//// IF HIGH_SAMPLE_COUNT
+#ifdef HIGH_SAMPLE_COUNT
     const SAMPLE_COUNT = 256.0;
-//// ELSE
+#else
     const SAMPLE_COUNT = 64.0;
-//// ENDIF
+#endif
 
 	var t: f32 = 0.0;
 	var d_t: f32 = 0.0;
     for (var s = 0.0; s < SAMPLE_COUNT; s += 1.0)
     {
-//// IF SCATTERING_NONLINEAR_SAMPLE
+#ifdef SCATTERING_NONLINEAR_SAMPLE
 		{
 			// quadratic distribution
         	var t_begin = s / SAMPLE_COUNT;
@@ -170,14 +170,14 @@ fn computeLuminanceScatteringIntegral(
 			d_t = t_end - t_begin;
 			t = mix(t_begin, t_end, T_SUBSTEP_NONLINEAR);
 		}
-//// ELSE
+#else
 		{
 			// linear distribution
 			let t_new = sample_distance * (s + T_SUBSTEP_LINEAR) / SAMPLE_COUNT;
 			d_t = t_new - t;
 			t = t_new;
 		}
-//// ENDIF
+#endif
 
         let sample_step: RaymarchStep = stepRadiusMu(origin_step, t);
 
@@ -186,31 +186,31 @@ fn computeLuminanceScatteringIntegral(
 
         // Terms of Equation (3) we assume to not vary over the path segment
 
-//// IF SAMPLE_PATH_TRANSMITTANCE
+#ifdef SAMPLE_PATH_TRANSMITTANCE
         let transmittance_to_t_begin = sampleTransmittanceLUT_RayMarchStep(transmittance_lut, lut_sampler, atmosphere, origin_step, t);
         let transmittance_along_path = sampleTransmittanceLUT_Segment(transmittance_lut, lut_sampler, atmosphere, sample_step.radius, sample_step.mu, d_t, intersects_ground);
-//// ELSE
+#else
 	    let transmittance_to_t_begin = transmittance_accumulated;
 		let transmittance_along_path = exp(-extinction_sample.extinction * d_t);
 		transmittance_accumulated *= transmittance_along_path;
-//// ENDIF
+#endif
 
-//// IF ISOTROPIC_PHASE
+#ifdef ISOTROPIC_PHASE
         let phase_times_scattering = extinction_sample.scattering * ISOTROPIC_PHASE;
-//// ELSE
+#else
         // Ozone does not scatter light normally, so we arbitrarily use rayleigh's phase function in case ozone's scattering
         // coefficient is nonzero
         let phase_times_scattering: vec3<f32> =
             extinction_sample.scattering_rayleigh * phaseRayleigh(incident_cosine)
             + extinction_sample.scattering_mie * phaseMie(incident_cosine, 0.8)
             + extinction_sample.scattering_ozone * phaseRayleigh(incident_cosine);
-//// ENDIF
+#endif
 
-//// IF MULTISCATTERING
+#ifdef MULTISCATTERING
         let multiscatter = sampleMultiscatterLUT(multiscatter_lut, lut_sampler, atmosphere, sample_step.radius, sample_step.mu_light);
-//// ELSE
+#else
         let multiscatter = vec3<f32>(0.0);
-//// ENDIF
+#endif
 
         var occlusion_planet: f32 = 0.0;
         {
@@ -231,11 +231,11 @@ fn computeLuminanceScatteringIntegral(
         result.luminance +=
             (phase_times_scattering * shadowing + multiscatter * extinction_sample.scattering)
             * scattering_illuminance_integral * transmittance_to_t_begin
-//// IF LIGHT_ILLUMINANCE_IS_ONE
+#ifdef LIGHT_ILLUMINANCE_IS_ONE
             * 1.0;
-//// ELSE
+#else
             * (*light).color.rgb * (*light).strength;
-//// ENDIF
+#endif
         result.multiscattering_transfer += extinction_sample.scattering * scattering_illuminance_integral * transmittance_to_t_begin;
     }
 
@@ -252,14 +252,14 @@ fn computeLuminanceScatteringIntegral(
 
         result.luminance +=
             transmittance_to_surface * transmittance_to_sun * normal_dot_light * diffuse
-//// IF LIGHT_ILLUMINANCE_IS_ONE
+#ifdef LIGHT_ILLUMINANCE_IS_ONE
             * 1.0;
-//// ELSE
+#else
             * (*light).color.rgb * (*light).strength;
-//// ENDIF
+#endif
     }
 
-//// IF SAMPLE_PATH_TRANSMITTANCE
+#ifdef SAMPLE_PATH_TRANSMITTANCE
 	result.transmittance = sampleTransmittanceLUT_Segment(
 		transmittance_lut,
 		lut_sampler,
@@ -269,9 +269,9 @@ fn computeLuminanceScatteringIntegral(
 		sample_distance,
 		intersects_ground
 	);
-//// ELSE
+#else
 	result.transmittance = transmittance_accumulated;
-//// ENDIF
+#endif
 
     return result;
 }

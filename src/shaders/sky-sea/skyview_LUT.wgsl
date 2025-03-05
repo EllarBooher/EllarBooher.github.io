@@ -1,4 +1,4 @@
-//// INCLUDE types.inc.wgsl
+#include types.inc.wgsl
 
 @group(0) @binding(0) var skyview_lut: texture_storage_2d<rgba32float, write>;
 @group(0) @binding(1) var lut_sampler: sampler;
@@ -7,9 +7,9 @@
 
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
-//// INCLUDE atmosphere_common.inc.wgsl
-//// INCLUDE raycast.inc.wgsl
-//// INCLUDE atmosphere_raymarch.inc.wgsl MULTISCATTERING SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE
+#include atmosphere_common.inc.wgsl
+#include raycast.inc.wgsl
+#include atmosphere_raymarch.inc.wgsl MULTISCATTERING SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE
 
 // All units are Mm/megameters (10^6 meters) unless marked km/kilometers (10^3 meters)
 

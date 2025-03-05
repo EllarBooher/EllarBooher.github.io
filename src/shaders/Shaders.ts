@@ -18,14 +18,14 @@ interface ShaderInclude {
 	flags: string[];
 }
 
+const FLAGS_PREFIX = "#flags ";
 function gatherFlags(filename: string, source: string): string[] {
 	let flags: string[] = [];
-	const FLAGS_PREFIX = "//// FLAGS ";
 	let foundPrefix = false;
 	source.split("\n").forEach((line, index) => {
 		if (line.startsWith(FLAGS_PREFIX)) {
 			if (foundPrefix) {
-				console.error(`Duplicate FLAGS prefix found:
+				console.error(`Duplicate ${FLAGS_PREFIX.trim()} prefix found:
                     Original line:
                     (${filename}:${index})
                     ${line}`);
@@ -60,20 +60,20 @@ includeFilenames.forEach((filename) => {
 /*
 A conditional block looks like the following:
 
-//// IF [FLAG]
+#ifdef [FLAG]
 
-//// ELSE
+#else
 
-//// ENDIF
+#endif
 
 FLAG is a string, taken to be all remaining characters excluding the single space after IF
-FLAG is not any sort of conditional statement like "TEXTURE_MODE == 2", it should look more like "ENABLE_TEXTURE_MODE_TWO"
+FLAG is not any sort of expression like "TEXTURE_MODE == 2", it should look more like "ENABLE_TEXTURE_MODE_TWO"
 FLAG is a boolean flag set outside of the include file, enabled/disabled before parsing the include
 
-If FLAG is enabled, only the lines between IF and ELSE are kept, the others are discarded.
+If FLAG is enabled, only the lines between IFDEF and ELSE are kept, the others are discarded.
 If FLAG is not enabled, only the lines between ELSE and ENDIF are kept, the others are discard.
 
-IF and ENDIF may not be omitted.
+IFDEF and ENDIF may not be omitted.
 ELSE may be omitted.
 
 At this point, nesting is not supported.
@@ -84,14 +84,16 @@ function replaceConditionalBlocks(
 	source: ShaderInclude,
 	enabledConditions: string[] = []
 ) {
-	const IF_PREFIX = "//// IF ";
-	const ELSE_PREFIX = "//// ELSE";
-	const ENDIF_PREFIX = "//// ENDIF";
+	const IF_PREFIX = "#ifdef ";
+	const ELSE_PREFIX = "#else";
+	const ENDIF_PREFIX = "#endif";
 
 	const enabledFlags = new Set<string>(enabledConditions);
 
 	console.log(
-		`Including '${filename}' with flags '${enabledConditions.join(",")}'`
+		`Including '${filename}' with ${
+			enabledConditions.length
+		} flag(s) '${enabledConditions.join(",")}'`
 	);
 	console.log(`Possible flag(s) are '${source.flags.join(",")}'`);
 	const invalidFlags = enabledConditions.filter((flag) => {
@@ -142,6 +144,9 @@ function replaceConditionalBlocks(
 
 	const sourceOut = source.code
 		.split("\n")
+		.filter((line) => {
+			return !line.startsWith(FLAGS_PREFIX);
+		})
 		.filter((line, index) => {
 			const { prefix, remainder } = getPrefix(line);
 
@@ -213,7 +218,7 @@ function replaceConditionalBlocks(
 
 // This is utilized as a plugin in vite.config.ts, to preprocess each shader as a part of typescript compilation
 export function packShaders(id: string, source: string): string {
-	const INCLUDE_PREFIX = "//// INCLUDE ";
+	const INCLUDE_PREFIX = "#include ";
 
 	console.log(`Preprocessing shader ${id}`);
 

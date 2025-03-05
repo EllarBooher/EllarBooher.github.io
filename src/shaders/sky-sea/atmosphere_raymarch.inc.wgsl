@@ -88,6 +88,7 @@ fn raycastAtmosphere(atmosphere: ptr<function, Atmosphere>, origin: vec3<f32>, d
 struct ScatteringResult
 {
     luminance: vec3<f32>,
+	transmittance: vec3<f32>,
     multiscattering_transfer: vec3<f32>,
 }
 
@@ -120,10 +121,12 @@ fn computeLuminanceScatteringIntegral(
 {
     var result: ScatteringResult;
     result.luminance = vec3<f32>(0.0);
+	result.transmittance = vec3<f32>(1.0);
     result.multiscattering_transfer = vec3<f32>(0.0);
 
 	if(sample_distance <= 0.0)
 	{
+		result.luminance = vec3<f32>(1.0, 1.0, 0.0);
 		return result;
 	}
 
@@ -255,6 +258,20 @@ fn computeLuminanceScatteringIntegral(
             * (*light).color.rgb * (*light).strength;
 //// ENDIF
     }
+
+//// IF SAMPLE_PATH_TRANSMITTANCE
+	result.transmittance = sampleTransmittanceLUT_Segment(
+		transmittance_lut,
+		lut_sampler,
+		atmosphere,
+		origin_step.radius,
+		origin_step.mu,
+		sample_distance,
+		intersects_ground
+	);
+//// ELSE
+	result.transmittance = transmittance_accumulated;
+//// ENDIF
 
     return result;
 }

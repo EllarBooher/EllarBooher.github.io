@@ -8,7 +8,7 @@ export class FullscreenQuadUBOData {
 	vertex_scale: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
 	swap_ba_rg = false;
 	channel_mask: number = 1 + 2 + 4;
-	array_layer_u32 = 0;
+	depth_or_array_layer = 0;
 	mip_level_u32 = 0;
 }
 
@@ -27,7 +27,7 @@ export class FullscreenQuadUBO extends UBO {
 		new Float32Array(buffer).set(this.data.vertex_scale, 16 / 4);
 		view.setUint32(32, this.data.swap_ba_rg ? 1 : 0, true);
 		view.setUint32(36, this.data.channel_mask, true);
-		view.setUint32(40, this.data.array_layer_u32, true);
+		view.setFloat32(40, this.data.depth_or_array_layer, true);
 		view.setUint32(44, this.data.mip_level_u32, true);
 
 		return buffer;
@@ -38,10 +38,11 @@ export class FullscreenQuadPassResources {
 	// keep layout for resetting textures when resizing them
 	private group0Layout: GPUBindGroupLayout;
 	private group0LayoutArray: GPUBindGroupLayout;
+	private group0Layout3D: GPUBindGroupLayout;
 
 	private group0ByOutputTexture: Map<
 		RenderOutput,
-		{ array: boolean; bindGroup: GPUBindGroup }
+		{ dimension: GPUTextureViewDimension; bindGroup: GPUBindGroup }
 	>;
 	private group0Sampler: GPUSampler;
 
@@ -51,18 +52,40 @@ export class FullscreenQuadPassResources {
 
 	private group1: GPUBindGroup;
 	private pipeline: GPURenderPipeline;
-	private arrayPipeline: GPURenderPipeline;
+	private pipelineArray: GPURenderPipeline;
+	private pipeline3D: GPURenderPipeline;
 
 	setView(
 		device: GPUDevice,
 		id: RenderOutput,
 		view: GPUTextureView,
-		array: boolean
+		dimension: GPUTextureViewDimension
 	) {
+		let layout = this.group0Layout;
+		switch (dimension) {
+			case "2d": {
+				layout = this.group0Layout;
+				break;
+			}
+			case "2d-array": {
+				layout = this.group0LayoutArray;
+				break;
+			}
+			case "3d": {
+				layout = this.group0Layout3D;
+				break;
+			}
+			default: {
+				throw new RangeError(
+					`Unsupported texture dimension '${dimension}'`
+				);
+			}
+		}
+
 		this.group0ByOutputTexture.set(id, {
-			array: array,
+			dimension: dimension,
 			bindGroup: device.createBindGroup({
-				layout: array ? this.group0LayoutArray : this.group0Layout,
+				layout: layout,
 				entries: [
 					{
 						binding: 0,
@@ -125,10 +148,28 @@ export class FullscreenQuadPassResources {
 			],
 			label: "Fullscreen Quad Group 0 Array",
 		});
+		this.group0Layout3D = device.createBindGroupLayout({
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.FRAGMENT,
+					texture: {
+						viewDimension: "3d",
+						sampleType: "unfilterable-float",
+					},
+				},
+				{
+					binding: 1,
+					visibility: GPUShaderStage.FRAGMENT,
+					sampler: { type: "non-filtering" },
+				},
+			],
+			label: "Fullscreen Quad Group 0 3D",
+		});
 
 		this.group0ByOutputTexture = new Map<
 			RenderOutput,
-			{ array: boolean; bindGroup: GPUBindGroup }
+			{ dimension: GPUTextureViewDimension; bindGroup: GPUBindGroup }
 		>();
 
 		this.group0Sampler = device.createSampler({
@@ -184,9 +225,9 @@ export class FullscreenQuadPassResources {
 			layout: device.createPipelineLayout({
 				bindGroupLayouts: [this.group0Layout, group1Layout],
 			}),
-			label: "Fullscreen Quad",
+			label: "Fullscreen Quad 2D",
 		});
-		this.arrayPipeline = device.createRenderPipeline({
+		this.pipelineArray = device.createRenderPipeline({
 			vertex: {
 				module: shaderModule,
 				entryPoint: "vertexMain",
@@ -208,7 +249,31 @@ export class FullscreenQuadPassResources {
 			layout: device.createPipelineLayout({
 				bindGroupLayouts: [this.group0LayoutArray, group1Layout],
 			}),
-			label: "Fullscreen Quad",
+			label: "Fullscreen Quad 2D Array",
+		});
+		this.pipeline3D = device.createRenderPipeline({
+			vertex: {
+				module: shaderModule,
+				entryPoint: "vertexMain",
+			},
+			fragment: {
+				module: shaderModule,
+				entryPoint: "fragmentMain3D",
+				targets: [
+					{
+						format: outputFormat,
+					},
+				],
+			},
+			primitive: {
+				topology: "triangle-list",
+				cullMode: "none",
+				frontFace: "ccw",
+			},
+			layout: device.createPipelineLayout({
+				bindGroupLayouts: [this.group0Layout3D, group1Layout],
+			}),
+			label: "Fullscreen Quad 3D",
 		});
 	}
 
@@ -263,9 +328,25 @@ export class FullscreenQuadPassResources {
 		);
 		fullscreenPassEncoder.setBindGroup(1, this.group1);
 
-		fullscreenPassEncoder.setPipeline(
-			bindGroup0.array ? this.arrayPipeline : this.pipeline
-		);
+		switch (bindGroup0.dimension) {
+			case "2d": {
+				fullscreenPassEncoder.setPipeline(this.pipeline);
+				break;
+			}
+			case "2d-array": {
+				fullscreenPassEncoder.setPipeline(this.pipelineArray);
+				break;
+			}
+			case "3d": {
+				fullscreenPassEncoder.setPipeline(this.pipeline3D);
+				break;
+			}
+			default: {
+				throw new Error(
+					`Unsupported texture dimension '${bindGroup0.dimension}'`
+				);
+			}
+		}
 		fullscreenPassEncoder.setBindGroup(0, bindGroup0.bindGroup);
 
 		fullscreenPassEncoder.drawIndexed(6, 1, 0, 0, 0);

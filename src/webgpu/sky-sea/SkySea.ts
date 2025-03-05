@@ -15,10 +15,16 @@ import {
 	FullscreenQuadUBOData,
 	FullscreenQuadPassResources,
 } from "./FullscreenQuad.ts";
+import { AerialPerspectiveLUTPassResources } from "./AerialPerspectiveLUT.ts";
 
 const TRANSMITTANCE_LUT_EXTENT = { width: 2048, height: 1024 } as const;
 const MULTISCATTER_LUT_EXTENT = { width: 1024, height: 1024 } as const;
 const SKYVIEW_LUT_EXTENT = { width: 1024, height: 512 } as const;
+const AERIAL_PERSPECTIVE_LUT_EXTENT = {
+	width: 32,
+	height: 32,
+	depthOrArrayLayers: 32,
+} as const;
 
 class RenderOutputTransform {
 	flip = false;
@@ -43,13 +49,20 @@ const RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES: ({
 	id: RenderOutput;
 })[] = [
 	{ id: RenderOutput.Scene },
-	{ id: RenderOutput.TransmittanceLUT, flip: true },
+	{ id: RenderOutput.AtmosphereTransmittanceLUT, flip: true },
 	{
-		id: RenderOutput.MultiscatterLUT,
+		id: RenderOutput.AtmosphereMultiscatterLUT,
 		flip: true,
 		colorGain: { r: 20.0, g: 20.0, b: 20.0 },
 	},
-	{ id: RenderOutput.SkyviewLUT, colorGain: { r: 8.0, g: 8.0, b: 8.0 } },
+	{
+		id: RenderOutput.AtmosphereSkyviewLUT,
+		colorGain: { r: 8.0, g: 8.0, b: 8.0 },
+	},
+	{
+		id: RenderOutput.AtmosphereAerialPerspectiveLUT,
+		colorGain: { r: 8.0, g: 8.0, b: 8.0 },
+	},
 	{ id: RenderOutput.GBufferColor },
 	{ id: RenderOutput.GBufferNormal },
 	{ id: RenderOutput.FFTWaveSpectrumGaussianNoise },
@@ -120,6 +133,7 @@ class SkySeaApp implements RendererApp {
 	transmittanceLUTPassResources: TransmittanceLUTPassResources;
 	multiscatterLUTPassResources: MultiscatterLUTPassResources;
 	skyviewLUTPassResources: SkyViewLUTPassResources;
+	aerialPerspectiveLUTPassResources: AerialPerspectiveLUTPassResources;
 	fftWaveSpectrumResources: FFTWaveSpectrumResources;
 	waveSurfaceDisplacementPassResources: WaveSurfaceDisplacementPassResources;
 	atmosphereCameraPassResources: AtmosphereCameraPassResources;
@@ -212,9 +226,13 @@ class SkySeaApp implements RendererApp {
 				"Final Scene": RenderOutput.Scene,
 				"[GBuffer] Color": RenderOutput.GBufferColor,
 				"[GBuffer] Normal": RenderOutput.GBufferNormal,
-				"[Atmosphere] Transmittance LUT": RenderOutput.TransmittanceLUT,
-				"[Atmosphere] Multiscatter LUT": RenderOutput.MultiscatterLUT,
-				"[Atmosphere] Skyview LUT": RenderOutput.SkyviewLUT,
+				"[Atmosphere] Transmittance LUT":
+					RenderOutput.AtmosphereTransmittanceLUT,
+				"[Atmosphere] Multiscatter LUT":
+					RenderOutput.AtmosphereMultiscatterLUT,
+				"[Atmosphere] Skyview LUT": RenderOutput.AtmosphereSkyviewLUT,
+				"[Atmosphere] Aerial Perspective LUT":
+					RenderOutput.AtmosphereAerialPerspectiveLUT,
 				"[FFT Waves] Gaussian Noise":
 					RenderOutput.FFTWaveSpectrumGaussianNoise,
 				"[FFT Waves] Initial Amplitude":
@@ -772,6 +790,16 @@ class SkySeaApp implements RendererApp {
 			this.globalUBO
 		);
 
+		this.aerialPerspectiveLUTPassResources =
+			new AerialPerspectiveLUTPassResources(
+				this.device,
+				AERIAL_PERSPECTIVE_LUT_EXTENT,
+				this.transmittanceLUTPassResources.view,
+				this.multiscatterLUTPassResources.view,
+				this.float32Filterable,
+				this.globalUBO
+			);
+
 		this.fftWaveSpectrumResources = new FFTWaveSpectrumResources(
 			this.device,
 			this.globalUBO
@@ -811,20 +839,26 @@ class SkySeaApp implements RendererApp {
 				),
 			],
 			[
-				RenderOutput.TransmittanceLUT,
+				RenderOutput.AtmosphereTransmittanceLUT,
 				new RenderOutputTexture(
 					this.transmittanceLUTPassResources.texture
 				),
 			],
 			[
-				RenderOutput.MultiscatterLUT,
+				RenderOutput.AtmosphereMultiscatterLUT,
 				new RenderOutputTexture(
 					this.multiscatterLUTPassResources.texture
 				),
 			],
 			[
-				RenderOutput.SkyviewLUT,
+				RenderOutput.AtmosphereSkyviewLUT,
 				new RenderOutputTexture(this.skyviewLUTPassResources.texture),
+			],
+			[
+				RenderOutput.AtmosphereAerialPerspectiveLUT,
+				new RenderOutputTexture(
+					this.aerialPerspectiveLUTPassResources.texture
+				),
 			],
 			[
 				RenderOutput.GBufferColor,
@@ -872,7 +906,7 @@ class SkySeaApp implements RendererApp {
 				device,
 				id,
 				resource.view,
-				resource.depthOrArrayLayerCount > 1
+				resource.viewDimension
 			);
 		}
 
@@ -1184,34 +1218,70 @@ class SkySeaApp implements RendererApp {
 			FrametimeCategory.SkyviewLUT,
 			timestampQueryIndex
 		);
-		const skyviewLUTPassEncoder = commandEncoder.beginComputePass({
-			timestampWrites:
-				this.frametimeQuery !== undefined
-					? {
-							querySet: this.frametimeQuery.querySet,
-							beginningOfPassWriteIndex: timestampQueryIndex++,
-							endOfPassWriteIndex: timestampQueryIndex++,
-					  }
-					: undefined,
-			label: "Skyview LUT",
-		});
-		skyviewLUTPassEncoder.setPipeline(
-			this.skyviewLUTPassResources.pipeline
-		);
-		skyviewLUTPassEncoder.setBindGroup(
-			0,
-			this.skyviewLUTPassResources.group0
-		);
-		skyviewLUTPassEncoder.setBindGroup(
-			1,
-			this.skyviewLUTPassResources.group1
-		);
-		skyviewLUTPassEncoder.dispatchWorkgroups(
-			Math.ceil(SKYVIEW_LUT_EXTENT.width / 16),
-			// Trim lower half of skyview lut to save roughly half of the work. We render the ocean over the entirety and are at a lower altitude, so our use case is a bit specific
-			Math.ceil(SKYVIEW_LUT_EXTENT.height / (16 * 1.9))
-		);
-		skyviewLUTPassEncoder.end();
+		{
+			const skyviewLUTPassEncoder = commandEncoder.beginComputePass({
+				timestampWrites:
+					this.frametimeQuery !== undefined
+						? {
+								querySet: this.frametimeQuery.querySet,
+								beginningOfPassWriteIndex:
+									timestampQueryIndex++,
+								endOfPassWriteIndex: timestampQueryIndex++,
+						  }
+						: undefined,
+				label: "Skyview LUT",
+			});
+			skyviewLUTPassEncoder.setPipeline(
+				this.skyviewLUTPassResources.pipeline
+			);
+			skyviewLUTPassEncoder.setBindGroup(
+				0,
+				this.skyviewLUTPassResources.group0
+			);
+			skyviewLUTPassEncoder.setBindGroup(
+				1,
+				this.skyviewLUTPassResources.group1
+			);
+			skyviewLUTPassEncoder.dispatchWorkgroups(
+				Math.ceil(SKYVIEW_LUT_EXTENT.width / 16),
+				// Trim lower half of skyview lut to save roughly half of the work. We render the ocean over the entirety and are at a lower altitude, so our use case is a bit specific
+				Math.ceil(SKYVIEW_LUT_EXTENT.height / (16 * 1.9))
+			);
+			skyviewLUTPassEncoder.end();
+		}
+		{
+			const aerialPerspectiveLUTPassEncoder =
+				commandEncoder.beginComputePass({
+					timestampWrites: /*
+					this.frametimeQuery !== undefined
+						? {
+								querySet: this.frametimeQuery.querySet,
+								beginningOfPassWriteIndex:
+									timestampQueryIndex++,
+								endOfPassWriteIndex: timestampQueryIndex++,
+						  }
+						: */ undefined,
+					label: "Aerial Perspective LUT",
+				});
+			aerialPerspectiveLUTPassEncoder.setPipeline(
+				this.aerialPerspectiveLUTPassResources.pipeline
+			);
+			aerialPerspectiveLUTPassEncoder.setBindGroup(
+				0,
+				this.aerialPerspectiveLUTPassResources.group0
+			);
+			aerialPerspectiveLUTPassEncoder.setBindGroup(
+				1,
+				this.aerialPerspectiveLUTPassResources.group1
+			);
+			aerialPerspectiveLUTPassEncoder.dispatchWorkgroups(
+				Math.ceil(AERIAL_PERSPECTIVE_LUT_EXTENT.width / 16),
+				// Trim lower half of skyview lut to save roughly half of the work. We render the ocean over the entirety and are at a lower altitude, so our use case is a bit specific
+				Math.ceil(AERIAL_PERSPECTIVE_LUT_EXTENT.height / 16),
+				Math.ceil(AERIAL_PERSPECTIVE_LUT_EXTENT.depthOrArrayLayers / 1)
+			);
+			aerialPerspectiveLUTPassEncoder.end();
+		}
 
 		timestampIndexMapping.set(
 			FrametimeCategory.AtmosphereCamera,
@@ -1267,9 +1337,7 @@ class SkySeaApp implements RendererApp {
 				1.0
 			);
 			uboData.mip_level_u32 = Math.round(renderOutputTransform.mipLevel);
-			uboData.array_layer_u32 = Math.round(
-				renderOutputTransform.arrayLayer
-			);
+			uboData.depth_or_array_layer = renderOutputTransform.arrayLayer;
 			uboData.channel_mask =
 				(renderOutputTransform.channelMasks.r ? 1 : 0) +
 				(renderOutputTransform.channelMasks.g ? 2 : 0) +
@@ -1476,7 +1544,7 @@ class SkySeaApp implements RendererApp {
 				this.device,
 				key,
 				value.view,
-				value.depthOrArrayLayerCount > 1
+				value.viewDimension
 			);
 		});
 	}

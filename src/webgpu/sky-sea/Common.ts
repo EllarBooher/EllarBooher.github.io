@@ -4,9 +4,10 @@ export class Extent2D {
 }
 
 export enum RenderOutput {
-	SkyviewLUT,
-	TransmittanceLUT,
-	MultiscatterLUT,
+	AtmosphereSkyviewLUT,
+	AtmosphereTransmittanceLUT,
+	AtmosphereMultiscatterLUT,
+	AtmosphereAerialPerspectiveLUT,
 	Scene,
 	GBufferColor,
 	GBufferNormal,
@@ -22,6 +23,8 @@ export enum RenderOutput {
 export class RenderOutputTexture {
 	private texture: GPUTexture;
 	readonly view: GPUTextureView;
+	readonly viewDimension: GPUTextureViewDimension;
+
 	get mipLevelCount() {
 		return this.texture.mipLevelCount;
 	}
@@ -32,10 +35,22 @@ export class RenderOutputTexture {
 	constructor(texture: GPUTexture) {
 		this.texture = texture;
 
+		let arrayLayerCount = 1;
+		let dimension: GPUTextureViewDimension = this.texture.dimension;
+		if (
+			this.texture.dimension == "2d" &&
+			this.texture.depthOrArrayLayers > 1
+		) {
+			arrayLayerCount = this.texture.depthOrArrayLayers;
+			dimension = "2d-array";
+		}
+
+		this.viewDimension = dimension;
+
 		this.view = texture.createView({
 			label: `Render Output View for '${texture.label}'`,
-			dimension: this.depthOrArrayLayerCount > 1 ? "2d-array" : "2d",
-			arrayLayerCount: this.depthOrArrayLayerCount,
+			dimension: this.viewDimension,
+			arrayLayerCount: arrayLayerCount,
 			baseArrayLayer: 0,
 		});
 	}

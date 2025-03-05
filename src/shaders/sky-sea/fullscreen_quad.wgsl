@@ -2,6 +2,7 @@
 
 @group(0) @binding(0) var b_texture: texture_2d<f32>;
 @group(0) @binding(0) var b_texture_array: texture_2d_array<f32>;
+@group(0) @binding(0) var b_texture_3d: texture_3d<f32>;
 @group(0) @binding(1) var b_sampler: sampler;
 
 struct FullscreenQuadUBO
@@ -10,7 +11,7 @@ struct FullscreenQuadUBO
     vertex_scale: vec4<f32>,
 	swap_ba_rg: u32,
 	channel_mask: u32,
-	array_layer: u32,
+	depth_or_array_layer: f32,
 	mip_level: u32,
 }
 
@@ -89,7 +90,20 @@ fn fragmentMainArray(frag_interpolated: VertexOut) -> FragmentOut
 			b_texture_array,
 			b_sampler,
 			frag_interpolated.uv,
-			u_fullscreen_quad.array_layer,
+			u32(u_fullscreen_quad.depth_or_array_layer),
+			f32(u_fullscreen_quad.mip_level)
+		)
+	);
+}
+
+@fragment
+fn fragmentMain3D(frag_interpolated: VertexOut) -> FragmentOut
+{
+	return doFragment(
+		textureSampleLevel(
+			b_texture_3d,
+			b_sampler,
+			vec3<f32>(frag_interpolated.uv, u_fullscreen_quad.depth_or_array_layer),
 			f32(u_fullscreen_quad.mip_level)
 		)
 	);

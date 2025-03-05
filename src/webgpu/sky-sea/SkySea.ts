@@ -2,7 +2,12 @@ import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { RendererApp, RendererAppConstructor } from "../RendererApp.ts";
 import { mat4, vec2, vec3, vec4 } from "wgpu-matrix";
 import { GlobalUBO } from "./UBO.ts";
-import { Extent2D, RenderOutput, RenderOutputTexture } from "./Common.ts";
+import {
+	Extent2D,
+	RenderOutput,
+	RenderOutputTexture,
+	TimestampQueryInterval,
+} from "./Common.ts";
 
 import { GBuffer } from "./GBuffer.ts";
 import { TransmittanceLUTPassResources } from "./TransmittanceLUT.ts";
@@ -88,14 +93,175 @@ const RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES: ({
 
 const RENDER_SCALES = [0.25, 0.3333, 0.5, 0.75, 1.0, 1.5, 2.0, 4.0];
 
-enum FrametimeCategory {
-	DrawToDraw,
-	SkyviewLUT,
-	AerialPerspectiveLUT,
-	FFTWaves,
-	OceanSurface,
-	AtmosphereCamera,
-	FullscreenQuad,
+const QueryCategories = [
+	"SkyviewLUT",
+	"AerialPerspectiveLUT",
+	"FFTWaves",
+	"OceanSurface",
+	"AtmosphereCamera",
+	"FullscreenQuad",
+] as const;
+const FrametimeCategories = ["DrawToDraw", ...QueryCategories] as const;
+type FrametimeCategory = (typeof FrametimeCategories)[number];
+
+class PerformanceTracker {
+	// Defined only when timestamp querying is supported
+	private readonly queryBuffers:
+		| {
+				querySet: GPUQuerySet;
+				// We cannot read directly from the buffer that WebGPU writes the timestamps to
+				// So we use a copy operation, then an async mapping.
+				// Since we cannot map until unmapping at the end of this async operation, we set a flag to avoid that until then.
+				writeBuffer: GPUBuffer;
+				readBuffer: GPUBuffer;
+				mappingLock: boolean;
+		  }
+		| undefined;
+	private readonly frametimeAverages: Map<
+		FrametimeCategory,
+		ArithmeticSumArray
+	>;
+
+	private readonly timestampIndexMapping = new Map<
+		FrametimeCategory,
+		number
+	>();
+	private timestampQueryIndex = 0;
+
+	pushTimestampQueryInterval(
+		category: FrametimeCategory
+	): TimestampQueryInterval | undefined {
+		if (this.queryBuffers === undefined) {
+			return undefined;
+		}
+		this.timestampIndexMapping.set(category, this.timestampQueryIndex);
+
+		const beginWriteIndex = this.timestampQueryIndex;
+		const endWriteIndex = beginWriteIndex + 1;
+
+		this.timestampQueryIndex += 2;
+
+		return {
+			querySet: this.queryBuffers.querySet,
+			beginWriteIndex: beginWriteIndex,
+			endWriteIndex: endWriteIndex,
+		};
+	}
+
+	startFrame(deltaTimeMilliseconds: number) {
+		this.frametimeAverages.get("DrawToDraw")?.push(deltaTimeMilliseconds);
+		this.timestampQueryIndex = 0;
+		this.timestampIndexMapping.clear();
+	}
+
+	recordCopyBuffers(commandEncoder: GPUCommandEncoder) {
+		if (
+			this.queryBuffers == undefined ||
+			this.queryBuffers.readBuffer.mapState !== "unmapped"
+		) {
+			return;
+		}
+
+		commandEncoder.resolveQuerySet(
+			this.queryBuffers.querySet,
+			0,
+			this.timestampQueryIndex,
+			this.queryBuffers.writeBuffer,
+			0
+		);
+		commandEncoder.copyBufferToBuffer(
+			this.queryBuffers.writeBuffer,
+			0,
+			this.queryBuffers.readBuffer,
+			0,
+			this.queryBuffers.readBuffer.size
+		);
+	}
+
+	asyncUpdateFrametimeAverages() {
+		if (
+			this.queryBuffers == undefined ||
+			this.queryBuffers.readBuffer.mapState !== "unmapped"
+		) {
+			return;
+		}
+		const buffer = this.queryBuffers.readBuffer;
+
+		/*
+		 * It's okay to throw away this promise, since we just want to update
+		 * performance whenever the buffer is available. We could rotate them,
+		 * but that would be extra work and sampling whatever frames we can
+		 * is okay.
+		 */
+		buffer
+			.mapAsync(GPUMapMode.READ, 0, buffer.size)
+			.then(() => {
+				const timestampsView = new BigInt64Array(
+					buffer.getMappedRange(0, buffer.size)
+				);
+				this.timestampIndexMapping.forEach((value, key) => {
+					const MS_PER_NS = 1000000;
+					const timeMilliseconds =
+						Number(
+							timestampsView.at(value + 1)! -
+								timestampsView.at(value)!
+						) / MS_PER_NS;
+					this.frametimeAverages.get(key)?.push(timeMilliseconds);
+				});
+				buffer.unmap();
+			})
+			.catch((reason) => {
+				console.error(
+					`Failed while retrieving frametime values from GPU:`
+				);
+				console.error(reason);
+			});
+	}
+
+	averageByCategory(category: FrametimeCategory): number | undefined {
+		return this.frametimeAverages.get(category)?.average;
+	}
+
+	constructor(device: GPUDevice) {
+		const FRAMETIME_SAMPLE_SIZE = 400;
+
+		this.frametimeAverages = new Map([
+			["DrawToDraw", new ArithmeticSumArray(FRAMETIME_SAMPLE_SIZE)],
+		]);
+
+		if (!device.features.has("timestamp-query")) {
+			console.warn(
+				"WebGPU feature 'timestamp-query' is not supported. Continuing, but without performance information about specific stages."
+			);
+			return;
+		}
+
+		// Space for start & end for each step
+		// webgpu timestamps are 64 bit nanoseconds
+		const BYTES_PER_TIMESTAMP_SAMPLE = 8;
+		const numberOfTimestamps = 2 * QueryCategories.length;
+		this.queryBuffers = {
+			mappingLock: false,
+			querySet: device.createQuerySet({
+				type: "timestamp",
+				count: numberOfTimestamps,
+			}),
+			writeBuffer: device.createBuffer({
+				size: BYTES_PER_TIMESTAMP_SAMPLE * numberOfTimestamps,
+				usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.QUERY_RESOLVE,
+			}),
+			readBuffer: device.createBuffer({
+				size: BYTES_PER_TIMESTAMP_SAMPLE * numberOfTimestamps,
+				usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+			}),
+		};
+		QueryCategories.forEach((category) => {
+			this.frametimeAverages.set(
+				category,
+				new ArithmeticSumArray(FRAMETIME_SAMPLE_SIZE)
+			);
+		});
+	}
 }
 
 class ArithmeticSumArray {
@@ -201,19 +367,7 @@ class SkySeaApp implements RendererApp {
 	presentFormat: GPUTextureFormat;
 	quit = false;
 
-	// undefined when 'timestamp-query' feature is disabled
-	frametimeQuery:
-		| {
-				querySet: GPUQuerySet;
-				// We cannot read directly from the buffer that WebGPU writes the timestamps to
-				// So we use a copy operation, then an async mapping.
-				// Since we cannot map until unmapping at the end of this async operation, we set a flag to avoid that until then.
-				writeBuffer: GPUBuffer;
-				readBuffer: GPUBuffer;
-				mappingLock: boolean;
-		  }
-		| undefined;
-	frametimeAverages: Map<FrametimeCategory, ArithmeticSumArray>;
+	performance: PerformanceTracker;
 
 	startTime: number;
 	dummyFrameCounter: number;
@@ -536,12 +690,12 @@ class SkySeaApp implements RendererApp {
 		}
 
 		const performanceFolder = gui.addFolder("Performance").close();
-		this.frametimeAverages.forEach((_value, category) => {
+		FrametimeCategories.forEach((category) => {
 			this.uiReadonly.frametimeControllers.set(
 				category,
 				performanceFolder
 					.add({ value: 0 }, "value")
-					.name(`${FrametimeCategory[category]} (ms)`)
+					.name(`${category} (ms)`)
 					.decimals(6)
 					.disable()
 			);
@@ -713,52 +867,7 @@ class SkySeaApp implements RendererApp {
 				newSettings.colorGain.b;
 		}
 
-		this.frametimeAverages = new Map();
-		if (device.features.has("timestamp-query")) {
-			// Space for start & end for each step
-			// webgpu timestamps are 64 bit nanoseconds
-			const BYTES_PER_TIMESTAMP_SAMPLE = 8;
-			const numberOfTimestamps =
-				2 *
-				Object.keys(FrametimeCategory)
-					.map((v) => Number(v))
-					.filter(isNaN).length;
-			this.frametimeQuery = {
-				mappingLock: false,
-				querySet: device.createQuerySet({
-					type: "timestamp",
-					count: numberOfTimestamps,
-				}),
-				writeBuffer: device.createBuffer({
-					size: BYTES_PER_TIMESTAMP_SAMPLE * numberOfTimestamps,
-					usage:
-						GPUBufferUsage.COPY_SRC | GPUBufferUsage.QUERY_RESOLVE,
-				}),
-				readBuffer: device.createBuffer({
-					size: BYTES_PER_TIMESTAMP_SAMPLE * numberOfTimestamps,
-					usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-				}),
-			};
-			Object.keys(FrametimeCategory)
-				.map((v) => Number(v))
-				.filter((v) => !isNaN(v))
-				.forEach((index) => {
-					const category = index as FrametimeCategory;
-					this.frametimeAverages.set(
-						category,
-						new ArithmeticSumArray(400)
-					);
-					Object.assign(this.uiReadonly, String(category), 0.0);
-				});
-		} else {
-			console.warn(
-				"WebGPU feature 'timestamp-query' is not supported. Continuing, but without performance information about specific stages."
-			);
-			this.frametimeAverages.set(
-				FrametimeCategory.DrawToDraw,
-				new ArithmeticSumArray(400)
-			);
-		}
+		this.performance = new PerformanceTracker(this.device);
 
 		this.dummyFrameCounter = 10.0;
 		this.probationFrameCounter = 100.0;
@@ -959,22 +1068,22 @@ class SkySeaApp implements RendererApp {
 		vec3.scale(sunDirection, -1.0, this.globalUBO.data.light.forward);
 	}
 
-	updateFPSValues(deltaTimeMilliseconds: number) {
-		if (deltaTimeMilliseconds > 0.01) {
-			this.frametimeAverages
-				.get(FrametimeCategory.DrawToDraw)
-				?.push(deltaTimeMilliseconds);
-			this.uiReadonly.averageFPS =
-				1000.0 /
-				(this.frametimeAverages.get(FrametimeCategory.DrawToDraw)
-					?.average ?? 1000.0);
+	updatePerformanceUI() {
+		this.uiReadonly.averageFPS =
+			1000.0 /
+			(this.performance.averageByCategory("DrawToDraw") ?? 1000.0);
+
+		FrametimeCategories.forEach((category) => {
+			const averageMilliseconds =
+				this.performance.averageByCategory(category);
+			if (averageMilliseconds === undefined) {
+				return;
+			}
+
 			this.uiReadonly.frametimeControllers
-				.get(FrametimeCategory.DrawToDraw)
-				?.setValue(
-					this.frametimeAverages.get(FrametimeCategory.DrawToDraw)
-						?.average ?? -1.0
-				);
-		}
+				.get(category)
+				?.setValue(averageMilliseconds);
+		});
 	}
 
 	updateCameras(aspectRatio: number) {
@@ -1101,7 +1210,8 @@ class SkySeaApp implements RendererApp {
 		}
 		const presentView = presentTexture.createView();
 
-		this.updateFPSValues(deltaTimeMilliseconds);
+		this.performance.startFrame(deltaTimeMilliseconds);
+		this.updatePerformanceUI();
 
 		// Run some dummy frames to estimate monitor refresh and guess the best render scale to hit it
 		if (this.probationFrameCounter > 49.0) {
@@ -1145,41 +1255,17 @@ class SkySeaApp implements RendererApp {
 			label: "Main",
 		});
 
-		const timestampIndexMapping = new Map<FrametimeCategory, number>();
-		let timestampQueryIndex = 0;
-
-		timestampIndexMapping.set(
-			FrametimeCategory.FFTWaves,
-			timestampQueryIndex
-		);
 		this.fftWaveSpectrumResources.record(
 			this.device,
 			commandEncoder,
 			this.settings.fourierWavesSettings,
-			this.frametimeQuery !== undefined
-				? {
-						querySet: this.frametimeQuery.querySet,
-						beginWriteIndex: timestampQueryIndex++,
-						endWriteIndex: timestampQueryIndex++,
-				  }
-				: undefined
-		);
-
-		timestampIndexMapping.set(
-			FrametimeCategory.OceanSurface,
-			timestampQueryIndex
+			this.performance.pushTimestampQueryInterval("FFTWaves")
 		);
 
 		this.waveSurfaceDisplacementPassResources.record(
 			this.device,
 			commandEncoder,
-			this.frametimeQuery !== undefined
-				? {
-						querySet: this.frametimeQuery.querySet,
-						beginWriteIndex: timestampQueryIndex++,
-						endWriteIndex: timestampQueryIndex++,
-				  }
-				: undefined,
+			this.performance.pushTimestampQueryInterval("OceanSurface"),
 			this.fftWaveSpectrumResources.turbulenceMapIndex,
 			{
 				gerstner: this.settings.oceanSurfaceSettings.gerstner,
@@ -1200,49 +1286,17 @@ class SkySeaApp implements RendererApp {
 			}
 		);
 
-		timestampIndexMapping.set(
-			FrametimeCategory.SkyviewLUT,
-			timestampQueryIndex
-		);
 		this.skyviewLUTPassResources.record(
 			commandEncoder,
-			this.frametimeQuery !== undefined
-				? {
-						querySet: this.frametimeQuery.querySet,
-						beginWriteIndex: timestampQueryIndex++,
-						endWriteIndex: timestampQueryIndex++,
-				  }
-				: undefined
-		);
-
-		timestampIndexMapping.set(
-			FrametimeCategory.AerialPerspectiveLUT,
-			timestampQueryIndex
+			this.performance.pushTimestampQueryInterval("SkyviewLUT")
 		);
 		this.aerialPerspectiveLUTPassResources.record(
 			commandEncoder,
-			this.frametimeQuery !== undefined
-				? {
-						querySet: this.frametimeQuery.querySet,
-						beginWriteIndex: timestampQueryIndex++,
-						endWriteIndex: timestampQueryIndex++,
-				  }
-				: undefined
-		);
-
-		timestampIndexMapping.set(
-			FrametimeCategory.AtmosphereCamera,
-			timestampQueryIndex
+			this.performance.pushTimestampQueryInterval("AerialPerspectiveLUT")
 		);
 		this.atmosphereCameraPassResources.record(
 			commandEncoder,
-			this.frametimeQuery !== undefined
-				? {
-						querySet: this.frametimeQuery.querySet,
-						beginWriteIndex: timestampQueryIndex++,
-						endWriteIndex: timestampQueryIndex++,
-				  }
-				: undefined,
+			this.performance.pushTimestampQueryInterval("AtmosphereCamera"),
 			this.gbuffer
 		);
 
@@ -1270,92 +1324,21 @@ class SkySeaApp implements RendererApp {
 				(renderOutputTransform.channelMasks.b ? 4 : 0);
 			uboData.swap_ba_rg = renderOutputTransform.swapBARG;
 
-			timestampIndexMapping.set(
-				FrametimeCategory.FullscreenQuad,
-				timestampQueryIndex
-			);
 			this.fullscreenQuadPassResources.recordPresent(
 				this.device,
 				commandEncoder,
 				presentView,
 				this.settings.outputTexture,
 				uboData,
-				this.frametimeQuery !== undefined
-					? {
-							querySet: this.frametimeQuery.querySet,
-							beginWriteIndex: timestampQueryIndex++,
-							endWriteIndex: timestampQueryIndex++,
-					  }
-					: undefined
+				this.performance.pushTimestampQueryInterval("FullscreenQuad")
 			);
 		}
 
-		if (
-			this.frametimeQuery != undefined &&
-			!this.frametimeQuery.mappingLock
-		) {
-			commandEncoder.resolveQuerySet(
-				this.frametimeQuery.querySet,
-				0,
-				2 * timestampIndexMapping.size,
-				this.frametimeQuery.writeBuffer,
-				0
-			);
-			commandEncoder.copyBufferToBuffer(
-				this.frametimeQuery.writeBuffer,
-				0,
-				this.frametimeQuery.readBuffer,
-				0,
-				this.frametimeQuery.readBuffer.size
-			);
-		}
+		this.performance.recordCopyBuffers(commandEncoder);
 
 		this.device.queue.submit([commandEncoder.finish()]);
 
-		if (
-			this.frametimeQuery !== undefined &&
-			!this.frametimeQuery.mappingLock
-		) {
-			const query = this.frametimeQuery;
-
-			this.frametimeQuery.mappingLock = true;
-			this.frametimeQuery.readBuffer
-				.mapAsync(
-					GPUMapMode.READ,
-					0,
-					this.frametimeQuery.readBuffer.size
-				)
-				.then(() => {
-					const timestampsView = new BigInt64Array(
-						query.readBuffer.getMappedRange(
-							0,
-							query.readBuffer.size
-						)
-					);
-					timestampIndexMapping.forEach((value, key) => {
-						const MS_PER_NS = 1000000;
-						const timeMilliseconds =
-							Number(
-								timestampsView.at(value + 1)! -
-									timestampsView.at(value)!
-							) / MS_PER_NS;
-						this.frametimeAverages.get(key)?.push(timeMilliseconds);
-						this.uiReadonly.frametimeControllers
-							.get(key)
-							?.setValue(
-								this.frametimeAverages.get(key)?.average ?? -1.0
-							);
-					});
-					query.readBuffer.unmap();
-					query.mappingLock = false;
-				})
-				.catch((reason) => {
-					console.error(
-						`Failed while retrieving frametime values from GPU:`
-					);
-					console.error(reason);
-				});
-		}
+		this.performance.asyncUpdateFrametimeAverages();
 	}
 
 	handleResize(newWidth: number, newHeight: number) {

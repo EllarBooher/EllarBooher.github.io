@@ -70,10 +70,10 @@ class WaveSurfaceDisplacementUBO extends UBO {
 		float32.set(this.data.padding0, 8);
 		view.setUint32(44, this.data.procedural_wave_count, true);
 
-		let vec3Zeroed = vec3.create(0.0, 0.0, 0.0);
+		const vec3Zeroed = vec3.create(0.0, 0.0, 0.0);
 
 		for (let i = 0; i < CASCADE_CAPACITY; i++) {
-			let f32Offset = 12 + i * 4;
+			const f32Offset = 12 + i * 4;
 			float32.set(vec3Zeroed, f32Offset);
 			view.setFloat32(
 				(f32Offset + 3) * 4,

@@ -9,15 +9,6 @@
 // "Precomputed Atmospheric Scattering: a New Implementation" by Eric Bruneton (2017)
 // https://ebruneton.github.io/precomputed_atmospheric_scattering
 
-const TRANSMITTANCE_LUT_WIDTH = 2048u;
-const TRANSMITTANCE_LUT_HEIGHT = 1024u;
-
-const MULTISCATTER_LUT_WIDTH = 1024u;
-const MULTISCATTER_LUT_HEIGHT = 1024u;
-
-const SKYVIEW_LUT_WIDTH = 1024u;
-const SKYVIEW_LUT_HEIGHT = 512u;
-
 const AERIAL_PERSPECTIVE_MM_PER_SLICE = 0.001;
 
 const ISOTROPIC_PHASE = 1.0 / (4.0 * PI);
@@ -44,7 +35,8 @@ fn unitRangeFromTextureCoord(coord: f32 , length: u32) -> f32
 fn transmittanceLUT_RMu_to_UV(
     atmosphere: ptr<function,Atmosphere>,
     radius: f32,
-    mu: f32
+    mu: f32,
+	dimensions: vec2<u32>,
 ) -> vec2<f32>
 {
     let atmosphere_radius_Mm_squared: f32 = (*atmosphere).atmosphere_radius_Mm * (*atmosphere).atmosphere_radius_Mm;
@@ -71,8 +63,8 @@ fn transmittanceLUT_RMu_to_UV(
     let x_radius: f32 = rho / h;
 
     return vec2<f32>(
-        textureCoordFromUnitRange(x_mu, TRANSMITTANCE_LUT_WIDTH),
-        textureCoordFromUnitRange(x_radius, TRANSMITTANCE_LUT_HEIGHT)
+        textureCoordFromUnitRange(x_mu, dimensions.x),
+        textureCoordFromUnitRange(x_radius, dimensions.y)
     );
 }
 
@@ -80,11 +72,12 @@ fn transmittanceLUT_RMu_to_UV(
 // Allocates more texture space to interesting rays near the horizon.
 fn transmittanceLUT_UV_to_RMu(
     atmosphere: ptr<function,Atmosphere>,
-    uv: vec2<f32>
+    uv: vec2<f32>,
+	dimensions: vec2<u32>,
 ) -> vec2<f32>
 {
-    let x_mu : f32 = unitRangeFromTextureCoord(uv.x, TRANSMITTANCE_LUT_WIDTH);
-    let x_radius : f32 = unitRangeFromTextureCoord(uv.y, TRANSMITTANCE_LUT_HEIGHT);
+    let x_mu : f32 = unitRangeFromTextureCoord(uv.x, dimensions.x);
+    let x_radius : f32 = unitRangeFromTextureCoord(uv.y, dimensions.y);
 
     let atmosphere_radius_Mm_squared : f32 = (*atmosphere).atmosphere_radius_Mm * (*atmosphere).atmosphere_radius_Mm;
     let planet_radius_Mm_squared : f32 = (*atmosphere).planet_radius_Mm * (*atmosphere).planet_radius_Mm;
@@ -123,7 +116,8 @@ fn transmittanceLUT_UV_to_RMu(
 fn multiscatterLUT_RMu_to_UV(
     atmosphere: ptr<function,Atmosphere>,
     radius: f32,
-    mu_light: f32
+    mu_light: f32,
+	dimensions: vec2<u32>,
 ) -> vec2<f32>
 {
     let u_unit: f32 = 0.5 + 0.5 * mu_light;
@@ -134,18 +128,19 @@ fn multiscatterLUT_RMu_to_UV(
     );
 
     return vec2<f32>(
-        textureCoordFromUnitRange(u_unit, MULTISCATTER_LUT_WIDTH),
-        textureCoordFromUnitRange(v_unit, MULTISCATTER_LUT_HEIGHT)
+        textureCoordFromUnitRange(u_unit, dimensions.x),
+        textureCoordFromUnitRange(v_unit, dimensions.y)
     );
 }
 
 fn multiscatterLUT_UV_to_RMu(
     atmosphere: ptr<function,Atmosphere>,
     uv: vec2<f32>,
+	dimensions: vec2<u32>,
 ) -> vec2<f32>
 {
-    let u_unit: f32 = unitRangeFromTextureCoord(uv.x, MULTISCATTER_LUT_WIDTH);
-    let v_unit: f32 = unitRangeFromTextureCoord(uv.y, MULTISCATTER_LUT_HEIGHT);
+    let u_unit: f32 = unitRangeFromTextureCoord(uv.x, dimensions.x);
+    let v_unit: f32 = unitRangeFromTextureCoord(uv.y, dimensions.y);
 
     let mu_light: f32 = 2.0 * (u_unit - 0.5);
 
@@ -168,7 +163,12 @@ fn sampleMultiscatterLUT(
     mu_light: f32
 ) -> vec3<f32>
 {
-    let uv: vec2<f32> = multiscatterLUT_RMu_to_UV(atmosphere, radius, mu_light);
+    let uv: vec2<f32> = multiscatterLUT_RMu_to_UV(
+		atmosphere,
+		radius,
+		mu_light,
+		textureDimensions(lut)
+	);
 
     return textureSampleLevel(lut, s, uv, 0.0).xyz;
 }
@@ -181,7 +181,12 @@ fn sampleTransmittanceLUT_RadiusMu(
     mu: f32
 ) -> vec3<f32>
 {
-    let uv: vec2<f32> = transmittanceLUT_RMu_to_UV(atmosphere, radius, mu);
+    let uv: vec2<f32> = transmittanceLUT_RMu_to_UV(
+		atmosphere,
+		radius,
+		mu,
+		textureDimensions(lut)
+	);
 
     let sample = textureSampleLevel(lut, s, uv, 0.0).xyz;
 

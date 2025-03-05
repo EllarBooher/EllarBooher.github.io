@@ -28,7 +28,7 @@ fn computeTransmittance(@builtin(global_invocation_id) global_id : vec3<u32>,)
     let offset = vec2<f32>(0.5, 0.5);
     let uv = (vec2<f32>(texel_coord) + offset) / vec2<f32>(size);
 
-    let r_mu: vec2<f32> = transmittanceLUT_UV_to_RMu(&atmosphere, uv);
+    let r_mu: vec2<f32> = transmittanceLUT_UV_to_RMu(&atmosphere, uv, textureDimensions(transmittance_lut));
 
     let radius: f32 = r_mu.x;
     let direction_cosine: f32 = r_mu.y;

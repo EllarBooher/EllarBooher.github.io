@@ -60,7 +60,7 @@ fn computeMultiscattering(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let offset = vec2<f32>(0.5, 0.5);
     let uv = (vec2<f32>(texel_coord) + offset) / vec2<f32>(size);
 
-    let r_mu_light = multiscatterLUT_UV_to_RMu(&atmosphere, uv);
+    let r_mu_light = multiscatterLUT_UV_to_RMu(&atmosphere, uv, textureDimensions(multiscatter_lut));
 
     let origin = vec3<f32>(0.0, r_mu_light.x, 0.0);
 

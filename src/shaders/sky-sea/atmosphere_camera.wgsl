@@ -87,7 +87,8 @@ fn sampleSkyViewLUT(
 	// The horizon will be rounded, and when the edges step it reveals gaps where texels below the horizon can be sampled from the skyview LUT, leading to patches of black.
 	// This offset may require tweaking depending on the various resolutions
 	const V_SAFE_OFFSET = 2.5;
-	let v_safe = (0.5 * f32(SKYVIEW_LUT_HEIGHT) - V_SAFE_OFFSET) / f32(SKYVIEW_LUT_HEIGHT);
+	let lut_height = textureDimensions(skyview_lut).y;
+	let v_safe = (0.5 * f32(lut_height) - V_SAFE_OFFSET) / f32(lut_height);
 	v = min(v, v_safe);
 
     return textureSampleLevel(skyview_lut, lut_sampler, vec2<f32>(u, v), 0.0).xyz;

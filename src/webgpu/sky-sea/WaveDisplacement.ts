@@ -4,6 +4,11 @@ import WaveSurfaceDisplacementPak from "../../shaders/sky-sea/wave_surface_displ
 import { TimestampQueryInterval } from "./Common";
 import { FFTWaveDisplacementMaps } from "./FourierWaves";
 
+interface WaveCascade {
+	patch_size_meters: number;
+}
+
+const CASCADE_CAPACITY = 4;
 class WaveSurfaceDisplacementUBO extends UBO {
 	public readonly data: {
 		patch_world_half_extent: number;
@@ -17,6 +22,8 @@ class WaveSurfaceDisplacementUBO extends UBO {
 
 		padding0: Vec3;
 		procedural_wave_count: number;
+
+		cascades: WaveCascade[];
 	} = {
 		patch_world_half_extent: 50.0,
 		b_gerstner: true,
@@ -28,10 +35,17 @@ class WaveSurfaceDisplacementUBO extends UBO {
 
 		padding0: vec3.create(0.0, 0.0, 0.0),
 		procedural_wave_count: 12,
+
+		cascades: [
+			{ patch_size_meters: 200.0 },
+			{ patch_size_meters: 50.0 },
+			{ patch_size_meters: 10.0 },
+			{ patch_size_meters: 0.0 },
+		],
 	};
 
 	constructor(device: GPUDevice) {
-		const FLOAT_COUNT = 12;
+		const FLOAT_COUNT = 4 + 4 + 4 + 4 * CASCADE_CAPACITY;
 		super(
 			device,
 			FLOAT_COUNT,
@@ -55,6 +69,18 @@ class WaveSurfaceDisplacementUBO extends UBO {
 
 		float32.set(this.data.padding0, 8);
 		view.setUint32(44, this.data.procedural_wave_count, true);
+
+		let vec3Zeroed = vec3.create(0.0, 0.0, 0.0);
+
+		for (let i = 0; i < CASCADE_CAPACITY; i++) {
+			let f32Offset = 12 + i * 4;
+			float32.set(vec3Zeroed, f32Offset);
+			view.setFloat32(
+				(f32Offset + 3) * 4,
+				this.data.cascades[i].patch_size_meters,
+				true
+			);
+		}
 
 		return buffer;
 	}

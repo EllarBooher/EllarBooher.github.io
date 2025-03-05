@@ -3,11 +3,21 @@
 #include types.inc.wgsl
 #include raycast.inc.wgsl
 
+const PI = 3.141592653589793;
+const WATER_COLOR = 0.3 * vec3<f32>(16.0 / 255.0, 97.0 / 255.0, 171.0 / 255.0);
+const CASCADE_CAPACITY = 4u;
+
 struct PlaneWave
 {
     direction: vec2<f32>,
     amplitude: f32,
     wavelength: f32,
+}
+
+struct WaveCascade
+{
+	padding0: vec3<f32>,
+	patch_size_meters: f32,
 }
 
 struct WaveSurfaceDisplacementUBO
@@ -23,6 +33,8 @@ struct WaveSurfaceDisplacementUBO
 
 	padding_0: vec3<f32>,
 	procedural_wave_count: u32,
+
+	cascades: array<WaveCascade, CASCADE_CAPACITY>,
 }
 
 @group(0) @binding(0) var<uniform> u_settings: WaveSurfaceDisplacementUBO;
@@ -34,14 +46,6 @@ struct WaveSurfaceDisplacementUBO
 @group(1) @binding(3) var<storage> u_waves: array<PlaneWave>;
 
 @group(2) @binding(0) var turbulence_jacobian: texture_2d_array<f32>;
-
-const PI = 3.141592653589793;
-
-const WATER_COLOR = 0.3 * vec3<f32>(16.0 / 255.0, 97.0 / 255.0, 171.0 / 255.0);
-const WAVE_NEUTRAL_PLANE = 1.0;
-
-const CASCADE_CAPACITY = 4u;
-const WAVE_CASCADE_SIZES = array<f32,3>(200.0, 50.0, 10.0);
 
 struct OceanSurfaceDisplacement
 {
@@ -61,7 +65,7 @@ fn sampleOceanSurfaceDisplacementFromMap(
 	{
 		let position_lambda = cascade_position_weights[array_layer];
 
-		let patch_uv = global_uv / WAVE_CASCADE_SIZES[array_layer];
+		let patch_uv = global_uv / u_settings.cascades[array_layer].patch_size_meters;
 
 		let Dx_Dy_Dz_Dxdz = textureSampleLevel(
 			Dx_Dy_Dz_Dxdz_spatial,
@@ -263,22 +267,6 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 
 	let overlap = vec2<f32>(1.05);
 
-	/*
-	 * This assumes:
-	 *  - the camera has no roll, so the horizon is flat in NDC space and extends to y=-1
-	 *  - the horizon is visible
-	 */
-
-	/* Enable this when camera moves too high, and horizon drops more than a pixel or two
-	const METERS_PER_MM = 1000000.0;
-	let atmosphere = u_global.atmosphere;
-
-    let origin = vec3<f32>(0.0, atmosphere.planet_radius_Mm, 0.0) + camera.position.xyz / METERS_PER_MM;
-    let sin_horizon: f32 = atmosphere.planet_radius_Mm / length(origin);
-    let cos_horizon: f32 = -safeSqrt(1.0 - sin_horizon * sin_horizon);
-	let ndc_horizon_forward = (camera.proj_view * vec4<f32>(camera.forward.x, 0.0, camera.forward.z, 0.0));
-	*/
-
 	let ndc_horizon_forward =
 		ocean_camera.proj_view
 		* vec4<f32>(
@@ -292,9 +280,6 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	let ndc_max = vec2<f32>(overlap.x, min(ndc_horizon_forward.y / ndc_horizon_forward.w, overlap.y));
 
 	let ndc_space_coord = mix(ndc_min, ndc_max, vert_coord);
-
-	let ocean_origin = vec3<f32>(0.0, WAVE_NEUTRAL_PLANE, 0.0);
-	let ocean_normal = vec3<f32>(0.0,1.0,0.0);
 
 	let center_position = projectNDCToOceanSurface(
 		mix(ndc_min, ndc_max, 0.5),
@@ -406,7 +391,6 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 	// output.color = vec3<f32>(step(fract(50 * ndc_space_coord), vec2<f32>(0.1)),0.0);
  	// output.color = vec3<f32>(step(fract(1.0 * world_position.x), 0.05),0.0,0.0);
 
-
 	output.surface_normal = normalize(
 		world_position
 		+ vec3<f32>(0.0, u_global.atmosphere.planet_radius_Mm * METERS_PER_MM, 0.0)
@@ -451,7 +435,7 @@ fn sampleOceanSurfaceTangentDifferentialFromMap(
 	{
 		let normal_lambda = cascade_normal_weights[array_layer];
 
-		let patch_uv = global_uv / WAVE_CASCADE_SIZES[array_layer];
+		let patch_uv = global_uv / u_settings.cascades[array_layer].patch_size_meters;
 
 		let Dx_Dy_Dz_Dxdz = textureSample(
 			Dx_Dy_Dz_Dxdz_spatial,
@@ -512,7 +496,7 @@ fn sampleOceanSurfaceTangentDifferentialFromWave(
     let wave_direction = normalize(wave.direction);
     let wavelength = wave.wavelength;
 
-    let wave_number = 2.0 * 3.141592653589793 / wavelength;
+    let wave_number = 2.0 * PI / wavelength;
 
 	// TODO: parameterize this in ubo (like how the FFT waves do it)
     let gravity = 9.8;

@@ -1,4 +1,4 @@
-import { Vec2, vec2 } from "wgpu-matrix";
+import { Vec2, vec2, Vec3, vec3 } from "wgpu-matrix";
 import { GlobalUBO, UBO } from "./UBO";
 import WaveSurfaceDisplacementPak from "../../shaders/sky-sea/wave_surface_displacement.wgsl";
 import { TimestampQueryInterval } from "./Common";
@@ -14,6 +14,9 @@ class WaveSurfaceDisplacementUBO extends UBO {
 		gbuffer_extent: Vec2;
 		foam_scale: number;
 		foam_bias: number;
+
+		padding0: Vec3;
+		procedural_wave_count: number;
 	} = {
 		patch_world_half_extent: 50.0,
 		b_gerstner: true,
@@ -22,10 +25,13 @@ class WaveSurfaceDisplacementUBO extends UBO {
 		gbuffer_extent: vec2.create(1.0, 1.0),
 		foam_scale: 1.0,
 		foam_bias: 0.0,
+
+		padding0: vec3.create(0.0, 0.0, 0.0),
+		procedural_wave_count: 12,
 	};
 
 	constructor(device: GPUDevice) {
-		const FLOAT_COUNT = 8;
+		const FLOAT_COUNT = 12;
 		super(
 			device,
 			FLOAT_COUNT,
@@ -46,6 +52,9 @@ class WaveSurfaceDisplacementUBO extends UBO {
 		float32.set(this.data.gbuffer_extent, 4);
 		view.setFloat32(24, this.data.foam_scale, true);
 		view.setFloat32(28, this.data.foam_bias, true);
+
+		float32.set(this.data.padding0, 8);
+		view.setUint32(44, this.data.procedural_wave_count, true);
 
 		return buffer;
 	}
@@ -146,7 +155,7 @@ export class WaveSurfaceDisplacementPassResources {
 		const WAVE_SIZE_BYTES = 4 * WAVE_SIZE_FLOATS;
 		const waves = device.createBuffer({
 			size: WAVE_COUNT * WAVE_SIZE_BYTES,
-			usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
+			usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
 			label: "Wave Surface Displacement Waves",
 		});
 
@@ -256,6 +265,7 @@ export class WaveSurfaceDisplacementPassResources {
 
 		this.settingsUBO = new WaveSurfaceDisplacementUBO(device);
 		this.settingsUBO.data.vertex_size = VERTEX_SIZE;
+		this.settingsUBO.data.procedural_wave_count = wavesSource.length;
 
 		const group1Layout = device.createBindGroupLayout({
 			label: "Wave Surface Displacement Group 1 Compute (Displacement Map)",
@@ -278,7 +288,7 @@ export class WaveSurfaceDisplacementPassResources {
 				{
 					binding: 3,
 					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-					buffer: { type: "uniform" },
+					buffer: { type: "read-only-storage" },
 				},
 			],
 		});

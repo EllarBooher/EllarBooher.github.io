@@ -20,6 +20,9 @@ struct WaveSurfaceDisplacementUBO
 	gbuffer_extent: vec2<f32>,
 	foam_scale: f32,
 	foam_bias: f32,
+
+	padding_0: vec3<f32>,
+	procedural_wave_count: u32,
 }
 
 @group(0) @binding(0) var<uniform> u_settings: WaveSurfaceDisplacementUBO;
@@ -28,13 +31,11 @@ struct WaveSurfaceDisplacementUBO
 @group(1) @binding(0) var displacement_map_sampler: sampler;
 @group(1) @binding(1) var Dx_Dy_Dz_Dxdz_spatial: texture_2d_array<f32>;
 @group(1) @binding(2) var Dydx_Dydz_Dxdx_Dzdz_spatial: texture_2d_array<f32>;
-@group(1) @binding(3) var<uniform> u_waves: array<PlaneWave, WAVE_COUNT>;
+@group(1) @binding(3) var<storage> u_waves: array<PlaneWave>;
 
 @group(2) @binding(0) var turbulence_jacobian: texture_2d_array<f32>;
 
 const PI = 3.141592653589793;
-
-const WAVE_COUNT = 12u;
 
 const WATER_COLOR = 0.3 * vec3<f32>(16.0 / 255.0, 97.0 / 255.0, 171.0 / 255.0);
 const WAVE_NEUTRAL_PLANE = 1.0;
@@ -139,7 +140,7 @@ fn getOceanSurfaceDisplacement(
 	{
 		var sample: OceanSurfaceDisplacement;
 
-		for (var i = 0u; i < WAVE_COUNT; i++)
+		for (var i = 0u; i < u_settings.procedural_wave_count; i++)
 		{
 			sample = sampleOceanSurfaceDisplacementFromWave(
 				u_waves[i],
@@ -590,7 +591,7 @@ fn getOceanSurfaceTangents(
 	{
 		var sample: OceanSurfaceTangents;
 
-		for (var i = 0u; i < WAVE_COUNT; i++)
+		for (var i = 0u; i < u_settings.procedural_wave_count; i++)
 		{
 			sample = sampleOceanSurfaceTangentDifferentialFromWave(
 				global_uv,
@@ -602,7 +603,8 @@ fn getOceanSurfaceTangents(
 
 			result.tangent += sample.tangent;
 			result.bitangent += sample.bitangent;
-			result.foam_strength += sample.foam_strength / f32(WAVE_COUNT);
+			result.foam_strength += sample.foam_strength
+				/ f32(u_settings.procedural_wave_count);
 		}
 	}
 

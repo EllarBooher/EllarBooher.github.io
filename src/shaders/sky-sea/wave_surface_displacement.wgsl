@@ -148,7 +148,7 @@ fn getOceanSurfaceDisplacement(
 				u_settings.patch_world_half_extent
 			);
 
-			result.displacement += result.displacement;
+			result.displacement += sample.displacement;
 		}
 	}
 

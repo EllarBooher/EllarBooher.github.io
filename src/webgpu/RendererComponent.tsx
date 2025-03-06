@@ -8,14 +8,16 @@ import {
 } from "react";
 import { Link, useSearchParams } from "react-router";
 import { SampleEntry, samplesByQueryParam } from "./Samples";
-import { RendererApp, RendererAppConstructor, getDevice } from "./RendererApp";
+import { RendererApp, initializeApp } from "./RendererApp";
 import { GUI } from "lil-gui";
 import "./RendererComponent.css";
 
 const RenderingCanvas = function RenderingCanvas({
 	app,
+	onError,
 }: {
 	app: RendererApp;
+	onError: (err: unknown) => void;
 }) {
 	const animateRequestRef = useRef<number>();
 	const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -33,9 +35,13 @@ const RenderingCanvas = function RenderingCanvas({
 			canvas.height = canvas.offsetHeight * devicePixelRatio;
 
 			// TODO: can we miss this event? can canvas dimensions and context.getCurrentTexture() be out of sync?
-			app.handleResize?.(canvas.width, canvas.height);
+			try {
+				app.handleResize?.(canvas.width, canvas.height);
+			} catch (err) {
+				onError(err);
+			}
 		}
-	}, [app]);
+	}, [app, onError]);
 
 	useEffect(() => {
 		resizeCanvas();
@@ -55,20 +61,23 @@ const RenderingCanvas = function RenderingCanvas({
 				lastTimeRef.current = time;
 
 				const drawTexture = drawContext.getCurrentTexture();
-
-				app.draw(
-					drawTexture,
-					canvasRef.current!.width / canvasRef.current!.height,
-					time,
-					deltaTime
-				);
+				try {
+					app.draw(
+						drawTexture,
+						canvasRef.current!.width / canvasRef.current!.height,
+						time,
+						deltaTime
+					);
+				} catch (err) {
+					onError(err);
+				}
 
 				if (!app.quit) {
 					animateRequestRef.current = requestAnimationFrame(animate);
 				}
 			}
 		},
-		[app]
+		[app, onError]
 	);
 
 	useEffect(() => {
@@ -85,7 +94,12 @@ const RenderingCanvas = function RenderingCanvas({
 					setGUIDocked(!gui._closed);
 				}
 			});
-			app.setupUI(guiRef.current);
+
+			try {
+				app.setupUI(guiRef.current);
+			} catch (err) {
+				onError(err);
+			}
 		}
 
 		if (!context) {
@@ -102,7 +116,7 @@ const RenderingCanvas = function RenderingCanvas({
 				cancelAnimationFrame(animateRequestRef.current);
 			}
 		};
-	}, [animate, app, setGUIDocked]);
+	}, [animate, app, setGUIDocked, onError]);
 
 	useEffect(() => {
 		// Need to respond to canvas html element resizing on redraw, so this is an effect
@@ -129,54 +143,19 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 	const appLoadingPromiseRef = useRef<Promise<void>>();
 	const [initialized, setInitialized] = useState(false);
 
-	const quitApp = useCallback(() => {
-		if (!appRef.current) {
-			return;
-		}
-		appRef.current.quit = true;
-	}, []);
-
-	const createApp = useCallback(
-		(
-			_adapter: GPUAdapter,
-			device: GPUDevice,
-			sampleConstructor: RendererAppConstructor
-		) => {
-			if (appRef.current) {
-				quitApp();
+	const handleError = useCallback(
+		(err: unknown) => {
+			console.error(err);
+			if (err instanceof Error) {
+				setErrors([
+					err.message,
+					...(typeof err.cause === "string" ? [err.cause] : []),
+				]);
+			} else {
+				setErrors(["Failed to initialize app."]);
 			}
-			console.log("Got WebGPU device, initializing sample app.");
-
-			// We could try to recreate the device and app, but outside of hotloading/dev that seems unnecessary
-			// The user can just reload the page if a crash occurs
-			device.lost.then(
-				(reason) => {
-					console.log(
-						`WebGPU device lost - ("${reason.reason}"):\n ${reason.message}`
-					);
-				},
-				(err) => {
-					// This shouldn't happen
-					throw new Error(`WebGPU device lost rejected`, {
-						cause: err,
-					});
-				}
-			);
-			device.onuncapturederror = (ev) => {
-				console.error(`WebGPU device uncaptured error: ${ev.error.message}`);
-				setErrors([ev.error.message]);
-				quitApp();
-			};
-
-			const presentFormat = navigator.gpu.getPreferredCanvasFormat();
-			appRef.current = sampleConstructor(
-				device,
-				presentFormat,
-				performance.now()
-			);
-			console.log("Finished initializing app.");
 		},
-		[quitApp]
+		[setErrors]
 	);
 
 	useEffect(() => {
@@ -184,60 +163,73 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 			return;
 		}
 
+		if (!("gpu" in navigator)) {
+			setErrors([
+				"WebGPU is not available in this browser.",
+				"navigator.gpu is null",
+			]);
+			setInitialized(true);
+			return;
+		}
+
 		setInitialized(false);
 		setErrors(undefined);
-		// Adapter is one-time, and samples can have different feature requirements, so we need to create everything from scratch
-		appLoadingPromiseRef.current = Promise.all([
-			sample.import(),
-			getDevice(
-				sample.requiredFeatures,
-				sample.optionalFeatures,
-				sample.requiredLimits
-			),
-		])
-			.then(
-				([sampleConstructor, { adapter, device }]) => {
-					createApp(adapter, device, sampleConstructor);
-				},
-				(err: Error) => {
-					console.error(err);
-					setErrors([err.message, err.cause?.toString?.() ?? "Unknown Cause"]);
-					// TODO: Differentiate between fatal and nonfatal errors
-					appRef.current = undefined;
-					setInitialized(false);
-				}
-			)
+
+		appLoadingPromiseRef.current = initializeApp({
+			gpu: navigator.gpu,
+			requiredLimits: sample.requiredLimits,
+			requiredFeatures: sample.requiredFeatures,
+			optionalFeatures: sample.optionalFeatures,
+			import: sample.import,
+			onUncapturedError: (ev) => {
+				console.error(`WebGPU device uncaptured error: ${ev.error.message}`);
+				setErrors(["WebGPU has encountered an error, causing it to crash."]);
+			},
+		})
+			.then((app) => {
+				appRef.current = app;
+			})
+			.catch((err) => {
+				handleError(err);
+			})
 			.finally(() => {
 				appLoadingPromiseRef.current = undefined;
 				setInitialized(true);
 			});
-	}, [sample, createApp]);
+	}, [sample]);
 
 	const errorBlock = (
-		<>
+		<div className="sample-text">
 			<p>
-				{`Sorry, there was an issue.
-            This app uses WebGPU, which has somewhat limited support.
-            Try using another browser, updating your browser, or downloading a Beta or Nightly version.`}
+				{`Sorry, there was an issue, cause the sample to fail to load or crash.
+            This app uses WebGPU, which can be unstable on some browsers.
+            Try updating or using another browser.`}
 			</p>
 			<ol className="sample-errors">
 				{errors?.map((value) => {
 					return <li key={value}>{value}</li>;
 				})}
 			</ol>
-		</>
+		</div>
 	);
-	const loadingBlock = <p>{`Loading...`}</p>;
-	const textBlock = (
-		<div className="sample-text">{errors ? errorBlock : loadingBlock}</div>
+	const loadingBlock = (
+		<div className="sample-text">
+			<p>{`Loading...`}</p>
+		</div>
 	);
 
 	return (
 		<>
-			{initialized && appRef.current ? (
-				<RenderingCanvas app={appRef.current} />
+			{initialized ? (
+				<>
+					{errors !== undefined ? (
+						errorBlock
+					) : (
+						<RenderingCanvas app={appRef.current!} onError={handleError} />
+					)}
+				</>
 			) : (
-				textBlock
+				loadingBlock
 			)}
 		</>
 	);

@@ -20,19 +20,13 @@ export type RendererAppConstructor = (
 	time: number
 ) => RendererApp;
 
-export async function getDevice(
-	requiredFeatures: ReadonlySet<GPUFeatureName>,
-	optionalFeatures: ReadonlySet<GPUFeatureName>,
-	requiredLimits: ReadonlyMap<keyof GPUSupportedLimits, number>
-): Promise<{ adapter: GPUAdapter; device: GPUDevice }> {
+async function getDevice(props: {
+	gpu: GPU;
+	requiredFeatures: ReadonlySet<GPUFeatureName>;
+	optionalFeatures: ReadonlySet<GPUFeatureName>;
+	requiredLimits: ReadonlyMap<keyof GPUSupportedLimits, number>;
+}): Promise<{ adapter: GPUAdapter; device: GPUDevice }> {
 	console.log("Starting WebGPU");
-	if (!("gpu" in navigator)) {
-		return Promise.reject(
-			new Error("WebGPU is not available in this browser.", {
-				cause: new Error("navigator.gpu is null"),
-			})
-		);
-	}
 
 	const adapterPromise = navigator.gpu
 		.requestAdapter()
@@ -52,13 +46,13 @@ export async function getDevice(
 
 	const devicePromise = adapterPromise.then((adapter) => {
 		const knownRequiredFeatures = Array.from(
-			requiredFeatures.values()
+			props.requiredFeatures.values()
 		).filter((feature) => {
 			return adapter.features.has(feature);
 		});
-		if (knownRequiredFeatures.length != requiredFeatures.size) {
+		if (knownRequiredFeatures.length != props.requiredFeatures.size) {
 			const reason = `Required features unavailable: ${Array.from(
-				requiredFeatures.values()
+				props.requiredFeatures.values()
 			)
 				.filter((feature) => !adapter.features.has(feature))
 				.map((feature) => `'${feature}'`)
@@ -68,7 +62,7 @@ export async function getDevice(
 			);
 		}
 		const features = knownRequiredFeatures.concat(
-			...Array.from(optionalFeatures.values()).filter((feature) => {
+			...Array.from(props.optionalFeatures.values()).filter((feature) => {
 				return adapter.features.has(feature);
 			})
 		);
@@ -83,7 +77,7 @@ export async function getDevice(
 			requestedMinimum: number;
 			supported: number;
 		}>();
-		for (const [name, requestedMinimum] of requiredLimits.entries()) {
+		for (const [name, requestedMinimum] of props.requiredLimits.entries()) {
 			const supported = adapter.limits[name] as number;
 
 			if (supported >= requestedMinimum) {
@@ -96,7 +90,7 @@ export async function getDevice(
 				});
 			}
 		}
-		if (satisfiedRequiredLimits.size < requiredLimits.size) {
+		if (satisfiedRequiredLimits.size < props.requiredLimits.size) {
 			const reason = `Required limits unsatisfied: ${missingLimits
 				.map(
 					(limit) =>
@@ -131,5 +125,47 @@ export async function getDevice(
 			adapter,
 			device,
 		};
+	});
+}
+
+export async function initializeApp(props: {
+	gpu: GPU;
+	requiredLimits: ReadonlyMap<keyof GPUSupportedLimits, number>;
+	requiredFeatures: ReadonlySet<GPUFeatureName>;
+	optionalFeatures: ReadonlySet<GPUFeatureName>;
+	import: () => Promise<RendererAppConstructor>;
+	onUncapturedError: (e: GPUUncapturedErrorEvent) => void;
+}): Promise<RendererApp> {
+	return Promise.all([
+		props.import(),
+		getDevice({
+			...props,
+		}),
+	]).then(([sampleConstructor, { adapter: _adapter, device }]) => {
+		const presentFormat = props.gpu.getPreferredCanvasFormat();
+		let app = sampleConstructor(device, presentFormat, performance.now());
+
+		device.lost
+			.then(
+				(reason) => {
+					console.log(
+						`WebGPU device lost - ("${reason.reason}"):\n ${reason.message}`
+					);
+				},
+				(err) => {
+					// This shouldn't happen
+					throw new Error(`WebGPU device lost rejected`, {
+						cause: err,
+					});
+				}
+			)
+			.finally(() => {
+				app.quit = true;
+			});
+		device.onuncapturederror = (ev) => {
+			app.quit = true;
+			props.onUncapturedError(ev);
+		};
+		return app;
 	});
 }

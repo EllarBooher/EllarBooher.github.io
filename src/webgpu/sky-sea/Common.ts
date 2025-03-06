@@ -1,6 +1,6 @@
-export class Extent2D {
-	width = 1;
-	height = 1;
+export interface Extent2D {
+	width: number;
+	height: number;
 }
 
 export enum RenderOutput {

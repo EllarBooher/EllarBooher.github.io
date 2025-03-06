@@ -206,14 +206,19 @@ export class RenderOutputController {
 			.step(1)
 			.name("Array Layer")
 			.listen();
+
+		const SCALE_MIN = -10000.0;
+		const SCALE_MAX = 10000.0;
+
 		outputTextureFolder
 			.add({ scale: 0.0 }, "scale")
 			.name("Uniform Scale")
-			.min(-10000.0)
-			.max(10000.0)
+			.min(SCALE_MIN)
+			.max(SCALE_MAX)
 			.onChange((v: number) => {
 				this.setUniformColorScale(v);
 			});
+
 		const rMaskController = outputTextureFolder
 			.add(currentTransform.channelMasks, "r")
 			.name("R")
@@ -221,8 +226,8 @@ export class RenderOutputController {
 		const rController = outputTextureFolder
 			.add(currentTransform.colorGain, "r")
 			.name("")
-			.min(0.0)
-			.max(10000.0)
+			.min(SCALE_MIN)
+			.max(SCALE_MAX)
 			.listen();
 		const gMaskController = outputTextureFolder
 			.add(currentTransform.channelMasks, "g")
@@ -231,8 +236,8 @@ export class RenderOutputController {
 		const gController = outputTextureFolder
 			.add(currentTransform.colorGain, "g")
 			.name("")
-			.min(0.0)
-			.max(10000.0)
+			.min(SCALE_MIN)
+			.max(SCALE_MAX)
 			.listen();
 		const bMaskController = outputTextureFolder
 			.add(currentTransform.channelMasks, "b")
@@ -241,8 +246,8 @@ export class RenderOutputController {
 		const bController = outputTextureFolder
 			.add(currentTransform.colorGain, "b")
 			.name("")
-			.min(0.0)
-			.max(10000.0)
+			.min(SCALE_MIN)
+			.max(SCALE_MAX)
 			.listen();
 		const swapBARGController = outputTextureFolder
 			.add(currentTransform, "swapBARG")

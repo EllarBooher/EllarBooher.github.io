@@ -159,10 +159,6 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 	);
 
 	useEffect(() => {
-		if (appLoadingPromiseRef.current) {
-			return;
-		}
-
 		if (!("gpu" in navigator)) {
 			setErrors([
 				"WebGPU is not available in this browser.",
@@ -174,6 +170,15 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 
 		setInitialized(false);
 		setErrors(undefined);
+
+		/*
+		 * If the app requires a lot of loading, this kinda sucks since the app
+		 * asynchronously continues to load creating a new instance each time the
+		 * user clicks around. This could cause issues on some systems.
+		 * The solution would be to make app initialization async with multiple
+		 * steps that can be interrupted.
+		 */
+		let shouldUpdate = true;
 
 		appLoadingPromiseRef.current = initializeApp({
 			gpu: navigator.gpu,
@@ -187,16 +192,23 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 			},
 		})
 			.then((app) => {
+				if (!shouldUpdate) return;
 				appRef.current = app;
 			})
 			.catch((err) => {
+				if (!shouldUpdate) return;
 				handleError(err);
 			})
 			.finally(() => {
+				if (!shouldUpdate) return;
 				appLoadingPromiseRef.current = undefined;
 				setInitialized(true);
 			});
-	}, [sample]);
+
+		return () => {
+			shouldUpdate = false;
+		};
+	}, [sample, handleError]);
 
 	const errorBlock = (
 		<div className="sample-text">

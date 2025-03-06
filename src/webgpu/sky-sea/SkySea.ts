@@ -31,6 +31,264 @@ const AERIAL_PERSPECTIVE_LUT_EXTENT = {
 
 const RENDER_SCALES = [0.25, 0.3333, 0.5, 0.75, 1.0, 1.5, 2.0, 4.0];
 
+interface SkySeaAppParameters {
+	renderFromOceanPOV: boolean;
+	renderScale: number;
+	readonly oceanSurfaceSettings: {
+		gerstner: boolean;
+		fft: boolean;
+		foamScale: number;
+		foamBias: number;
+	};
+	readonly oceanCamera: {
+		translationX: number;
+		translationY: number;
+		translationZ: number;
+		// Applied in order Y * X * Z
+		// Z first, X second, Y third
+		eulerAnglesX: number;
+		eulerAnglesY: number;
+		eulerAnglesZ: number;
+	};
+	readonly debugCamera: {
+		translationX: number;
+		translationY: number;
+		translationZ: number;
+		eulerAnglesX: number;
+		eulerAnglesY: number;
+		eulerAnglesZ: number;
+	};
+	readonly fourierWavesSettings: FFTWavesSettings;
+	readonly time: {
+		pause: boolean;
+		timeSeconds: number;
+		deltaTimeSeconds: number;
+	};
+	readonly orbit: {
+		timeHours: number;
+		timeSpeedupFactor: number;
+		reversed: boolean;
+		paused: boolean;
+		inclinationRadians: number;
+		sunsetAzimuthRadians: number;
+	};
+}
+type ValidParamsGuard<T> = T extends {
+	[K in keyof T]: number | boolean | string | ValidParamsGuard<T[K]>;
+}
+	? T
+	: never;
+
+function setupUI(
+	gui: LilGUI,
+	paramsToBind: ValidParamsGuard<SkySeaAppParameters>,
+	handleResize: () => void
+) {
+	gui.add(paramsToBind, "renderScale", RENDER_SCALES)
+		.name("Render Resolution Scale")
+		.decimals(1)
+		.onFinishChange((_v: number) => {
+			handleResize();
+		})
+		.listen();
+
+	const cameraParameters = gui.addFolder("Camera").open();
+	cameraParameters
+		.add(paramsToBind.oceanCamera, "translationX")
+		.name("Camera X")
+		.min(-100.0)
+		.max(100.0);
+	cameraParameters
+		.add(paramsToBind.oceanCamera, "translationY")
+		.name("Camera Y")
+		.min(10.0)
+		.max(2000.0);
+	cameraParameters
+		.add(paramsToBind.oceanCamera, "translationZ")
+		.name("Camera Z")
+		.min(-100.0)
+		.max(100.0);
+
+	const EULER_ANGLES_X_SAFETY_MARGIN = 0.01;
+	cameraParameters
+		.add(paramsToBind.oceanCamera, "eulerAnglesX")
+		.name("Camera Pitch")
+		.min(-Math.PI / 2.0 + EULER_ANGLES_X_SAFETY_MARGIN)
+		.max(Math.PI / 2.0 - EULER_ANGLES_X_SAFETY_MARGIN);
+	cameraParameters
+		.add(paramsToBind.oceanCamera, "eulerAnglesY")
+		.name("Camera Yaw")
+		.min(-Math.PI)
+		.max(Math.PI);
+	/* Non-zero camera roll breaks certain horizon calculations in shaders
+		cameraParameters
+			.add(this.controls.cameraSettings, "eulerAnglesZ")
+			.name("Camera Roll")
+			.min(-Math.PI)
+			.max(Math.PI);
+		*/
+
+	const sunFolder = gui.addFolder("Sun").open();
+	sunFolder
+		.add(paramsToBind.orbit, "timeHours")
+		.min(0.0)
+		.max(24.0)
+		.name("Time in Hours")
+		.listen();
+	sunFolder
+		.add(paramsToBind.orbit, "timeSpeedupFactor")
+		.min(1.0)
+		.max(50000)
+		.step(1.0)
+		.name("Time Multiplier");
+	sunFolder.add(paramsToBind.orbit, "paused").name("Pause Sun");
+
+	sunFolder
+		.add(
+			{
+				fn: () => {
+					paramsToBind.orbit.timeHours = paramsToBind.orbit.reversed
+						? 18.0 + 0.5
+						: 6.0 - 0.5;
+				},
+			},
+			"fn"
+		)
+		.name("Skip to Sunrise");
+	sunFolder
+		.add(
+			{
+				fn: () => {
+					paramsToBind.orbit.timeHours = paramsToBind.orbit.reversed
+						? 6.0 + 0.5
+						: 18.0 - 0.5;
+				},
+			},
+			"fn"
+		)
+		.name("Skip to Sunset");
+
+	sunFolder.add(paramsToBind.orbit, "reversed").name("Reverse Sun");
+	sunFolder
+		.add(paramsToBind.orbit, "sunsetAzimuthRadians")
+		.name("Sun Azimuth")
+		.min(0.0)
+		.max(2.0 * Math.PI);
+	sunFolder
+		.add(paramsToBind.orbit, "inclinationRadians")
+		.name("Sun Inclination")
+		.min(0.0)
+		.max(Math.PI);
+
+	const oceanFolder = gui.addFolder("Ocean").close();
+	oceanFolder
+		.add(paramsToBind.oceanSurfaceSettings, "gerstner")
+		.name("Gerstner Waves");
+	oceanFolder
+		.add(paramsToBind.oceanSurfaceSettings, "fft")
+		.name("FFT Accelerated Waves");
+	oceanFolder.add(paramsToBind.time, "pause").name("Pause Waves");
+	oceanFolder
+		.add(paramsToBind.oceanSurfaceSettings, "foamScale")
+		.name("Foam Scale")
+		.min(-30.0)
+		.max(30.0);
+	oceanFolder
+		.add(paramsToBind.oceanSurfaceSettings, "foamBias")
+		.name("Foam Bias")
+		.min(-1.0)
+		.max(1.0);
+
+	oceanFolder
+		.add(paramsToBind.fourierWavesSettings, "gravity")
+		.name("Gravity (m / s^2)")
+		.min(0.01)
+		.max(20.0);
+	oceanFolder
+		.add(paramsToBind.fourierWavesSettings, "waveSwell")
+		.name("Wave Swell")
+		.min(0.01)
+		.max(1.0);
+	oceanFolder
+		.add(paramsToBind.fourierWavesSettings, "windFetchMeters")
+		.name("Wind Fetch (m)")
+		.min(10.0 * 1000.0)
+		.max(100.0 * 1000.0);
+	oceanFolder
+		.add(paramsToBind.fourierWavesSettings, "windSpeedMetersPerSeconds")
+		.name("Wind Speed (m/s)")
+		.min(0.01)
+		.max(50.0);
+
+	const debugFolder = gui.addFolder("Debug").close();
+	const debugCameraControllers: LilController[] = [];
+	debugFolder
+		.add(paramsToBind, "renderFromOceanPOV")
+		.name("Render from Ocean POV")
+		.onFinishChange((v: boolean) => {
+			debugCameraControllers.forEach((c) => {
+				c.enable(!v);
+			});
+		});
+
+	debugCameraControllers.push(
+		debugFolder
+			.add(paramsToBind.debugCamera, "translationX")
+			.name("Camera X")
+			.min(-100.0)
+			.max(100.0),
+		debugFolder
+			.add(paramsToBind.debugCamera, "translationY")
+			.name("Camera Y")
+			.min(10.0)
+			.max(1000.0),
+		debugFolder
+			.add(paramsToBind.debugCamera, "translationZ")
+			.name("Camera Z")
+			.min(-100.0)
+			.max(100.0),
+
+		debugFolder
+			.add(paramsToBind.debugCamera, "eulerAnglesX")
+			.name("Camera Pitch")
+			.min(-Math.PI / 2.0 + EULER_ANGLES_X_SAFETY_MARGIN)
+			.max(Math.PI / 2.0 - EULER_ANGLES_X_SAFETY_MARGIN),
+		debugFolder
+			.add(paramsToBind.debugCamera, "eulerAnglesY")
+			.name("Camera Yaw")
+			.min(-Math.PI)
+			.max(Math.PI),
+
+		/* Non-zero camera roll breaks certain horizon calculations in shaders
+		debugFolder
+			.add(this.settings.cameraSettings.debugCamera, "eulerAnglesZ")
+			.name("Camera Roll")
+			.min(-Math.PI)
+			.max(Math.PI),
+		*/
+		debugFolder
+			.add(
+				{
+					fn: () => {
+						Object.assign<
+							typeof paramsToBind.debugCamera,
+							typeof paramsToBind.debugCamera
+						>(
+							paramsToBind.debugCamera,
+							structuredClone(paramsToBind.oceanCamera)
+						);
+						debugFolder.controllers.forEach((c) => {
+							c.updateDisplay();
+						});
+					},
+				},
+				"fn"
+			)
+			.name("Reset to match main camera")
+	);
+	debugCameraControllers.forEach((c) => c.enable(false));
+}
+
 class SkySeaApp implements RendererApp {
 	transmittanceLUTPassResources: TransmittanceLUTPassResources;
 	multiscatterLUTPassResources: MultiscatterLUTPassResources;
@@ -42,60 +300,17 @@ class SkySeaApp implements RendererApp {
 	fullscreenQuadPassResources: FullscreenQuadPassResources;
 
 	gbuffer: GBuffer;
-	scaledSize: Extent2D;
-	rawSize: Extent2D;
+	unscaledResolution: Extent2D;
 
 	renderOutputController: RenderOutputController;
-
-	settings: {
-		oceanSurfaceSettings: {
-			gerstner: boolean;
-			fft: boolean;
-			foamScale: number;
-			foamBias: number;
-		};
-		cameraSettings: {
-			renderFromOceanPOV: boolean;
-			oceanCamera: {
-				translationX: number;
-				translationY: number;
-				translationZ: number;
-				// Applied in order Y * X * Z
-				// Z first, X second, Y third
-				eulerAnglesX: number;
-				eulerAnglesY: number;
-				eulerAnglesZ: number;
-			};
-			debugCamera: {
-				translationX: number;
-				translationY: number;
-				translationZ: number;
-				eulerAnglesX: number;
-				eulerAnglesY: number;
-				eulerAnglesZ: number;
-			};
-		};
-		fourierWavesSettings: FFTWavesSettings;
-		pauseGlobalTime: boolean;
-
-		orbit: {
-			timeHours: number;
-			timeSpeedupFactor: number;
-			reversed: boolean;
-			paused: boolean;
-			inclinationRadians: number;
-			sunsetAzimuthRadians: number;
-		};
-		renderScale: number;
-	};
+	parameters: SkySeaAppParameters;
+	performance: PerformanceTracker;
 
 	globalUBO: GlobalUBO;
 
-	device: GPUDevice;
 	presentFormat: GPUTextureFormat;
+	device: GPUDevice;
 	quit = false;
-
-	performance: PerformanceTracker;
 
 	startTime: number;
 	dummyFrameCounter: number;
@@ -104,219 +319,11 @@ class SkySeaApp implements RendererApp {
 	float32Filterable: boolean;
 
 	setupUI(gui: LilGUI) {
+		setupUI(gui, this.parameters, () => {
+			this.updateResizableResources();
+		});
+
 		this.renderOutputController.setupUI(gui);
-
-		gui.add(this.settings, "renderScale", RENDER_SCALES)
-			.name("Render Resolution Scale")
-			.decimals(1)
-			.onFinishChange((_v: number) => {
-				this.handleResize(this.rawSize.width, this.rawSize.height);
-			})
-			.listen();
-
-		const cameraParameters = gui.addFolder("Camera").open();
-		cameraParameters
-			.add(this.settings.cameraSettings.oceanCamera, "translationX")
-			.name("Camera X")
-			.min(-100.0)
-			.max(100.0);
-		cameraParameters
-			.add(this.settings.cameraSettings.oceanCamera, "translationY")
-			.name("Camera Y")
-			.min(10.0)
-			.max(2000.0);
-		cameraParameters
-			.add(this.settings.cameraSettings.oceanCamera, "translationZ")
-			.name("Camera Z")
-			.min(-100.0)
-			.max(100.0);
-
-		const EULER_ANGLES_X_SAFETY_MARGIN = 0.01;
-		cameraParameters
-			.add(this.settings.cameraSettings.oceanCamera, "eulerAnglesX")
-			.name("Camera Pitch")
-			.min(-Math.PI / 2.0 + EULER_ANGLES_X_SAFETY_MARGIN)
-			.max(Math.PI / 2.0 - EULER_ANGLES_X_SAFETY_MARGIN);
-		cameraParameters
-			.add(this.settings.cameraSettings.oceanCamera, "eulerAnglesY")
-			.name("Camera Yaw")
-			.min(-Math.PI)
-			.max(Math.PI);
-		/* Non-zero camera roll breaks certain horizon calculations in shaders
-		cameraParameters
-			.add(this.settings.cameraSettings, "eulerAnglesZ")
-			.name("Camera Roll")
-			.min(-Math.PI)
-			.max(Math.PI);
-		*/
-
-		const sunFolder = gui.addFolder("Sun").open();
-		sunFolder
-			.add(this.settings.orbit, "timeHours")
-			.min(0.0)
-			.max(24.0)
-			.name("Time in Hours")
-			.listen();
-		sunFolder
-			.add(this.settings.orbit, "timeSpeedupFactor")
-			.min(1.0)
-			.max(50000)
-			.step(1.0)
-			.name("Time Multiplier");
-		sunFolder.add(this.settings.orbit, "paused").name("Pause Sun");
-
-		sunFolder
-			.add(
-				{
-					fn: () => {
-						this.settings.orbit.timeHours = this.settings.orbit
-							.reversed
-							? 18.0 + 0.5
-							: 6.0 - 0.5;
-					},
-				},
-				"fn"
-			)
-			.name("Skip to Sunrise");
-		sunFolder
-			.add(
-				{
-					fn: () => {
-						this.settings.orbit.timeHours = this.settings.orbit
-							.reversed
-							? 6.0 + 0.5
-							: 18.0 - 0.5;
-					},
-				},
-				"fn"
-			)
-			.name("Skip to Sunset");
-
-		sunFolder.add(this.settings.orbit, "reversed").name("Reverse Sun");
-		sunFolder
-			.add(this.settings.orbit, "sunsetAzimuthRadians")
-			.name("Sun Azimuth")
-			.min(0.0)
-			.max(2.0 * Math.PI);
-		sunFolder
-			.add(this.settings.orbit, "inclinationRadians")
-			.name("Sun Inclination")
-			.min(0.0)
-			.max(Math.PI);
-
-		const oceanFolder = gui.addFolder("Ocean").close();
-		oceanFolder
-			.add(this.settings.oceanSurfaceSettings, "gerstner")
-			.name("Gerstner Waves");
-		oceanFolder
-			.add(this.settings.oceanSurfaceSettings, "fft")
-			.name("FFT Accelerated Waves");
-		oceanFolder.add(this.settings, "pauseGlobalTime").name("Pause Waves");
-		oceanFolder
-			.add(this.settings.oceanSurfaceSettings, "foamScale")
-			.name("Foam Scale")
-			.min(-30.0)
-			.max(30.0);
-		oceanFolder
-			.add(this.settings.oceanSurfaceSettings, "foamBias")
-			.name("Foam Bias")
-			.min(-1.0)
-			.max(1.0);
-
-		oceanFolder
-			.add(this.settings.fourierWavesSettings, "gravity")
-			.name("Gravity (m / s^2)")
-			.min(0.01)
-			.max(20.0);
-		oceanFolder
-			.add(this.settings.fourierWavesSettings, "waveSwell")
-			.name("Wave Swell")
-			.min(0.01)
-			.max(1.0);
-		oceanFolder
-			.add(this.settings.fourierWavesSettings, "windFetchMeters")
-			.name("Wind Fetch (m)")
-			.min(10.0 * 1000.0)
-			.max(100.0 * 1000.0);
-		oceanFolder
-			.add(
-				this.settings.fourierWavesSettings,
-				"windSpeedMetersPerSeconds"
-			)
-			.name("Wind Speed (m/s)")
-			.min(0.01)
-			.max(50.0);
-
-		const debugFolder = gui.addFolder("Debug").close();
-		const debugCameraControllers: LilController[] = [];
-		debugFolder
-			.add(this.settings.cameraSettings, "renderFromOceanPOV")
-			.name("Render from Ocean POV")
-			.onFinishChange((v: boolean) => {
-				debugCameraControllers.forEach((c) => {
-					c.enable(!v);
-				});
-			});
-
-		debugCameraControllers.push(
-			debugFolder
-				.add(this.settings.cameraSettings.debugCamera, "translationX")
-				.name("Camera X")
-				.min(-100.0)
-				.max(100.0),
-			debugFolder
-				.add(this.settings.cameraSettings.debugCamera, "translationY")
-				.name("Camera Y")
-				.min(10.0)
-				.max(1000.0),
-			debugFolder
-				.add(this.settings.cameraSettings.debugCamera, "translationZ")
-				.name("Camera Z")
-				.min(-100.0)
-				.max(100.0),
-
-			debugFolder
-				.add(this.settings.cameraSettings.debugCamera, "eulerAnglesX")
-				.name("Camera Pitch")
-				.min(-Math.PI / 2.0 + EULER_ANGLES_X_SAFETY_MARGIN)
-				.max(Math.PI / 2.0 - EULER_ANGLES_X_SAFETY_MARGIN),
-			debugFolder
-				.add(this.settings.cameraSettings.debugCamera, "eulerAnglesY")
-				.name("Camera Yaw")
-				.min(-Math.PI)
-				.max(Math.PI),
-
-			/* Non-zero camera roll breaks certain horizon calculations in shaders
-		debugFolder
-			.add(this.settings.cameraSettings.debugCamera, "eulerAnglesZ")
-			.name("Camera Roll")
-			.min(-Math.PI)
-			.max(Math.PI),
-		*/
-			debugFolder
-				.add(
-					{
-						fn: () => {
-							Object.assign<
-								typeof this.settings.cameraSettings.debugCamera,
-								typeof this.settings.cameraSettings.debugCamera
-							>(
-								this.settings.cameraSettings.debugCamera,
-								structuredClone(
-									this.settings.cameraSettings.oceanCamera
-								)
-							);
-							debugFolder.controllers.forEach((c) => {
-								c.updateDisplay();
-							});
-						},
-					},
-					"fn"
-				)
-				.name("Reset to match main camera")
-		);
-		debugCameraControllers.forEach((c) => c.enable(false));
-
 		this.performance.setupUI(gui);
 	}
 
@@ -329,34 +336,32 @@ class SkySeaApp implements RendererApp {
 
 		this.float32Filterable = device.features.has("float32-filterable");
 
-		this.renderOutputController = new RenderOutputController();
 		this.presentFormat = presentFormat;
-		this.startTime = time;
-		this.settings = {
+
+		this.renderOutputController = new RenderOutputController();
+		this.parameters = {
 			oceanSurfaceSettings: {
 				gerstner: true,
 				fft: true,
 				foamScale: 15,
 				foamBias: 0.25,
 			},
-			cameraSettings: {
-				renderFromOceanPOV: true,
-				oceanCamera: {
-					translationX: 0.0,
-					translationY: 20.0,
-					translationZ: 0.0,
-					eulerAnglesX: -0.2,
-					eulerAnglesY: 0.0,
-					eulerAnglesZ: 0.0,
-				},
-				debugCamera: {
-					translationX: 0.0,
-					translationY: 40.0,
-					translationZ: -20.0,
-					eulerAnglesX: -0.4,
-					eulerAnglesY: 0.0,
-					eulerAnglesZ: 0.0,
-				},
+			renderFromOceanPOV: true,
+			oceanCamera: {
+				translationX: 0.0,
+				translationY: 20.0,
+				translationZ: 0.0,
+				eulerAnglesX: -0.2,
+				eulerAnglesY: 0.0,
+				eulerAnglesZ: 0.0,
+			},
+			debugCamera: {
+				translationX: 0.0,
+				translationY: 40.0,
+				translationZ: -20.0,
+				eulerAnglesX: -0.4,
+				eulerAnglesY: 0.0,
+				eulerAnglesZ: 0.0,
 			},
 			fourierWavesSettings: {
 				gravity: 9.8,
@@ -364,7 +369,11 @@ class SkySeaApp implements RendererApp {
 				windFetchMeters: 40.0 * 1000.0,
 				waveSwell: 0.3,
 			},
-			pauseGlobalTime: false,
+			time: {
+				pause: false,
+				timeSeconds: 0.0,
+				deltaTimeSeconds: 0.0,
+			},
 			orbit: {
 				timeHours: 5.7,
 				timeSpeedupFactor: 400.0,
@@ -373,10 +382,11 @@ class SkySeaApp implements RendererApp {
 				inclinationRadians: Math.PI / 2,
 				sunsetAzimuthRadians: Math.PI,
 			},
-			renderScale: 1.5,
+			renderScale: 1.0,
 		};
-		this.scaledSize = { width: 1.0, height: 1.0 };
-		this.rawSize = { width: 1.0, height: 1.0 };
+
+		this.startTime = time;
+		this.unscaledResolution = { width: 1.0, height: 1.0 };
 
 		this.performance = new PerformanceTracker(this.device);
 
@@ -538,10 +548,29 @@ class SkySeaApp implements RendererApp {
 		device.queue.submit([commandEncoder.finish()]);
 	}
 
-	updateOrbit(deltaTimeMilliseconds: number) {
-		const orbit = this.settings.orbit;
+	tickTime(deltaTimeMilliseconds: number) {
+		const NON_FFT_WAVE_PERIOD_SECONDS = 60.0;
+		const FFT_WAVE_PERIOD_SECONDS = 100.0;
 
-		if (!this.settings.orbit.paused) {
+		const periodSeconds = this.parameters.oceanSurfaceSettings.fft
+			? FFT_WAVE_PERIOD_SECONDS
+			: NON_FFT_WAVE_PERIOD_SECONDS;
+
+		const time = this.parameters.time;
+		if (!time.pause) {
+			time.deltaTimeSeconds = deltaTimeMilliseconds / 1000.0;
+			time.timeSeconds += time.deltaTimeSeconds;
+		} else {
+			time.deltaTimeSeconds = 0.0;
+		}
+
+		// It is important to NOT set the time, instead modulo it.
+		// This keeps the delta time consistent.
+		time.timeSeconds -=
+			Math.floor(time.timeSeconds / periodSeconds) * periodSeconds;
+
+		const orbit = this.parameters.orbit;
+		if (!orbit.paused) {
 			const HOURS_TO_MILLISECONDS = 60.0 * 60.0 * 1000.0;
 			orbit.timeHours +=
 				((orbit.reversed ? -1.0 : 1.0) *
@@ -551,40 +580,45 @@ class SkySeaApp implements RendererApp {
 			orbit.timeHours =
 				orbit.timeHours - Math.floor(orbit.timeHours / 24.0) * 24.0;
 		}
+	}
+
+	updateGlobalUBO(aspectRatio: number) {
+		const parameters = this.parameters;
+
+		this.globalUBO.data.time.deltaTimeSeconds =
+			parameters.time.deltaTimeSeconds;
+		this.globalUBO.data.time.timeSeconds = parameters.time.timeSeconds;
 
 		// offset the time so that the app starts during the day
 		const SUN_ROTATION_RAD_PER_HOUR = (2.0 * Math.PI) / 24.0;
 		const SUN_ANOMALY =
-			(12.0 - orbit.timeHours) * SUN_ROTATION_RAD_PER_HOUR;
+			(12.0 - parameters.orbit.timeHours) * SUN_ROTATION_RAD_PER_HOUR;
 
 		const sunsetDirection = vec3.create(
-			-Math.sin(orbit.sunsetAzimuthRadians),
+			-Math.sin(parameters.orbit.sunsetAzimuthRadians),
 			0.0,
-			Math.cos(orbit.sunsetAzimuthRadians)
+			Math.cos(parameters.orbit.sunsetAzimuthRadians)
 		);
 		const noonDirection = vec3.create(
-			Math.cos(orbit.sunsetAzimuthRadians) *
-				Math.cos(orbit.inclinationRadians),
-			Math.sin(orbit.inclinationRadians),
-			Math.sin(orbit.sunsetAzimuthRadians) *
-				Math.cos(orbit.inclinationRadians)
+			Math.cos(parameters.orbit.sunsetAzimuthRadians) *
+				Math.cos(parameters.orbit.inclinationRadians),
+			Math.sin(parameters.orbit.inclinationRadians),
+			Math.sin(parameters.orbit.sunsetAzimuthRadians) *
+				Math.cos(parameters.orbit.inclinationRadians)
 		);
 		const sunDirection = vec3.add(
 			vec3.scale(sunsetDirection, Math.sin(SUN_ANOMALY)),
 			vec3.scale(noonDirection, Math.cos(SUN_ANOMALY))
 		);
 		vec3.scale(sunDirection, -1.0, this.globalUBO.data.light.forward);
-	}
 
-	updateCameras(aspectRatio: number) {
 		const fov = (60 * Math.PI) / 180;
 		const near = 0.1;
 		const far = 1000;
 		const perspective = mat4.perspective(fov, aspectRatio, near, far);
 
 		{
-			const oceanCameraSettings =
-				this.settings.cameraSettings.oceanCamera;
+			const oceanCameraSettings = parameters.oceanCamera;
 			const oceanCameraPos = [
 				oceanCameraSettings.translationX,
 				oceanCameraSettings.translationY,
@@ -618,7 +652,7 @@ class SkySeaApp implements RendererApp {
 			});
 		}
 
-		if (this.settings.cameraSettings.renderFromOceanPOV) {
+		if (parameters.renderFromOceanPOV) {
 			Object.assign<
 				typeof this.globalUBO.data.camera,
 				typeof this.globalUBO.data.camera
@@ -627,8 +661,7 @@ class SkySeaApp implements RendererApp {
 				structuredClone(this.globalUBO.data.ocean_camera)
 			);
 		} else {
-			const debugCameraSettings =
-				this.settings.cameraSettings.debugCamera;
+			const debugCameraSettings = parameters.debugCamera;
 			const debugCameraPos = [
 				debugCameraSettings.translationX,
 				debugCameraSettings.translationY,
@@ -662,28 +695,8 @@ class SkySeaApp implements RendererApp {
 				),
 			});
 		}
-	}
 
-	updateTime(deltaTimeMilliseconds: number) {
-		const timeUBO = this.globalUBO.data.time;
-		if (!this.settings.pauseGlobalTime) {
-			timeUBO.deltaTimeSeconds = deltaTimeMilliseconds / 1000.0;
-			timeUBO.timeSeconds += timeUBO.deltaTimeSeconds;
-		} else {
-			timeUBO.deltaTimeSeconds = 0.0;
-		}
-
-		const NON_FFT_WAVE_PERIOD_SECONDS = 60.0;
-		const FFT_WAVE_PERIOD_SECONDS = 100.0;
-
-		const periodSeconds = this.settings.oceanSurfaceSettings.fft
-			? FFT_WAVE_PERIOD_SECONDS
-			: NON_FFT_WAVE_PERIOD_SECONDS;
-
-		// It is important to NOT set the time, instead modulo it.
-		// This keeps the delta time consistent.
-		timeUBO.timeSeconds -=
-			Math.floor(timeUBO.timeSeconds / periodSeconds) * periodSeconds;
+		this.globalUBO.writeToGPU(this.device.queue);
 	}
 
 	draw(
@@ -716,31 +729,10 @@ class SkySeaApp implements RendererApp {
 			this.performance.asyncUpdateFrametimeAverages();
 			return;
 		}
-		if (this.probationFrameCounter > 0.0) {
-			this.probationFrameCounter -= 1;
-			if (this.probationFrameCounter < 1.0) {
-				console.log(
-					`Average FPS with load is ${this.performance.averageFPS}`
-				);
-				const exactScale = this.performance.averageFPS / this.targetFPS;
-				this.settings.renderScale = RENDER_SCALES[0];
-				RENDER_SCALES.forEach((scale) => {
-					if (
-						Math.abs(scale - exactScale) <
-						Math.abs(this.settings.renderScale - exactScale)
-					) {
-						this.settings.renderScale = scale;
-					}
-				});
-				this.handleResize(this.rawSize.width, this.rawSize.height);
-			}
-		}
 
-		this.updateCameras(aspectRatio);
-		this.updateTime(deltaTimeMilliseconds);
-		this.updateOrbit(deltaTimeMilliseconds);
+		this.tickTime(deltaTimeMilliseconds);
 
-		this.globalUBO.writeToGPU(this.device.queue);
+		this.updateGlobalUBO(aspectRatio);
 
 		const commandEncoder = this.device.createCommandEncoder({
 			label: "Main",
@@ -749,7 +741,7 @@ class SkySeaApp implements RendererApp {
 		this.fftWaveSpectrumResources.record(
 			this.device,
 			commandEncoder,
-			this.settings.fourierWavesSettings,
+			this.parameters.fourierWavesSettings,
 			this.performance.pushTimestampQueryInterval("FFTWaves")
 		);
 
@@ -759,10 +751,10 @@ class SkySeaApp implements RendererApp {
 			this.performance.pushTimestampQueryInterval("OceanSurface"),
 			this.fftWaveSpectrumResources.turbulenceMapIndex,
 			{
-				gerstner: this.settings.oceanSurfaceSettings.gerstner,
-				fft: this.settings.oceanSurfaceSettings.fft,
-				foamBias: this.settings.oceanSurfaceSettings.foamBias,
-				foamScale: this.settings.oceanSurfaceSettings.foamScale,
+				gerstner: this.parameters.oceanSurfaceSettings.gerstner,
+				fft: this.parameters.oceanSurfaceSettings.fft,
+				foamBias: this.parameters.oceanSurfaceSettings.foamBias,
+				foamScale: this.parameters.oceanSurfaceSettings.foamScale,
 			},
 			{
 				extent: vec2.create(
@@ -806,53 +798,74 @@ class SkySeaApp implements RendererApp {
 		this.device.queue.submit([commandEncoder.finish()]);
 
 		this.performance.asyncUpdateFrametimeAverages();
+
+		if (this.probationFrameCounter > 0.0) {
+			this.probationFrameCounter -= 1;
+			if (this.probationFrameCounter < 1.0) {
+				console.log(
+					`Average FPS with load is ${this.performance.averageFPS}`
+				);
+				const exactScale = this.performance.averageFPS / this.targetFPS;
+				this.parameters.renderScale = RENDER_SCALES[0];
+				RENDER_SCALES.forEach((scale) => {
+					if (
+						Math.abs(scale - exactScale) <
+						Math.abs(this.parameters.renderScale - exactScale)
+					) {
+						this.parameters.renderScale = scale;
+					}
+				});
+				this.updateResizableResources();
+			}
+		}
 	}
 
-	handleResize(newWidth: number, newHeight: number) {
-		const newSize = {
-			width: newWidth * this.settings.renderScale,
-			height: newHeight * this.settings.renderScale,
+	updateResizableResources() {
+		const calcScaledSize = (renderScale: number) => {
+			return {
+				width: Math.floor(this.unscaledResolution.width * renderScale),
+				height: Math.floor(
+					this.unscaledResolution.height * renderScale
+				),
+			};
 		};
 
-		const WEBGPU_MAX_DIMENSION = 8192;
-		const WEBGPU_MAX_BUFFER_BYTES = 268435456;
-		const BYTES_PER_RGBA32FLOAT = 16;
-
-		const validateSize = (width: number, height: number) => {
+		const validateSize = (size: Extent2D) => {
+			const WEBGPU_MAX_DIMENSION = 8192;
+			const WEBGPU_MAX_BUFFER_BYTES = 268435456;
+			const BYTES_PER_RGBA32FLOAT = 16;
 			return (
-				width < WEBGPU_MAX_DIMENSION &&
-				height < WEBGPU_MAX_DIMENSION &&
-				width * height * BYTES_PER_RGBA32FLOAT < WEBGPU_MAX_BUFFER_BYTES
+				size.width < WEBGPU_MAX_DIMENSION &&
+				size.height < WEBGPU_MAX_DIMENSION &&
+				size.width * size.height * BYTES_PER_RGBA32FLOAT <
+					WEBGPU_MAX_BUFFER_BYTES
 			);
 		};
 
-		if (!validateSize(newSize.width, newSize.height)) {
+		let renderScale = this.parameters.renderScale;
+		const originalScaledSize = calcScaledSize(renderScale);
+		if (!validateSize(originalScaledSize)) {
 			RENDER_SCALES.slice()
 				.reverse()
-				.some((value) => {
-					if (validateSize(newWidth * value, newHeight * value)) {
-						this.settings.renderScale = value;
+				.some((newRenderScale) => {
+					if (validateSize(calcScaledSize(newRenderScale))) {
+						renderScale = newRenderScale;
 						return true;
 					}
 				});
 			console.warn(
-				`During resize: Texture size (${newSize.width},${newSize.height}) exceeds WebGPU guaranteed limit (8192, 8192).
-								Defaulting to highest possible render scale of ${this.settings.renderScale}`
+				`During resize: Texture size (${originalScaledSize.width},${originalScaledSize.height}) exceeds WebGPU guaranteed limit (8192, 8192).
+					Defaulting to highest possible render scale of ${renderScale}`
 			);
-			this.scaledSize = {
-				width: newWidth * this.settings.renderScale,
-				height: newHeight * this.settings.renderScale,
-			};
-		} else {
-			this.scaledSize = newSize;
 		}
+		this.parameters.renderScale = renderScale;
 
+		const finalScaledSize = calcScaledSize(this.parameters.renderScale);
 		console.log(
-			`Resizing to (${this.scaledSize.width},${this.scaledSize.height})`
+			`Resizing to (${finalScaledSize.width},${finalScaledSize.height})`
 		);
 
-		this.rawSize = { width: newWidth, height: newHeight };
-		this.gbuffer = new GBuffer(this.device, this.scaledSize, this.gbuffer);
+		this.gbuffer = new GBuffer(this.device, finalScaledSize, this.gbuffer);
 
 		this.fullscreenQuadPassResources.setOutput(
 			this.device,
@@ -870,7 +883,7 @@ class SkySeaApp implements RendererApp {
 		);
 
 		this.atmosphereCameraPassResources.resize(
-			this.scaledSize,
+			finalScaledSize,
 			this.device,
 			this.transmittanceLUTPassResources.view,
 			this.multiscatterLUTPassResources.view,
@@ -888,6 +901,13 @@ class SkySeaApp implements RendererApp {
 		for (const props of this.fullscreenQuadPassResources.getAllTextureProperties()) {
 			this.renderOutputController.setTextureProperties(props);
 		}
+	}
+
+	handleResize(newWidth: number, newHeight: number) {
+		this.unscaledResolution.width = newWidth;
+		this.unscaledResolution.height = newHeight;
+
+		this.updateResizableResources();
 	}
 }
 

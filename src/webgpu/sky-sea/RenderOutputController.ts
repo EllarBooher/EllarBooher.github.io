@@ -154,34 +154,35 @@ export class RenderOutputController {
 	}
 
 	setupUI(gui: LilGUI) {
-		gui.add({ outputTexture: "Scene" }, "outputTexture", {
-			"Final Scene": "Scene",
-			"[GBuffer] Color": "GBufferColor",
-			"[GBuffer] Normal": "GBufferNormal",
-			"[Atmosphere] Transmittance LUT": "AtmosphereTransmittanceLUT",
-			"[Atmosphere] Multiscatter LUT": "AtmosphereMultiscatterLUT",
-			"[Atmosphere] Skyview LUT": "AtmosphereSkyviewLUT",
-			"[Atmosphere] Aerial Perspective LUT":
-				"AtmosphereAerialPerspectiveLUT",
-			"[FFT Waves] Gaussian Noise": "FFTWaveSpectrumGaussianNoise",
-			"[FFT Waves] Initial Amplitude": "FFTWaveInitialAmplitude",
-			"[FFT Waves] Frequency Domain (Dx + i * Dy, Dz + i * Dxdz)":
-				"FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude",
-			"[FFT Waves] Frequency Domain (Dydx + i * Dydz, Dxdx + i * Dzdz)":
-				"FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude",
-			"[FFT Waves] (Turbulence, Jacobian)": "FFTWaveTurbulenceJacobian",
-			"[FFT Waves] Spatial Domain (Dx, Dy, Dz, Dxdz)":
-				"FFTWaveDx_Dy_Dz_Dxdz_Spatial",
-			"[FFT Waves] Spatial Domain (Dydx, Dydz, Dxdx, Dzdx)":
-				"FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial",
-		})
+		const outputTextureFolder = gui.addFolder("Render Output").close();
+		outputTextureFolder
+			.add({ outputTexture: "Scene" }, "outputTexture", {
+				"Final Scene": "Scene",
+				"[GBuffer] Color": "GBufferColor",
+				"[GBuffer] Normal": "GBufferNormal",
+				"[Atmosphere] Transmittance LUT": "AtmosphereTransmittanceLUT",
+				"[Atmosphere] Multiscatter LUT": "AtmosphereMultiscatterLUT",
+				"[Atmosphere] Skyview LUT": "AtmosphereSkyviewLUT",
+				"[Atmosphere] Aerial Perspective LUT":
+					"AtmosphereAerialPerspectiveLUT",
+				"[FFT Waves] Gaussian Noise": "FFTWaveSpectrumGaussianNoise",
+				"[FFT Waves] Initial Amplitude": "FFTWaveInitialAmplitude",
+				"[FFT Waves] Frequency Domain (Dx + i * Dy, Dz + i * Dxdz)":
+					"FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude",
+				"[FFT Waves] Frequency Domain (Dydx + i * Dydz, Dxdx + i * Dzdz)":
+					"FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude",
+				"[FFT Waves] (Turbulence, Jacobian)":
+					"FFTWaveTurbulenceJacobian",
+				"[FFT Waves] Spatial Domain (Dx, Dy, Dz, Dxdz)":
+					"FFTWaveDx_Dy_Dz_Dxdz_Spatial",
+				"[FFT Waves] Spatial Domain (Dydx, Dydz, Dxdx, Dzdx)":
+					"FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial",
+			})
 			.name("Render Output")
 			.listen()
 			.onFinishChange((v: RenderOutputCategory) => {
 				this.setOutput(v);
 			});
-
-		const outputTextureFolder = gui.addFolder("Output Transform").close();
 
 		const currentTransform = this.options.renderOutputTransforms.get(
 			this.options.outputTexture

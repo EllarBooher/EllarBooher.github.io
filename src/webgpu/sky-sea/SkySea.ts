@@ -2,22 +2,23 @@ import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { RendererApp, RendererAppConstructor } from "../RendererApp.ts";
 import { mat4, vec2, vec3, vec4 } from "wgpu-matrix";
 import { Camera, GlobalUBO } from "./UBO.ts";
+import { Extent2D } from "./Common.ts";
+
+import { TransmittanceLUTPassResources } from "./atmosphere/TransmittanceLUT.ts";
+import { MultiscatterLUTPassResources } from "./atmosphere/MultiscatterLUT.ts";
+import { SkyViewLUTPassResources } from "./atmosphere/SkyViewLUT.ts";
+import { AtmosphereCameraPassResources } from "./atmosphere/AtmosphereCamera.ts";
+import { AerialPerspectiveLUTPassResources } from "./atmosphere/AerialPerspectiveLUT.ts";
+
 import {
-	Extent2D,
 	RenderOutputCategory,
 	RenderOutputTexture,
-} from "./Common.ts";
-
-import { RenderOutputController } from "./RenderOutputController.ts";
+	RenderOutputController,
+} from "./RenderOutputController.ts";
 import { GBuffer } from "./GBuffer.ts";
-import { TransmittanceLUTPassResources } from "./TransmittanceLUT.ts";
-import { MultiscatterLUTPassResources } from "./MultiscatterLUT.ts";
-import { SkyViewLUTPassResources } from "./SkyViewLUT.ts";
 import { FFTWaveSpectrumResources, FFTWavesSettings } from "./FourierWaves.ts";
 import { WaveSurfaceDisplacementPassResources } from "./WaveDisplacement.ts";
-import { AtmosphereCameraPassResources } from "./AtmosphereCamera.ts";
 import { FullscreenQuadPassResources } from "./FullscreenQuad.ts";
-import { AerialPerspectiveLUTPassResources } from "./AerialPerspectiveLUT.ts";
 import { PerformanceTracker } from "./PerformanceTracker.ts";
 
 const TRANSMITTANCE_LUT_EXTENT = { width: 2048, height: 1024 } as const;

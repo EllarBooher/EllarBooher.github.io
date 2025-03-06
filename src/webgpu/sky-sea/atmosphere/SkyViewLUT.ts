@@ -1,21 +1,22 @@
-import { GlobalUBO } from "./UBO.ts";
-import AerialPerspectiveLUTPak from "../../shaders/sky-sea/aerial_perspective_LUT.wgsl";
-import { TimestampQueryInterval } from "./PerformanceTracker.ts";
+import { Extent2D } from "../Common.ts";
+import { GlobalUBO } from "../UBO.ts";
+import SkyViewLUTPak from "../../../shaders/sky-sea/skyview_LUT.wgsl";
+import { TimestampQueryInterval } from "../PerformanceTracker.ts";
 
-const AERIAL_PERSPECTIVE_LUT_FORMAT: GPUTextureFormat = "rgba16float";
+const SKYVIEW_LUT_FORMAT: GPUTextureFormat = "rgba32float";
 
-export class AerialPerspectiveLUTPassResources {
+export class SkyViewLUTPassResources {
 	texture: GPUTexture;
 	view: GPUTextureView;
 
 	/*
-	 * @group(0) @binding(0) var aerial_perspective_lut: texture_storage_3d<rgba16float, write>;
-	 * @group(0) @binding(1) var lut_sampler: sampler;
-	 * @group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
-	 * @group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
-	 *
-	 * @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
-	 */
+	@group(0) @binding(0) var skyview_lut: texture_storage_2d<rgba32float, write>;
+	@group(0) @binding(1) var lut_sampler: sampler;
+	@group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
+	@group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
+
+	@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+	*/
 	group0: GPUBindGroup;
 	group1: GPUBindGroup;
 
@@ -23,7 +24,7 @@ export class AerialPerspectiveLUTPassResources {
 
 	constructor(
 		device: GPUDevice,
-		dimensions: GPUExtent3DDictStrict,
+		dimensions: Extent2D,
 		transmittanceLUT: GPUTextureView,
 		multiscatterLUT: GPUTextureView,
 		filterableLUT: boolean,
@@ -31,17 +32,14 @@ export class AerialPerspectiveLUTPassResources {
 	) {
 		this.texture = device.createTexture({
 			size: dimensions,
-			dimension: "3d",
-			format: AERIAL_PERSPECTIVE_LUT_FORMAT,
+			dimension: "2d",
+			format: SKYVIEW_LUT_FORMAT,
 			usage:
 				GPUTextureUsage.STORAGE_BINDING |
 				GPUTextureUsage.TEXTURE_BINDING,
-			label: "Aerial Perspective LUT",
+			label: "Skyview LUT",
 		});
-		this.view = this.texture.createView({
-			label: this.texture.label,
-			dimension: "3d",
-		});
+		this.view = this.texture.createView({ label: "Skyview LUT" });
 
 		const bindGroup0Layout = device.createBindGroupLayout({
 			entries: [
@@ -50,8 +48,7 @@ export class AerialPerspectiveLUTPassResources {
 					visibility: GPUShaderStage.COMPUTE,
 					storageTexture: {
 						access: "write-only",
-						viewDimension: "3d",
-						format: AERIAL_PERSPECTIVE_LUT_FORMAT,
+						format: SKYVIEW_LUT_FORMAT,
 					},
 				},
 				{
@@ -80,7 +77,7 @@ export class AerialPerspectiveLUTPassResources {
 					},
 				},
 			],
-			label: "Aerial Perspective LUT",
+			label: "Skyview LUT",
 		});
 
 		this.group0 = device.createBindGroup({
@@ -106,7 +103,7 @@ export class AerialPerspectiveLUTPassResources {
 					resource: multiscatterLUT,
 				},
 			],
-			label: "Aerial Perspective LUT Group 0",
+			label: "Skyview LUT Group 0",
 		});
 
 		const bindGroup1Layout = device.createBindGroupLayout({
@@ -117,7 +114,7 @@ export class AerialPerspectiveLUTPassResources {
 					buffer: {},
 				},
 			],
-			label: "Aerial Perspective LUT Group 1",
+			label: "Skyview LUT Group 1",
 		});
 
 		this.group1 = device.createBindGroup({
@@ -128,22 +125,22 @@ export class AerialPerspectiveLUTPassResources {
 					resource: { buffer: globalUBO.buffer },
 				},
 			],
-			label: "Aerial Perspective LUT Group 1",
+			label: "Skyview LUT Group 1",
 		});
 
-		const shaderModule = device.createShaderModule({
-			code: AerialPerspectiveLUTPak,
+		const skyviewLUTShaderModule = device.createShaderModule({
+			code: SkyViewLUTPak,
 		});
 
 		this.pipeline = device.createComputePipeline({
 			compute: {
-				module: shaderModule,
-				entryPoint: "computeAerialPerspective",
+				module: skyviewLUTShaderModule,
+				entryPoint: "computeSkyViewLuminance",
 			},
 			layout: device.createPipelineLayout({
 				bindGroupLayouts: [bindGroup0Layout, bindGroup1Layout],
 			}),
-			label: "Aerial Perspective LUT",
+			label: "Skyview LUT",
 		});
 	}
 
@@ -151,29 +148,32 @@ export class AerialPerspectiveLUTPassResources {
 		commandEncoder: GPUCommandEncoder,
 		timestampInterval: TimestampQueryInterval | undefined
 	) {
-		const aerialPerspectiveLUTPassEncoder = commandEncoder.beginComputePass(
-			{
-				timestampWrites:
-					timestampInterval !== undefined
-						? {
-								querySet: timestampInterval.querySet,
-								beginningOfPassWriteIndex:
-									timestampInterval.beginWriteIndex,
-								endOfPassWriteIndex:
-									timestampInterval.endWriteIndex,
-						  }
-						: undefined,
-				label: "Aerial Perspective LUT",
-			}
-		);
-		aerialPerspectiveLUTPassEncoder.setPipeline(this.pipeline);
-		aerialPerspectiveLUTPassEncoder.setBindGroup(0, this.group0);
-		aerialPerspectiveLUTPassEncoder.setBindGroup(1, this.group1);
-		aerialPerspectiveLUTPassEncoder.dispatchWorkgroups(
+		const skyviewLUTPassEncoder = commandEncoder.beginComputePass({
+			timestampWrites:
+				timestampInterval !== undefined
+					? {
+							querySet: timestampInterval.querySet,
+							beginningOfPassWriteIndex:
+								timestampInterval.beginWriteIndex,
+							endOfPassWriteIndex:
+								timestampInterval.endWriteIndex,
+					  }
+					: undefined,
+			label: "Skyview LUT",
+		});
+		skyviewLUTPassEncoder.setPipeline(this.pipeline);
+		skyviewLUTPassEncoder.setBindGroup(0, this.group0);
+		skyviewLUTPassEncoder.setBindGroup(1, this.group1);
+
+		/*
+		 * We trim lower half of skyview lut to save roughly half of the work.
+		 * We render the ocean over the entirety and are at a lower altitude,
+		 * so our use case is a bit specific.
+		 */
+		skyviewLUTPassEncoder.dispatchWorkgroups(
 			Math.ceil(this.texture.width / 16),
-			Math.ceil(this.texture.height / 16),
-			Math.ceil(this.texture.depthOrArrayLayers / 1)
+			Math.ceil(this.texture.height / (16 * 1.9))
 		);
-		aerialPerspectiveLUTPassEncoder.end();
+		skyviewLUTPassEncoder.end();
 	}
 }

@@ -1,5 +1,8 @@
 import { UBO } from "./UBO";
-import { RenderOutputCategory, RenderOutputTexture } from "./Common";
+import {
+	RenderOutputCategory,
+	RenderOutputTexture,
+} from "./RenderOutputController";
 import FullscreenQuadPak from "../../shaders/sky-sea/fullscreen_quad.wgsl";
 import { Vec4, vec4 } from "wgpu-matrix";
 import { TimestampQueryInterval } from "./PerformanceTracker";

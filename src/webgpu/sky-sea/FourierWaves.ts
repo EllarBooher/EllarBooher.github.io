@@ -2,7 +2,7 @@ import FourierWavesShaderPak from "../../shaders/sky-sea/fourier_waves.wgsl";
 
 import { GlobalUBO, UBO } from "./UBO.ts";
 import { DFFTResources } from "./FFT.ts";
-import { RenderOutputTexture } from "./Common.ts";
+import { RenderOutputTexture } from "./RenderOutputController.ts";
 import {
 	MipMapGenerationPassResources,
 	MipMapGenerationTextureBindings,

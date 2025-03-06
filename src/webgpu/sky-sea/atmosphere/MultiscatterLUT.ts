@@ -1,6 +1,6 @@
-import { Extent2D } from "./Common.ts";
-import { GlobalUBO } from "./UBO.ts";
-import MultiscatterLUTPak from "../../shaders/sky-sea/multiscatter_LUT.wgsl";
+import { Extent2D } from "../Common.ts";
+import { GlobalUBO } from "../UBO.ts";
+import MultiscatterLUTPak from "../../../shaders/sky-sea/multiscatter_LUT.wgsl";
 
 const MULTISCATTER_LUT_FORMAT: GPUTextureFormat = "rgba32float";
 

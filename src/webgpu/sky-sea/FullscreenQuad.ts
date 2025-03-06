@@ -4,6 +4,23 @@ import FullscreenQuadPak from "../../shaders/sky-sea/fullscreen_quad.wgsl";
 import { Vec4, vec4 } from "wgpu-matrix";
 import { TimestampQueryInterval } from "./PerformanceTracker";
 
+export class RenderOutputTransform {
+	flip = false;
+	colorGain: {
+		r: number;
+		g: number;
+		b: number;
+	} = { r: 1.0, g: 1.0, b: 1.0 };
+	channelMasks: {
+		r: boolean;
+		g: boolean;
+		b: boolean;
+	} = { r: true, g: true, b: true };
+	swapBARG = false;
+	mipLevel = 0;
+	arrayLayer = 0;
+}
+
 export class FullscreenQuadUBOData {
 	color_gain: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
 	vertex_scale: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
@@ -278,12 +295,12 @@ export class FullscreenQuadPassResources {
 		});
 	}
 
-	recordPresent(
+	record(
 		device: GPUDevice,
 		commandEncoder: GPUCommandEncoder,
 		presentView: GPUTextureView,
 		id: RenderOutput,
-		renderParams: FullscreenQuadUBOData,
+		transform: RenderOutputTransform,
 		timestamps?: TimestampQueryInterval
 	) {
 		const clearColor = { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
@@ -318,7 +335,27 @@ export class FullscreenQuadPassResources {
 		// This should happen upon changing params in the UI, not every draw?
 		// It probably does not matter too much with how small the buffer is,
 		// and how it is mostly static each frame.
-		this.ubo.data = renderParams;
+
+		this.ubo.data.color_gain = vec4.create(
+			transform.colorGain.r,
+			transform.colorGain.g,
+			transform.colorGain.b,
+			1.0
+		);
+		this.ubo.data.vertex_scale = vec4.create(
+			1.0,
+			transform.flip ? -1.0 : 1.0,
+			1.0,
+			1.0
+		);
+		this.ubo.data.mip_level_u32 = Math.round(transform.mipLevel);
+		this.ubo.data.depth_or_array_layer = transform.arrayLayer;
+		this.ubo.data.channel_mask =
+			(transform.channelMasks.r ? 1 : 0) +
+			(transform.channelMasks.g ? 2 : 0) +
+			(transform.channelMasks.b ? 4 : 0);
+		this.ubo.data.swap_ba_rg = transform.swapBARG;
+
 		this.ubo.writeToGPU(device.queue);
 
 		fullscreenPassEncoder.setIndexBuffer(

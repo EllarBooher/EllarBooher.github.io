@@ -12,8 +12,8 @@ import { FFTWaveSpectrumResources, FFTWavesSettings } from "./FourierWaves.ts";
 import { WaveSurfaceDisplacementPassResources } from "./WaveDisplacement.ts";
 import { AtmosphereCameraPassResources } from "./AtmosphereCamera.ts";
 import {
-	FullscreenQuadUBOData,
 	FullscreenQuadPassResources,
+	RenderOutputTransform,
 } from "./FullscreenQuad.ts";
 import { AerialPerspectiveLUTPassResources } from "./AerialPerspectiveLUT.ts";
 import {
@@ -30,23 +30,6 @@ const AERIAL_PERSPECTIVE_LUT_EXTENT = {
 	height: 32,
 	depthOrArrayLayers: 32,
 } as const;
-
-class RenderOutputTransform {
-	flip = false;
-	colorGain: {
-		r: number;
-		g: number;
-		b: number;
-	} = { r: 1.0, g: 1.0, b: 1.0 };
-	channelMasks: {
-		r: boolean;
-		g: boolean;
-		b: boolean;
-	} = { r: true, g: true, b: true };
-	swapBARG = false;
-	mipLevel = 0;
-	arrayLayer = 0;
-}
 
 const RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES: ({
 	[K in keyof RenderOutputTransform]?: RenderOutputTransform[K];
@@ -1096,40 +1079,14 @@ class SkySeaApp implements RendererApp {
 			this.performance.pushTimestampQueryInterval("AtmosphereCamera"),
 			this.gbuffer
 		);
-
-		{
-			const renderOutputTransform =
-				this.settings.currentRenderOutputTransform;
-			const uboData = new FullscreenQuadUBOData();
-			uboData.color_gain = vec4.create(
-				renderOutputTransform.colorGain.r,
-				renderOutputTransform.colorGain.g,
-				renderOutputTransform.colorGain.b,
-				1.0
-			);
-			uboData.vertex_scale = vec4.create(
-				1.0,
-				renderOutputTransform.flip ? -1.0 : 1.0,
-				1.0,
-				1.0
-			);
-			uboData.mip_level_u32 = Math.round(renderOutputTransform.mipLevel);
-			uboData.depth_or_array_layer = renderOutputTransform.arrayLayer;
-			uboData.channel_mask =
-				(renderOutputTransform.channelMasks.r ? 1 : 0) +
-				(renderOutputTransform.channelMasks.g ? 2 : 0) +
-				(renderOutputTransform.channelMasks.b ? 4 : 0);
-			uboData.swap_ba_rg = renderOutputTransform.swapBARG;
-
-			this.fullscreenQuadPassResources.recordPresent(
-				this.device,
-				commandEncoder,
-				presentView,
-				this.settings.outputTexture,
-				uboData,
-				this.performance.pushTimestampQueryInterval("FullscreenQuad")
-			);
-		}
+		this.fullscreenQuadPassResources.record(
+			this.device,
+			commandEncoder,
+			presentView,
+			this.settings.outputTexture,
+			this.settings.currentRenderOutputTransform,
+			this.performance.pushTimestampQueryInterval("FullscreenQuad")
+		);
 
 		this.performance.recordCopyBuffers(commandEncoder);
 

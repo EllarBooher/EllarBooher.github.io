@@ -1,3 +1,5 @@
+import { GUI as LilGUI, Controller as LilController } from "lil-gui";
+
 export const QueryCategories = [
 	"SkyviewLUT",
 	"AerialPerspectiveLUT",
@@ -72,6 +74,35 @@ export class PerformanceTracker {
 		number
 	>();
 	private timestampQueryIndex = 0;
+
+	private readonly uiDisplay: {
+		averageFPS: number;
+		frametimeControllers: Map<FrametimeCategory, LilController>;
+	};
+
+	public get averageFPS() {
+		return this.uiDisplay.averageFPS;
+	}
+
+	setupUI(gui: LilGUI) {
+		const performanceFolder = gui.addFolder("Performance").close();
+		performanceFolder
+			.add(this.uiDisplay, "averageFPS")
+			.decimals(1)
+			.disable()
+			.name("Average FPS")
+			.listen();
+		FrametimeCategories.forEach((category) => {
+			this.uiDisplay.frametimeControllers.set(
+				category,
+				performanceFolder
+					.add({ value: 0 }, "value")
+					.name(`${category} (ms)`)
+					.decimals(6)
+					.disable()
+			);
+		});
+	}
 
 	pushTimestampQueryInterval(
 		category: QueryCategory
@@ -153,6 +184,24 @@ export class PerformanceTracker {
 						) / MS_PER_NS;
 					this.frametimeAverages.get(key)?.push(timeMilliseconds);
 				});
+
+				this.uiDisplay.averageFPS =
+					1000.0 /
+					(this.frametimeAverages.get("DrawToDraw")?.average ??
+						1000.0);
+
+				FrametimeCategories.forEach((category) => {
+					const averageMilliseconds =
+						this.frametimeAverages.get(category)?.average;
+					if (averageMilliseconds === undefined) {
+						return;
+					}
+
+					this.uiDisplay.frametimeControllers
+						.get(category)
+						?.setValue(averageMilliseconds);
+				});
+
 				buffer.unmap();
 			})
 			.catch((reason) => {
@@ -163,16 +212,16 @@ export class PerformanceTracker {
 			});
 	}
 
-	averageByCategory(category: FrametimeCategory): number | undefined {
-		return this.frametimeAverages.get(category)?.average;
-	}
-
 	constructor(device: GPUDevice) {
 		const FRAMETIME_SAMPLE_SIZE = 400;
 
 		this.frametimeAverages = new Map([
 			["DrawToDraw", new ArithmeticSumArray(FRAMETIME_SAMPLE_SIZE)],
 		]);
+		this.uiDisplay = {
+			averageFPS: 0.0,
+			frametimeControllers: new Map(),
+		};
 
 		if (!device.features.has("timestamp-query")) {
 			console.warn(

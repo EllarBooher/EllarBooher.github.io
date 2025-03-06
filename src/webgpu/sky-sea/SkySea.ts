@@ -18,11 +18,7 @@ import { WaveSurfaceDisplacementPassResources } from "./WaveDisplacement.ts";
 import { AtmosphereCameraPassResources } from "./AtmosphereCamera.ts";
 import { FullscreenQuadPassResources } from "./FullscreenQuad.ts";
 import { AerialPerspectiveLUTPassResources } from "./AerialPerspectiveLUT.ts";
-import {
-	FrametimeCategories,
-	FrametimeCategory,
-	PerformanceTracker,
-} from "./PerformanceTracker.ts";
+import { PerformanceTracker } from "./PerformanceTracker.ts";
 
 const TRANSMITTANCE_LUT_EXTENT = { width: 2048, height: 1024 } as const;
 const MULTISCATTER_LUT_EXTENT = { width: 1024, height: 1024 } as const;
@@ -93,11 +89,6 @@ class SkySeaApp implements RendererApp {
 		renderScale: number;
 	};
 
-	uiReadonly: {
-		averageFPS: number;
-		frametimeControllers: Map<FrametimeCategory, LilController>;
-	};
-
 	globalUBO: GlobalUBO;
 
 	device: GPUDevice;
@@ -121,11 +112,6 @@ class SkySeaApp implements RendererApp {
 			.onFinishChange((_v: number) => {
 				this.handleResize(this.rawSize.width, this.rawSize.height);
 			})
-			.listen();
-		gui.add(this.uiReadonly, "averageFPS")
-			.decimals(1)
-			.disable()
-			.name("Average FPS")
 			.listen();
 
 		const cameraParameters = gui.addFolder("Camera").open();
@@ -261,18 +247,6 @@ class SkySeaApp implements RendererApp {
 			.min(0.01)
 			.max(50.0);
 
-		const performanceFolder = gui.addFolder("Performance").close();
-		FrametimeCategories.forEach((category) => {
-			this.uiReadonly.frametimeControllers.set(
-				category,
-				performanceFolder
-					.add({ value: 0 }, "value")
-					.name(`${category} (ms)`)
-					.decimals(6)
-					.disable()
-			);
-		});
-
 		const debugFolder = gui.addFolder("Debug").close();
 		const debugCameraControllers: LilController[] = [];
 		debugFolder
@@ -342,6 +316,8 @@ class SkySeaApp implements RendererApp {
 				.name("Reset to match main camera")
 		);
 		debugCameraControllers.forEach((c) => c.enable(false));
+
+		this.performance.setupUI(gui);
 	}
 
 	constructor(
@@ -398,10 +374,6 @@ class SkySeaApp implements RendererApp {
 				sunsetAzimuthRadians: Math.PI,
 			},
 			renderScale: 1.5,
-		};
-		this.uiReadonly = {
-			averageFPS: 0.0,
-			frametimeControllers: new Map(),
 		};
 		this.scaledSize = { width: 1.0, height: 1.0 };
 		this.rawSize = { width: 1.0, height: 1.0 };
@@ -604,24 +576,6 @@ class SkySeaApp implements RendererApp {
 		vec3.scale(sunDirection, -1.0, this.globalUBO.data.light.forward);
 	}
 
-	updatePerformanceUI() {
-		this.uiReadonly.averageFPS =
-			1000.0 /
-			(this.performance.averageByCategory("DrawToDraw") ?? 1000.0);
-
-		FrametimeCategories.forEach((category) => {
-			const averageMilliseconds =
-				this.performance.averageByCategory(category);
-			if (averageMilliseconds === undefined) {
-				return;
-			}
-
-			this.uiReadonly.frametimeControllers
-				.get(category)
-				?.setValue(averageMilliseconds);
-		});
-	}
-
 	updateCameras(aspectRatio: number) {
 		const fov = (60 * Math.PI) / 180;
 		const near = 0.1;
@@ -747,7 +701,6 @@ class SkySeaApp implements RendererApp {
 		const presentView = presentTexture.createView();
 
 		this.performance.startFrame(deltaTimeMilliseconds);
-		this.updatePerformanceUI();
 
 		// Run some dummy frames to estimate monitor refresh and guess the best render scale to hit it
 		if (this.probationFrameCounter > 49.0) {
@@ -755,19 +708,21 @@ class SkySeaApp implements RendererApp {
 
 			if (this.probationFrameCounter < 50.0) {
 				console.log(
-					`Average FPS without load is ${this.uiReadonly.averageFPS}`
+					`Average FPS without load is ${this.performance.averageFPS}`
 				);
-				this.targetFPS = this.uiReadonly.averageFPS;
+				this.targetFPS = this.performance.averageFPS;
 			}
+
+			this.performance.asyncUpdateFrametimeAverages();
 			return;
 		}
 		if (this.probationFrameCounter > 0.0) {
 			this.probationFrameCounter -= 1;
 			if (this.probationFrameCounter < 1.0) {
 				console.log(
-					`Average FPS with load is ${this.uiReadonly.averageFPS}`
+					`Average FPS with load is ${this.performance.averageFPS}`
 				);
-				const exactScale = this.uiReadonly.averageFPS / this.targetFPS;
+				const exactScale = this.performance.averageFPS / this.targetFPS;
 				this.settings.renderScale = RENDER_SCALES[0];
 				RENDER_SCALES.forEach((scale) => {
 					if (

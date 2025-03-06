@@ -114,7 +114,7 @@ function lightSun(): CelestialLight {
 	};
 }
 
-interface Camera {
+export interface Camera {
 	invProj: Mat4;
 	invView: Mat4;
 	projView: Mat4;

@@ -1,7 +1,7 @@
 import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { RendererApp, RendererAppConstructor } from "../RendererApp.ts";
 import { mat4, vec2, vec3, vec4 } from "wgpu-matrix";
-import { GlobalUBO } from "./UBO.ts";
+import { Camera, GlobalUBO } from "./UBO.ts";
 import {
 	Extent2D,
 	RenderOutputCategory,
@@ -31,6 +31,17 @@ const AERIAL_PERSPECTIVE_LUT_EXTENT = {
 
 const RENDER_SCALES = [0.25, 0.3333, 0.5, 0.75, 1.0, 1.5, 2.0, 4.0];
 
+interface CameraParameters {
+	translationX: number;
+	translationY: number;
+	translationZ: number;
+	// Applied in order Y * X * Z
+	// Z first, X second, Y third
+	eulerAnglesX: number;
+	eulerAnglesY: number;
+	eulerAnglesZ: number;
+}
+
 interface SkySeaAppParameters {
 	renderFromOceanPOV: boolean;
 	renderScale: number;
@@ -40,24 +51,8 @@ interface SkySeaAppParameters {
 		foamScale: number;
 		foamBias: number;
 	};
-	readonly oceanCamera: {
-		translationX: number;
-		translationY: number;
-		translationZ: number;
-		// Applied in order Y * X * Z
-		// Z first, X second, Y third
-		eulerAnglesX: number;
-		eulerAnglesY: number;
-		eulerAnglesZ: number;
-	};
-	readonly debugCamera: {
-		translationX: number;
-		translationY: number;
-		translationZ: number;
-		eulerAnglesX: number;
-		eulerAnglesY: number;
-		eulerAnglesZ: number;
-	};
+	readonly oceanCamera: CameraParameters;
+	readonly debugCamera: CameraParameters;
 	readonly fourierWavesSettings: FFTWavesSettings;
 	readonly time: {
 		pause: boolean;
@@ -617,84 +612,50 @@ class SkySeaApp implements RendererApp {
 		const far = 1000;
 		const perspective = mat4.perspective(fov, aspectRatio, near, far);
 
-		{
-			const oceanCameraSettings = parameters.oceanCamera;
-			const oceanCameraPos = [
-				oceanCameraSettings.translationX,
-				oceanCameraSettings.translationY,
-				oceanCameraSettings.translationZ,
+		const assignToGPUCamera = (
+			destination: Camera,
+			source: CameraParameters
+		): void => {
+			const cameraPos = [
+				source.translationX,
+				source.translationY,
+				source.translationZ,
 				1,
 			];
-			const rotationX = mat4.rotationX(oceanCameraSettings.eulerAnglesX);
-			const rotationY = mat4.rotationY(oceanCameraSettings.eulerAnglesY);
-			const rotationZ = mat4.rotationZ(oceanCameraSettings.eulerAnglesZ);
+			const rotationX = mat4.rotationX(source.eulerAnglesX);
+			const rotationY = mat4.rotationY(source.eulerAnglesY);
+			const rotationZ = mat4.rotationZ(source.eulerAnglesZ);
 
-			const oceanTransform = mat4.mul(
-				mat4.translation(vec4.create(...oceanCameraPos)),
+			const transform = mat4.mul(
+				mat4.translation(vec4.create(...cameraPos)),
 				mat4.mul(rotationY, mat4.mul(rotationX, rotationZ))
 			);
-			const oceanView = mat4.inverse(oceanTransform);
+			const view = mat4.inverse(transform);
 
-			Object.assign<
-				typeof this.globalUBO.data.ocean_camera,
-				typeof this.globalUBO.data.ocean_camera
-			>(this.globalUBO.data.ocean_camera, {
+			Object.assign<Camera, Camera>(destination, {
 				invProj: mat4.inverse(perspective),
-				invView: oceanTransform,
-				projView: mat4.mul(perspective, oceanView),
-				position: vec4.create(...oceanCameraPos),
-				forward: vec4.create(
-					...mat4.multiply(
-						oceanTransform,
-						vec4.create(0.0, 0.0, -1.0, 0.0)
-					)
-				),
-			});
-		}
-
-		if (parameters.renderFromOceanPOV) {
-			Object.assign<
-				typeof this.globalUBO.data.camera,
-				typeof this.globalUBO.data.camera
-			>(
-				this.globalUBO.data.camera,
-				structuredClone(this.globalUBO.data.ocean_camera)
-			);
-		} else {
-			const debugCameraSettings = parameters.debugCamera;
-			const debugCameraPos = [
-				debugCameraSettings.translationX,
-				debugCameraSettings.translationY,
-				debugCameraSettings.translationZ,
-				1,
-			];
-			const rotationX = mat4.rotationX(debugCameraSettings.eulerAnglesX);
-			const rotationY = mat4.rotationY(debugCameraSettings.eulerAnglesY);
-			const rotationZ = mat4.rotationZ(debugCameraSettings.eulerAnglesZ);
-
-			const debugTransform = mat4.mul(
-				mat4.translation(vec4.create(...debugCameraPos)),
-				mat4.mul(rotationY, mat4.mul(rotationX, rotationZ))
-			);
-
-			const view = mat4.inverse(debugTransform);
-
-			Object.assign<
-				typeof this.globalUBO.data.camera,
-				typeof this.globalUBO.data.camera
-			>(this.globalUBO.data.camera, {
-				invProj: mat4.inverse(perspective),
-				invView: debugTransform,
+				invView: transform,
 				projView: mat4.mul(perspective, view),
-				position: vec4.create(...debugCameraPos),
+				position: vec4.create(...cameraPos),
 				forward: vec4.create(
 					...mat4.multiply(
-						debugTransform,
+						transform,
 						vec4.create(0.0, 0.0, -1.0, 0.0)
 					)
 				),
 			});
-		}
+		};
+
+		assignToGPUCamera(
+			this.globalUBO.data.ocean_camera,
+			parameters.oceanCamera
+		);
+		assignToGPUCamera(
+			this.globalUBO.data.camera,
+			parameters.renderFromOceanPOV
+				? parameters.oceanCamera
+				: parameters.debugCamera
+		);
 
 		this.globalUBO.writeToGPU(this.device.queue);
 	}

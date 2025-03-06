@@ -141,41 +141,31 @@ export async function initializeApp(props: {
 		getDevice({
 			...props,
 		}),
-	])
-		.then(([sampleConstructor, { adapter: _adapter, device }]) => {
-			const presentFormat = props.gpu.getPreferredCanvasFormat();
-			const app = sampleConstructor(
-				device,
-				presentFormat,
-				performance.now()
-			);
+	]).then(([sampleConstructor, { adapter: _adapter, device }]) => {
+		const presentFormat = props.gpu.getPreferredCanvasFormat();
+		const app = sampleConstructor(device, presentFormat, performance.now());
 
-			device.lost
-				.then(
-					(reason) => {
-						console.log(
-							`WebGPU device lost - ("${reason.reason}"):\n ${reason.message}`
-						);
-					},
-					(err) => {
-						// This shouldn't happen
-						throw new Error(`WebGPU device lost rejected`, {
-							cause: err,
-						});
-					}
-				)
-				.finally(() => {
-					app.quit = true;
-				});
-			device.onuncapturederror = (ev) => {
+		device.lost
+			.then(
+				(reason) => {
+					console.log(
+						`WebGPU device lost - ("${reason.reason}"):\n ${reason.message}`
+					);
+				},
+				(err) => {
+					// This shouldn't happen
+					throw new Error(`WebGPU device lost rejected`, {
+						cause: err,
+					});
+				}
+			)
+			.finally(() => {
 				app.quit = true;
-				props.onUncapturedError(ev);
-			};
-			return app;
-		})
-		.then((value) => {
-			return new Promise<RendererApp>((resolve, reject) => {
-				setTimeout(() => resolve(value), 4000);
 			});
-		});
+		device.onuncapturederror = (ev) => {
+			app.quit = true;
+			props.onUncapturedError(ev);
+		};
+		return app;
+	});
 }

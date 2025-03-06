@@ -3,22 +3,23 @@ export interface Extent2D {
 	height: number;
 }
 
-export enum RenderOutput {
-	AtmosphereSkyviewLUT,
-	AtmosphereTransmittanceLUT,
-	AtmosphereMultiscatterLUT,
-	AtmosphereAerialPerspectiveLUT,
-	Scene,
-	GBufferColor,
-	GBufferNormal,
-	FFTWaveSpectrumGaussianNoise,
-	FFTWaveInitialAmplitude,
-	FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude,
-	FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,
-	FFTWaveTurbulenceJacobian,
-	FFTWaveDx_Dy_Dz_Dxdz_Spatial,
-	FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial,
-}
+export const RenderOutputCategories = [
+	"Scene",
+	"GBufferColor",
+	"GBufferNormal",
+	"AtmosphereTransmittanceLUT",
+	"AtmosphereMultiscatterLUT",
+	"AtmosphereSkyviewLUT",
+	"AtmosphereAerialPerspectiveLUT",
+	"FFTWaveSpectrumGaussianNoise",
+	"FFTWaveInitialAmplitude",
+	"FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude",
+	"FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude",
+	"FFTWaveTurbulenceJacobian",
+	"FFTWaveDx_Dy_Dz_Dxdz_Spatial",
+	"FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial",
+] as const;
+export type RenderOutputCategory = (typeof RenderOutputCategories)[number];
 
 export class RenderOutputTexture {
 	private texture: GPUTexture;

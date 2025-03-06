@@ -1,7 +1,8 @@
 import { UBO } from "./UBO";
-import { RenderOutput, TimestampQueryInterval } from "./Common";
+import { RenderOutput } from "./Common";
 import FullscreenQuadPak from "../../shaders/sky-sea/fullscreen_quad.wgsl";
 import { Vec4, vec4 } from "wgpu-matrix";
+import { TimestampQueryInterval } from "./PerformanceTracker";
 
 export class FullscreenQuadUBOData {
 	color_gain: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);

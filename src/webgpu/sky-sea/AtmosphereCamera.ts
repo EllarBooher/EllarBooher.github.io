@@ -1,7 +1,8 @@
 import { GlobalUBO } from "./UBO";
 import AtmosphereCameraPak from "../../shaders/sky-sea/atmosphere_camera.wgsl";
-import { Extent2D, TimestampQueryInterval } from "./Common";
+import { Extent2D } from "./Common";
 import { GBuffer } from "./GBuffer";
+import { TimestampQueryInterval } from "./PerformanceTracker";
 
 const ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT: GPUTextureFormat = "rgba16float";
 

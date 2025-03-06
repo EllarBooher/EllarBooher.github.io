@@ -2,12 +2,13 @@ import FourierWavesShaderPak from "../../shaders/sky-sea/fourier_waves.wgsl";
 
 import { GlobalUBO, UBO } from "./UBO.ts";
 import { DFFTResources } from "./FFT.ts";
-import { RenderOutputTexture, TimestampQueryInterval } from "./Common.ts";
+import { RenderOutputTexture } from "./Common.ts";
 import {
 	MipMapGenerationPassResources,
 	MipMapGenerationTextureBindings,
 } from "./MipMap.ts";
 import { vec2, Vec2 } from "wgpu-matrix";
+import { TimestampQueryInterval } from "./PerformanceTracker.ts";
 
 // The dimension of the fourier grid, i.e., the sqrt of the number of unique waves for our discrete fourier transform
 const GRID_SIZE = 512;

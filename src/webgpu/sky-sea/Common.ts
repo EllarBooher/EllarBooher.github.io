@@ -55,9 +55,3 @@ export class RenderOutputTexture {
 		});
 	}
 }
-
-export interface TimestampQueryInterval {
-	querySet: GPUQuerySet;
-	beginWriteIndex: GPUSize32;
-	endWriteIndex: GPUSize32;
-}

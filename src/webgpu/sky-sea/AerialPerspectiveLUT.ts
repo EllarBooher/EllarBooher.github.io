@@ -1,6 +1,6 @@
 import { GlobalUBO } from "./UBO.ts";
 import AerialPerspectiveLUTPak from "../../shaders/sky-sea/aerial_perspective_LUT.wgsl";
-import { TimestampQueryInterval } from "./Common.ts";
+import { TimestampQueryInterval } from "./PerformanceTracker.ts";
 
 const AERIAL_PERSPECTIVE_LUT_FORMAT: GPUTextureFormat = "rgba16float";
 

@@ -1,19 +1,6 @@
 import fs from "fs";
 import path from "path";
 
-const shaderRoot = "src/shaders/";
-
-// TODO: Load includes upon every shader compile, but cache them and check if the version on disk is newer. This is needed for hot reloading
-const includeFilenames = [
-	"sky-sea/constants.inc.wgsl",
-	"sky-sea/types.inc.wgsl",
-	"sky-sea/atmosphere_common.inc.wgsl",
-	"sky-sea/atmosphere_raymarch.inc.wgsl",
-	"sky-sea/tonemap.inc.wgsl",
-	"sky-sea/pbr.inc.wgsl",
-	"sky-sea/raycast.inc.wgsl",
-];
-
 interface ShaderInclude {
 	code: string;
 	flags: string[];
@@ -47,16 +34,6 @@ function gatherFlags(filename: string, source: string): string[] {
 	});
 	return flags;
 }
-
-const includeMappings = new Map<string, ShaderInclude>();
-includeFilenames.forEach((filename) => {
-	const path = fs.realpathSync(shaderRoot + filename);
-	const code = fs.readFileSync(path).toString();
-	includeMappings.set(path, {
-		code: code,
-		flags: gatherFlags(filename, code),
-	});
-});
 
 /*
 A conditional block looks like the following:
@@ -218,17 +195,17 @@ function replaceConditionalBlocks(
 }
 
 // This is utilized as a plugin in vite.config.ts, to preprocess each shader as a part of typescript compilation
-export function packShaders(id: string, source: string): string {
+export function packShaders(
+	id: string,
+	source: string
+): { source: string; includes: string[] } {
 	const INCLUDE_PREFIX = "#include ";
+
+	const includeMappings = new Map<string, ShaderInclude>();
 
 	console.log(`Preprocessing shader ${id}`);
 
 	const includeWorkingPrefix = path.parse(id).dir;
-
-	let logIncludes = false;
-
-	// TODO: detect loops
-	const visitedIncludes = new Set<string>();
 
 	let lineIndex = 0;
 	const lines = source.split("\n");
@@ -248,7 +225,8 @@ export function packShaders(id: string, source: string): string {
 					return value.length > 0;
 				});
 			if (fragments.length == 0) {
-				return "";
+				console.warn(`Found include without any filename.`);
+				continue;
 			}
 
 			const includeFilename = fragments.shift()!;
@@ -256,22 +234,25 @@ export function packShaders(id: string, source: string): string {
 				includeWorkingPrefix,
 				includeFilename
 			);
-			if (visitedIncludes.has(resolvedPath)) {
-				console.warn(
+			if (includeMappings.has(resolvedPath)) {
+				console.log(
 					`Skipping duplicated include ${includeFilename} which resolved to ${resolvedPath}.\n Note that deduplication is based on the resolved path, and not the identifier or file contents of the include.`
 				);
 				continue;
 			}
-			visitedIncludes.add(resolvedPath);
 
-			const includeSource = includeMappings.get(resolvedPath);
-			if (includeSource == undefined) {
+			if (!fs.existsSync(resolvedPath)) {
 				console.error(
-					`Unrecognized WGSL include: ${includeFilename} \n Resolved as: ${resolvedPath}`
+					`Unrecognized WGSL include does not exist on disk: ${includeFilename} \n Resolved as: ${resolvedPath}`
 				);
-				logIncludes = true;
 				continue;
 			}
+			const code = fs.readFileSync(resolvedPath).toString();
+			includeMappings.set(resolvedPath, {
+				code: code,
+				flags: gatherFlags(resolvedPath, code),
+			});
+			const includeSource = includeMappings.get(resolvedPath)!;
 
 			lines.splice(
 				lineIndex,
@@ -288,12 +269,8 @@ export function packShaders(id: string, source: string): string {
 	}
 	const sourceOut = lines.join("\n");
 
-	if (logIncludes) {
-		console.error(`Absolute paths of known include(s) are:`);
-		includeMappings.forEach((_value, key) => {
-			console.error(`    ${key}`);
-		});
-	}
-
-	return sourceOut;
+	return {
+		source: sourceOut,
+		includes: [...includeMappings.keys()],
+	};
 }

@@ -25,11 +25,12 @@ const POSSIBLE_WEBGPU_FEATURES = new Set<string>([
 ]);
 
 export class HelloCubeApp implements RendererApp {
-	device: GPUDevice;
-	presentFormat: GPUTextureFormat;
 	quit = false;
 
+	private device: GPUDevice;
+
 	private pipeline: GPURenderPipeline;
+	private presentFormat: GPUTextureFormat;
 
 	private vertexBuffer: GPUBuffer;
 	private indexBuffer: GPUBuffer;
@@ -40,6 +41,13 @@ export class HelloCubeApp implements RendererApp {
 	private projViewModelBindGroup: GPUBindGroup;
 
 	private supportedFeatures: GPUSupportedFeatures;
+
+	presentationInterface(): { device: GPUDevice; format: GPUTextureFormat } {
+		return {
+			device: this.device,
+			format: this.presentFormat,
+		};
+	}
 
 	constructor(device: GPUDevice, presentFormat: GPUTextureFormat) {
 		this.device = device;
@@ -151,7 +159,7 @@ export class HelloCubeApp implements RendererApp {
 				entryPoint: "fragment_main",
 				targets: [
 					{
-						format: this.presentFormat,
+						format: presentFormat,
 					},
 				],
 			},

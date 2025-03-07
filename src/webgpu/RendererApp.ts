@@ -1,9 +1,8 @@
 import { GUI } from "lil-gui";
 
 export interface RendererApp {
-	device: GPUDevice;
-	presentFormat: GPUTextureFormat;
 	quit: boolean;
+	presentationInterface(): { device: GPUDevice; format: GPUTextureFormat };
 	handleResize?: (newWidth: number, newHeight: number) => void;
 	draw: (
 		presentTexture: GPUTexture,

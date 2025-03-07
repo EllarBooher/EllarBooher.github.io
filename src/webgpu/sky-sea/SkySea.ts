@@ -304,12 +304,22 @@ class SkySeaApp implements RendererApp {
 
 	private globalUBO: GlobalUBO;
 
-	presentFormat: GPUTextureFormat;
-	device: GPUDevice;
+	private device: GPUDevice;
+
 	quit = false;
 
 	private dummyFrameCounter: number;
 	private float32Filterable: boolean;
+
+	presentationInterface(): {
+		device: GPUDevice;
+		format: GPUTextureFormat;
+	} {
+		return {
+			device: this.device,
+			format: this.fullscreenQuadPassResources.outputFormat,
+		};
+	}
 
 	setupUI(gui: LilGUI) {
 		setupUI(gui, this.parameters, () => {
@@ -324,8 +334,6 @@ class SkySeaApp implements RendererApp {
 		this.device = device;
 
 		this.float32Filterable = device.features.has("float32-filterable");
-
-		this.presentFormat = presentFormat;
 
 		this.renderOutputController = new RenderOutputController();
 		this.parameters = {
@@ -447,7 +455,7 @@ class SkySeaApp implements RendererApp {
 
 		this.fullscreenQuadPassResources = new FullscreenQuadPassResources(
 			this.device,
-			this.presentFormat
+			presentFormat
 		);
 
 		(

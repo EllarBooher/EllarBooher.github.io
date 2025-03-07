@@ -79,6 +79,8 @@ export class FullscreenQuadPassResources {
 	private pipelineArray: GPURenderPipeline;
 	private pipeline3D: GPURenderPipeline;
 
+	public readonly outputFormat: GPUTextureFormat;
+
 	setOutput(
 		device: GPUDevice,
 		category: RenderOutputCategory,
@@ -141,6 +143,8 @@ export class FullscreenQuadPassResources {
 	}
 
 	constructor(device: GPUDevice, outputFormat: GPUTextureFormat) {
+		this.outputFormat = outputFormat;
+
 		const fullscreenQuadIndices = new Uint32Array([0, 1, 2, 0, 2, 3]);
 		this.fullscreenQuadIndexBuffer = device.createBuffer({
 			size: fullscreenQuadIndices.byteLength,

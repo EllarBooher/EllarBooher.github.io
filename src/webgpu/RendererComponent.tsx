@@ -107,7 +107,7 @@ const RenderingCanvas = function RenderingCanvas({
 			return;
 		}
 
-		context.configure({ device: app.device, format: app.presentFormat });
+		context.configure(app.presentationInterface());
 
 		animateRequestRef.current = requestAnimationFrame(animate);
 

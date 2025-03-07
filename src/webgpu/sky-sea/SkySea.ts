@@ -286,30 +286,30 @@ function setupUI(
 }
 
 class SkySeaApp implements RendererApp {
-	transmittanceLUTPassResources: TransmittanceLUTPassResources;
-	multiscatterLUTPassResources: MultiscatterLUTPassResources;
-	skyviewLUTPassResources: SkyViewLUTPassResources;
-	aerialPerspectiveLUTPassResources: AerialPerspectiveLUTPassResources;
-	fftWaveSpectrumResources: FFTWaveSpectrumResources;
-	waveSurfaceDisplacementPassResources: WaveSurfaceDisplacementPassResources;
-	atmosphereCameraPassResources: AtmosphereCameraPassResources;
-	fullscreenQuadPassResources: FullscreenQuadPassResources;
+	private transmittanceLUTPassResources: TransmittanceLUTPassResources;
+	private multiscatterLUTPassResources: MultiscatterLUTPassResources;
+	private skyviewLUTPassResources: SkyViewLUTPassResources;
+	private aerialPerspectiveLUTPassResources: AerialPerspectiveLUTPassResources;
+	private fftWaveSpectrumResources: FFTWaveSpectrumResources;
+	private waveSurfaceDisplacementPassResources: WaveSurfaceDisplacementPassResources;
+	private atmosphereCameraPassResources: AtmosphereCameraPassResources;
+	private fullscreenQuadPassResources: FullscreenQuadPassResources;
 
-	gbuffer: GBuffer;
-	unscaledResolution: Extent2D;
+	private gbuffer: GBuffer;
+	private unscaledResolution: Extent2D;
 
-	renderOutputController: RenderOutputController;
-	parameters: SkySeaAppParameters;
-	performance: PerformanceTracker;
+	private renderOutputController: RenderOutputController;
+	private parameters: SkySeaAppParameters;
+	private performance: PerformanceTracker;
 
-	globalUBO: GlobalUBO;
+	private globalUBO: GlobalUBO;
 
 	presentFormat: GPUTextureFormat;
 	device: GPUDevice;
 	quit = false;
 
-	dummyFrameCounter: number;
-	float32Filterable: boolean;
+	private dummyFrameCounter: number;
+	private float32Filterable: boolean;
 
 	setupUI(gui: LilGUI) {
 		setupUI(gui, this.parameters, () => {

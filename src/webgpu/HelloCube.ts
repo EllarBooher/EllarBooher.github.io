@@ -29,17 +29,17 @@ export class HelloCubeApp implements RendererApp {
 	presentFormat: GPUTextureFormat;
 	quit = false;
 
-	pipeline: GPURenderPipeline;
+	private pipeline: GPURenderPipeline;
 
-	vertexBuffer: GPUBuffer;
-	indexBuffer: GPUBuffer;
+	private vertexBuffer: GPUBuffer;
+	private indexBuffer: GPUBuffer;
 
-	indexCount: number;
+	private indexCount: number;
 
-	projViewModelBuffer: GPUBuffer;
-	projViewModelBindGroup: GPUBindGroup;
+	private projViewModelBuffer: GPUBuffer;
+	private projViewModelBindGroup: GPUBindGroup;
 
-	supportedFeatures: GPUSupportedFeatures;
+	private supportedFeatures: GPUSupportedFeatures;
 
 	constructor(device: GPUDevice, presentFormat: GPUTextureFormat) {
 		this.device = device;

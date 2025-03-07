@@ -232,8 +232,7 @@ export class HelloCubeApp implements RendererApp {
 
 export const HelloCubeAppConstructor: RendererAppConstructor = (
 	device,
-	presentFormat,
-	_time
+	presentFormat
 ) => {
 	return new HelloCubeApp(device, presentFormat);
 };

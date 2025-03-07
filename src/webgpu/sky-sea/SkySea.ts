@@ -308,7 +308,6 @@ class SkySeaApp implements RendererApp {
 	device: GPUDevice;
 	quit = false;
 
-	startTime: number;
 	dummyFrameCounter: number;
 	probationFrameCounter: number;
 	targetFPS = 0.0;
@@ -323,11 +322,7 @@ class SkySeaApp implements RendererApp {
 		this.performance.setupUI(gui);
 	}
 
-	constructor(
-		device: GPUDevice,
-		presentFormat: GPUTextureFormat,
-		time: number
-	) {
+	constructor(device: GPUDevice, presentFormat: GPUTextureFormat) {
 		this.device = device;
 
 		this.float32Filterable = device.features.has("float32-filterable");
@@ -381,7 +376,6 @@ class SkySeaApp implements RendererApp {
 			renderScale: 1.0,
 		};
 
-		this.startTime = time;
 		this.unscaledResolution = { width: 1.0, height: 1.0 };
 
 		this.performance = new PerformanceTracker(this.device);
@@ -875,8 +869,7 @@ class SkySeaApp implements RendererApp {
 
 export const SkySeaAppConstructor: RendererAppConstructor = (
 	device,
-	presentFormat,
-	time
+	presentFormat
 ) => {
-	return new SkySeaApp(device, presentFormat, time);
+	return new SkySeaApp(device, presentFormat);
 };

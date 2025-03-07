@@ -16,8 +16,7 @@ export interface RendererApp {
 
 export type RendererAppConstructor = (
 	device: GPUDevice,
-	presentFormat: GPUTextureFormat,
-	time: number
+	presentFormat: GPUTextureFormat
 ) => RendererApp;
 
 async function getDevice(props: {
@@ -143,7 +142,7 @@ export async function initializeApp(props: {
 		}),
 	]).then(([sampleConstructor, { adapter: _adapter, device }]) => {
 		const presentFormat = props.gpu.getPreferredCanvasFormat();
-		const app = sampleConstructor(device, presentFormat, performance.now());
+		const app = sampleConstructor(device, presentFormat);
 
 		device.lost
 			.then(

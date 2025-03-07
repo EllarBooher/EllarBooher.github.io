@@ -309,8 +309,6 @@ class SkySeaApp implements RendererApp {
 	quit = false;
 
 	dummyFrameCounter: number;
-	probationFrameCounter: number;
-	targetFPS = 0.0;
 	float32Filterable: boolean;
 
 	setupUI(gui: LilGUI) {
@@ -381,7 +379,6 @@ class SkySeaApp implements RendererApp {
 		this.performance = new PerformanceTracker(this.device);
 
 		this.dummyFrameCounter = 10.0;
-		this.probationFrameCounter = 100.0;
 
 		this.globalUBO = new GlobalUBO(this.device);
 		this.globalUBO.writeToGPU(this.device.queue);
@@ -671,21 +668,6 @@ class SkySeaApp implements RendererApp {
 
 		this.performance.startFrame(deltaTimeMilliseconds);
 
-		// Run some dummy frames to estimate monitor refresh and guess the best render scale to hit it
-		if (this.probationFrameCounter > 49.0) {
-			this.probationFrameCounter -= 1;
-
-			if (this.probationFrameCounter < 50.0) {
-				console.log(
-					`Average FPS without load is ${this.performance.averageFPS}`
-				);
-				this.targetFPS = this.performance.averageFPS;
-			}
-
-			this.performance.asyncUpdateFrametimeAverages();
-			return;
-		}
-
 		this.tickTime(deltaTimeMilliseconds);
 
 		this.updateGlobalUBO(aspectRatio);
@@ -754,26 +736,6 @@ class SkySeaApp implements RendererApp {
 		this.device.queue.submit([commandEncoder.finish()]);
 
 		this.performance.asyncUpdateFrametimeAverages();
-
-		if (this.probationFrameCounter > 0.0) {
-			this.probationFrameCounter -= 1;
-			if (this.probationFrameCounter < 1.0) {
-				console.log(
-					`Average FPS with load is ${this.performance.averageFPS}`
-				);
-				const exactScale = this.performance.averageFPS / this.targetFPS;
-				this.parameters.renderScale = RENDER_SCALES[0];
-				RENDER_SCALES.forEach((scale) => {
-					if (
-						Math.abs(scale - exactScale) <
-						Math.abs(this.parameters.renderScale - exactScale)
-					) {
-						this.parameters.renderScale = scale;
-					}
-				});
-				this.updateResizableResources();
-			}
-		}
 	}
 
 	updateResizableResources() {

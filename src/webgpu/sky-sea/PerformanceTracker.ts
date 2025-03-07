@@ -80,10 +80,6 @@ export class PerformanceTracker {
 		frametimeControllers: Map<FrametimeCategory, LilController>;
 	};
 
-	public get averageFPS() {
-		return this.uiDisplay.averageFPS;
-	}
-
 	setupUI(gui: LilGUI) {
 		const performanceFolder = gui.addFolder("Performance").close();
 		performanceFolder

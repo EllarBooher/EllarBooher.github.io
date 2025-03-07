@@ -10,7 +10,7 @@ import { Link, useSearchParams } from "react-router";
 import { SampleEntry, samplesByQueryParam } from "./Samples";
 import { RendererApp, initializeApp } from "./RendererApp";
 import { GUI } from "lil-gui";
-import "./RendererComponent.css";
+import "./WebGPUSamplePageBody.css";
 
 const RenderingCanvas = function RenderingCanvas({
 	app,
@@ -247,7 +247,7 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 	);
 };
 
-export const RendererComponent = memo(function RendererComponent() {
+export const WebGPUSamplePageBody = memo(function WebGPUSamplePageBody() {
 	const [searchParams, setSearchParams] = useSearchParams();
 
 	const sampleSidebarLinks: ReactElement[] = [];

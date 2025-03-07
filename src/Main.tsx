@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Routes, Route, HashRouter, Navigate } from "react-router";
 import "./Main.css";
 import App from "./App.tsx";
-import { RendererComponent } from "./webgpu/RendererComponent.tsx";
+import { WebGPUSamplePageBody } from "./webgpu/WebGPUSamplePageBody.tsx";
 import { NavigationHeader } from "./NavigateLink.tsx";
 import Axe from "./Axe.tsx";
 
@@ -28,7 +28,7 @@ createRoot(root).render(
 					element={
 						<div className="sample-container">
 							<NavigationHeader />
-							<RendererComponent />
+							<WebGPUSamplePageBody />
 						</div>
 					}
 				/>

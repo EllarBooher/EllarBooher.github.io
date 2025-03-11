@@ -7,11 +7,21 @@ import {
 	ReactElement,
 } from "react";
 import { Link, useSearchParams } from "react-router";
-import { SampleEntry, samplesByQueryParam } from "./Samples";
+import { SampleEntry, samplesBySearchParam } from "./Samples";
 import { RendererApp, initializeApp } from "./RendererApp";
 import { GUI } from "lil-gui";
 import "./WebGPUSamplePageBody.css";
 
+/**
+ * This component contains the UI and canvas HTML elements used to display and
+ * control the WebGPU sample app, while also handling the render loop and
+ * timing.
+ * @param {RendererApp} app - A fully initialized `RendererApp` to display in
+ *  the canvas and bind to the UI.
+ * @param {((err: unknown) => void)} onError - An error handler for errors that
+ *  occur within methods of `app`. Any errors outside `app` are unhandled.
+ * @returns
+ */
 const RenderingCanvas = function RenderingCanvas({
 	app,
 	onError,
@@ -119,11 +129,18 @@ const RenderingCanvas = function RenderingCanvas({
 	}, [animate, app, setGUIDocked, onError]);
 
 	useEffect(() => {
-		// Need to respond to canvas html element resizing on redraw, so this is an effect
-		// As opposed to calling resizeCanvas() in the onOpenClose callback above
+		/*
+		 * Need to respond to canvas html element resizing on redraw, so this is an
+		 * effect as opposed to calling resizeCanvas() in the onOpenClose callback
+		 * above.
+		 */
 		resizeCanvas();
 	}, [resizeCanvas, guiDocked]);
 
+	/*
+	 * The precise hierarchy of these elements is important for the desired
+	 * effect. See `WebGPUSamplePageBody.css` for the specifics.
+	 */
 	return (
 		<>
 			<div className="canvas-container">
@@ -137,6 +154,11 @@ const RenderingCanvas = function RenderingCanvas({
 	);
 };
 
+/**
+ * A component that handles the initialization of the rendering application for
+ * a given sample, before serving it on a canvas.
+ * @param {SampleEntry} sample - The sample load, run, and display.
+ */
 const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 	const [errors, setErrors] = useState<string[]>();
 	const appRef = useRef<RendererApp>();
@@ -247,12 +269,18 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 	);
 };
 
+/**
+ * The body of the WebGPU sample page, with a sidebar of links to all of the
+ * samples. It loads the sample via the URL search param with key 'sample'. If
+ * no valid sample matches the query param, a landing page with a grid of cards
+ * containing descriptions of each sample is shown.
+ */
 export const WebGPUSamplePageBody = memo(function WebGPUSamplePageBody() {
 	const [searchParams, setSearchParams] = useSearchParams();
 
 	const sampleSidebarLinks: ReactElement[] = [];
 	const sampleNavCards: ReactElement[] = [];
-	samplesByQueryParam.forEach((value, key) => {
+	samplesBySearchParam.forEach((value, key) => {
 		const sampleLink = `/webgpu-samples?sample=${key}`;
 		sampleSidebarLinks.push(
 			<li key={key}>
@@ -271,7 +299,7 @@ export const WebGPUSamplePageBody = memo(function WebGPUSamplePageBody() {
 
 	const sampleQueryParam = searchParams.get("sample");
 	const sample = sampleQueryParam
-		? samplesByQueryParam.get(sampleQueryParam)
+		? samplesBySearchParam.get(sampleQueryParam)
 		: undefined;
 	if (sampleQueryParam && !sample) {
 		searchParams.delete("sample");

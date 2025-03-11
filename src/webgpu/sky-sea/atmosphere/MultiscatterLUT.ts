@@ -4,9 +4,30 @@ import MultiscatterLUTPak from "../../../shaders/sky-sea/multiscatter_LUT.wgsl";
 
 const MULTISCATTER_LUT_FORMAT: GPUTextureFormat = "rgba32float";
 
+/**
+ * Contains the resources for the creation of a lookup table for multi-scattered
+ * spectral RGB inscattering luminance arriving at any given point in the
+ * atmosphere. Multi-scattered means that the values in the table are the sum of
+ * secondary inscattering, plus tertiary inscattering, and so on.
+ * @see `/shaders/sky-sea/multiscatter_LUT.wgsl` for the shader implementation
+ *  details.
+ * @export
+ * @class MultiscatterLUTPassResources
+ */
 export class MultiscatterLUTPassResources {
-	readonly texture: GPUTexture;
-	readonly view: GPUTextureView;
+	/**
+	 * The multiscatter lookup table texture.
+	 * @type {GPUTexture}
+	 * @memberof MultiscatterLUTPassResources
+	 */
+	public readonly texture: GPUTexture;
+
+	/**
+	 * The view into {@link texture}.
+	 * @type {GPUTextureView}
+	 * @memberof MultiscatterLUTPassResources
+	 */
+	public readonly view: GPUTextureView;
 
 	/*
 	 * @group(0) @binding(0) var multiscatter_lut: texture_storage_2d<rgba32float, write>;
@@ -20,6 +41,15 @@ export class MultiscatterLUTPassResources {
 	private group0: GPUBindGroup;
 	private group1: GPUBindGroup;
 
+	/**
+	 * Initializes all resources related to the multiscatter lookup table.
+	 * @param {GPUDevice} device
+	 * @param {Extent2D} dimensions
+	 * @param {GPUTextureView} transmittanceLUT
+	 * @param {boolean} filterableLUT
+	 * @param {GlobalUBO} globalUBO
+	 * @memberof MultiscatterLUTPassResources
+	 */
 	constructor(
 		device: GPUDevice,
 		dimensions: Extent2D,

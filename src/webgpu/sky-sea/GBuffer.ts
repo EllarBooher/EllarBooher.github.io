@@ -7,6 +7,17 @@ const GBUFFER_DEPTH_FORMAT: GPUTextureFormat = "depth32float";
 const GBUFFER_NORMAL_FORMAT: GPUTextureFormat = "rgba16float";
 const GBUFFER_NORMAL_SAMPLE_TYPE: GPUTextureSampleType = "float";
 
+/**
+ * Stores color and depth textures in a GBuffer, in a format that is consumed by
+ * render pipelines in the renderer. The textures by WebGPU format are:
+ * - `rgba16float`  - Color with world-space distance to the texel packed into
+ *                    the alpha channel.
+ * - `rgba16float`  - World-space normals with ocean-surface foam strength
+ *                    packed into the alpha channel.
+ * - `depth32float` - Framebuffer depth.
+ * @export
+ * @class GBuffer
+ */
 export class GBuffer {
 	colorWithSurfaceWorldDepthInAlpha: GPUTexture;
 	colorWithSurfaceWorldDepthInAlphaView: GPUTextureView;
@@ -31,6 +42,16 @@ export class GBuffer {
 	writeGroupLayout: GPUBindGroupLayout;
 	writeGroup: GPUBindGroup;
 
+	/**
+	 * Instantiates all textures and bind groups for the GBuffer.
+	 * @param {GPUDevice} device
+	 * @param {Extent2D} dimensions - The dimensions in pixels to instantiate
+	 * 	all the textures with.
+	 * @param {GBuffer} [old] - A previous instance of `GBuffer` to potentially
+	 *  reuse resources or parameters from. This is useful to pass when the
+	 *  GBuffer is resized to match the presentation viewport's dimensions.
+	 * @memberof GBuffer
+	 */
 	constructor(device: GPUDevice, dimensions: Extent2D, old?: GBuffer) {
 		this.colorWithSurfaceWorldDepthInAlpha = device.createTexture({
 			size: dimensions,

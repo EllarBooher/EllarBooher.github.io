@@ -1,6 +1,8 @@
-import { RenderOutputTransform } from "./FullscreenQuad";
 import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 
+/**
+ * @see {@link RenderOutputCategory} for the enum this array backs.
+ */
 export const RenderOutputCategories = [
 	"Scene",
 	"GBufferColor",
@@ -17,8 +19,15 @@ export const RenderOutputCategories = [
 	"FFTWaveDx_Dy_Dz_Dxdz_Spatial",
 	"FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial",
 ] as const;
+/**
+ * Identifiers for render output targets supported by the renderer.
+ */
 export type RenderOutputCategory = (typeof RenderOutputCategories)[number];
 
+/**
+ * Stores a view to a texture, alongside information like the depth, mip levels,
+ * and dimension, for binding to a pipeline that renders it to the screen.
+ */
 export class RenderOutputTexture {
 	private texture: GPUTexture;
 	readonly view: GPUTextureView;
@@ -31,6 +40,13 @@ export class RenderOutputTexture {
 		return this.texture.depthOrArrayLayers;
 	}
 
+	/**
+	 * Uses the passed texture to create a view, while storing the texture
+	 * object so that the properties can be queried later. The resulting view
+	 * will have dimension "1d", "2d", "2d-array", or "3d" and will match the
+	 * texture.
+	 * @param texture - The texture to store and create a view of.
+	 */
 	constructor(texture: GPUTexture) {
 		this.texture = texture;
 
@@ -53,6 +69,29 @@ export class RenderOutputTexture {
 			baseArrayLayer: 0,
 		});
 	}
+}
+
+/**
+ * The parameters for transforming an instance of `{@link RenderOutputTexture}`
+ * while sampling it for presentation.
+ * @export
+ * @class RenderOutputTransform
+ */
+export class RenderOutputTransform {
+	flip = false;
+	colorGain: {
+		r: number;
+		g: number;
+		b: number;
+	} = { r: 1.0, g: 1.0, b: 1.0 };
+	channelMasks: {
+		r: boolean;
+		g: boolean;
+		b: boolean;
+	} = { r: true, g: true, b: true };
+	swapBARG = false;
+	mipLevel = 0;
+	arrayLayer = 0;
 }
 
 type NestedUniform<T, B> = T extends object
@@ -92,6 +131,16 @@ const RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES: ({
 	},
 ];
 
+/**
+ * This manages the selection from a list of possible targets that can be
+ * presented as the final output of the renderer, alongside persisting
+ * transformations to use when rendering that target. See
+ * {@link RenderOutputCategories} for the possible outputs, and
+ * {@link RenderOutputTransform} for the properties that are transformed during
+ * rendering.
+ * @export
+ * @class RenderOutputController
+ */
 export class RenderOutputController {
 	private options: {
 		outputTexture: RenderOutputCategory;
@@ -108,6 +157,11 @@ export class RenderOutputController {
 		| NestedUniform<RenderOutputTransform, LilController>
 		| undefined;
 
+	/**
+	 * @returns The category and transform of the currently selected render
+	 * output.
+	 * @memberof RenderOutputController
+	 */
 	current() {
 		return {
 			category: this.options.outputTexture,
@@ -144,6 +198,18 @@ export class RenderOutputController {
 		}
 	}
 
+	/**
+	 * Set the per-texture data for a given render output, restricting what
+	 * values can be set in the UI, such as not accessing out-of-bounds mipmap
+	 * levels.
+	 * @param {RenderOutputCategory} props.category - The render output to tweak
+	 *  the parameters for.
+	 * @param {number} prop.mipLevelCount - The upper bound of what mip level
+	 *  can be set in the UI.
+	 * @param {number} prop.depthOrArrayLayerCount - The upper bound of what
+	 *  array layer (or depth) can be set in the UI.
+	 * @memberof RenderOutputController
+	 */
 	setTextureProperties(props: {
 		category: RenderOutputCategory;
 		mipLevelCount: number;
@@ -206,6 +272,11 @@ export class RenderOutputController {
 		currentTransform.colorGain.b = scale;
 	}
 
+	/**
+	 * Adds this controller to the UI.
+	 * @param {LilGUI} gui - The root level GUI to attach to.
+	 * @memberof RenderOutputController
+	 */
 	setupUI(gui: LilGUI) {
 		const outputTextureFolder = gui.addFolder("Render Output").close();
 		outputTextureFolder

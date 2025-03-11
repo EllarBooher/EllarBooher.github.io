@@ -6,40 +6,72 @@ import { TimestampQueryInterval } from "../PerformanceTracker";
 
 const ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT: GPUTextureFormat = "rgba16float";
 
+/**
+ * Contains the resources for the composition of the atmosphere with an input
+ * GBuffer. The GBuffer is interpreted as the ocean surface and shaded as such.
+ * This includes reflections of the sky.
+ * @see `/shaders/sky-sea/atmosphere_camera.wgsl` for the shader implementation
+ *  details.
+ * @export
+ * @class AtmosphereCameraPassResources
+ */
 export class AtmosphereCameraPassResources {
 	/*
-		@group(0) @binding(0) var output_color: texture_storage_2d<rgba32float, write>;
-		@group(0) @binding(1) var lut_sampler: sampler;
-		@group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
-		@group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
-		@group(0) @binding(4) var skyview_lut: texture_2d<f32>;
-		@group(0) @binding(5) var aerial_perspective_lut: texture_3d<f32>;
+	 * @group(0) @binding(0) var output_color: texture_storage_2d<rgba32float, write>;
+	 * @group(0) @binding(1) var lut_sampler: sampler;
+	 * @group(0) @binding(2) var transmittance_lut: texture_2d<f32>;
+	 * @group(0) @binding(3) var multiscatter_lut: texture_2d<f32>;
+	 * @group(0) @binding(4) var skyview_lut: texture_2d<f32>;
+	 * @group(0) @binding(5) var aerial_perspective_lut: texture_3d<f32>;
+	 *
+	 * @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+	 *
+	 * @group(2) @binding(0) var gbuffer_color_with_surface_world_depth_in_alpha: texture_2d<f32>;
+	 * @group(2) @binding(1) var gbuffer_normal_with_surface_jacobian_in_alpha: texture_2d<f32>;
+	 */
+	private group0Layout: GPUBindGroupLayout;
+	private group1Layout: GPUBindGroupLayout;
 
-		@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+	private lutSampler: GPUSampler;
 
-		@group(2) @binding(0) var gbuffer_color_with_surface_world_depth_in_alpha: texture_2d<f32>;
-		@group(2) @binding(1) var gbuffer_normal_with_surface_jacobian_in_alpha: texture_2d<f32>;
-		*/
-	group0Layout: GPUBindGroupLayout;
-	group1Layout: GPUBindGroupLayout;
+	private group0: GPUBindGroup;
+	private group1: GPUBindGroup;
 
-	lutSampler: GPUSampler;
+	public outputColor: GPUTexture;
+	public outputColorView: GPUTextureView;
 
-	group0: GPUBindGroup;
-	group1: GPUBindGroup;
+	private pipeline: GPUComputePipeline;
 
-	outputColor: GPUTexture;
-	outputColorView: GPUTextureView;
-
-	pipeline: GPUComputePipeline;
-
+	/**
+	 * Initializes all resources related to the atmospheric camera pass. The
+	 * texture will be initialized as one pixel by one pixel, call
+	 * {@link resize} afterwards to set the size.
+	 * @param {GPUDevice} device
+	 * @param {GPUBindGroupLayout} gbufferReadGroupLayout - The layout of the
+	 *  GBuffer bind group that will be provided at rendering time.
+	 * @param {GPUTextureView} transmittanceLUT - A view into the transmittance
+	 *  LUT that will be used.
+	 * @param {GPUTextureView} multiscatterLUT - A view into the multiscatter
+	 *  LUT that will be used.
+	 * @param {GPUTextureView} skyviewLUT - A view into the sky view LUT that
+	 *  will be used.
+	 * @param {GPUTextureView} aerialPerspectiveLUT - A view into the aerial
+	 *  perspective LUT that will be used.
+	 * @param {boolean} filterableLUT - Whether or not the passed LUTs are
+	 *  filterable by samples. This is a consideration since the LUTs are 32-bit
+	 *  floats per channel, and filtering such textures is not supported on all
+	 *  WebGPU instances.
+	 * @param {GlobalUBO} globalUBO - The global UBO to bind and use when
+	 *  rendering the LUT.
+	 * @memberof AtmosphereCameraPassResources
+	 */
 	constructor(
 		device: GPUDevice,
 		gbufferReadGroupLayout: GPUBindGroupLayout,
-		transmittanceLUTView: GPUTextureView,
-		multiscatterLUTView: GPUTextureView,
-		skyviewLUTView: GPUTextureView,
-		aerialPerspectiveLUTView: GPUTextureView,
+		transmittanceLUT: GPUTextureView,
+		multiscatterLUT: GPUTextureView,
+		skyviewLUT: GPUTextureView,
+		aerialPerspectiveLUT: GPUTextureView,
 		filterableLUT: boolean,
 		globalUBO: GlobalUBO
 	) {
@@ -146,19 +178,19 @@ export class AtmosphereCameraPassResources {
 				},
 				{
 					binding: 2,
-					resource: transmittanceLUTView,
+					resource: transmittanceLUT,
 				},
 				{
 					binding: 3,
-					resource: multiscatterLUTView,
+					resource: multiscatterLUT,
 				},
 				{
 					binding: 4,
-					resource: skyviewLUTView,
+					resource: skyviewLUT,
 				},
 				{
 					binding: 5,
-					resource: aerialPerspectiveLUTView,
+					resource: aerialPerspectiveLUT,
 				},
 			],
 			label: "Atmosphere Camera Group 0",
@@ -195,13 +227,22 @@ export class AtmosphereCameraPassResources {
 		});
 	}
 
+	/**
+	 * Resizes all managed textures.
+	 * @see {@link AtmosphereCameraPassResources:constructor} for further
+	 * 	descriptions of the parameters.
+	 * @param {Extent2D} size - The new size to use. {@link outputColor} will be
+	 *  this size.
+	 * @param {GPUDevice} device
+	 * @memberof AtmosphereCameraPassResources
+	 */
 	resize(
 		size: Extent2D,
 		device: GPUDevice,
-		transmittanceLUTView: GPUTextureView,
-		multiscatterLUTView: GPUTextureView,
-		skyviewLUTView: GPUTextureView,
-		aerialPerspectiveLUTView: GPUTextureView
+		transmittanceLUT: GPUTextureView,
+		multiscatterLUT: GPUTextureView,
+		skyviewLUT: GPUTextureView,
+		aerialPerspectiveLUT: GPUTextureView
 	) {
 		this.outputColor = device.createTexture({
 			format: this.outputColor.format,
@@ -225,25 +266,35 @@ export class AtmosphereCameraPassResources {
 				},
 				{
 					binding: 2,
-					resource: transmittanceLUTView,
+					resource: transmittanceLUT,
 				},
 				{
 					binding: 3,
-					resource: multiscatterLUTView,
+					resource: multiscatterLUT,
 				},
 				{
 					binding: 4,
-					resource: skyviewLUTView,
+					resource: skyviewLUT,
 				},
 				{
 					binding: 5,
-					resource: aerialPerspectiveLUTView,
+					resource: aerialPerspectiveLUT,
 				},
 			],
 			label: "Atmosphere Camera Group 0 Resized",
 		});
 	}
 
+	/**
+	 * Records the rendering of GBuffer scene composited with the atmosphere.
+	 * @param {GPUCommandEncoder} commandEncoder - The command encoder to record
+	 *  into.
+	 * @param {(TimestampQueryInterval | undefined)} timestampInterval - The
+	 *  interval to record timing information into.
+	 * @param {GBuffer} gbuffer - The GBuffer to use as the input scene. See
+	 * 	shader source for how it is utilized.
+	 * @memberof AtmosphereCameraPassResources
+	 */
 	record(
 		commandEncoder: GPUCommandEncoder,
 		timestampInterval: TimestampQueryInterval | undefined,

@@ -1,12 +1,36 @@
 import { Mat4, mat4, vec4, vec3, Vec4, Vec3 } from "wgpu-matrix";
 
-// See "shaders/sky-sea/ubo.inc.wgsl" for the GPU counterpart of all these types, and the reference for sizes/alignments
+/*
+ * See "shaders/sky-sea/types.inc.wgsl" for the GPU counterpart of all these
+ * types, and the reference for sizes/alignments
+ */
 
 const BYTES_PER_FLOAT32 = 4;
 
+/**
+ * A wrapper around a device buffer that handles packing and uploading the
+ * proper byte representation for a host-shareable and constructible GPU
+ * type.
+ * @export
+ * @abstract
+ * @class UBO
+ */
 export abstract class UBO {
+	/**
+	 * The device buffer that is uploaded to.
+	 * @type {GPUBuffer}
+	 * @memberof UBO
+	 */
 	public readonly buffer: GPUBuffer;
 
+	/**
+	 * Allocates the backing buffer with a given size.
+	 * @param {GPUDevice} device
+	 * @param {number} lengthFloat32 - The length of the buffer in 32-bit
+	 *  (4-byte) floats.
+	 * @param {string} label - A label for debugging purposes, used by WebGPU.
+	 * @memberof UBO
+	 */
 	constructor(device: GPUDevice, lengthFloat32: number, label: string) {
 		this.buffer = device.createBuffer({
 			size: lengthFloat32 * BYTES_PER_FLOAT32,
@@ -15,8 +39,22 @@ export abstract class UBO {
 		});
 	}
 
+	/**
+	 * Synthesizes the bytes that will be written to the UBO buffer.
+	 * @protected
+	 * @abstract
+	 * @return {ArrayBuffer} A packed array of the bytes that must match the
+	 *  exact representation of the mirrored type on the device.
+	 * @memberof UBO
+	 */
 	protected abstract packed(): ArrayBuffer;
 
+	/**
+	 * Writes the bytes of the host data into the device buffer.
+	 * @param {GPUQueue} queue - The device queue to submit the synchronous
+	 *  write command into.
+	 * @memberof UBO
+	 */
 	public writeToGPU(queue: GPUQueue) {
 		const values = this.packed();
 
@@ -30,7 +68,18 @@ export abstract class UBO {
 	}
 }
 
-interface RayleighProfile {
+/**
+ * The profile of light scattering and absorption for Rayleigh particles in a
+ * medium. Its altitude-dependent density is modelled with a exponential
+ * function `exp(-densityScale * altitude)`.
+ * @prop {Vec3} scattering - Optical depth of scattered light per unit length
+ * @prop {Vec3} absorption - Optical depth of absorbed light per unit length
+ * @prop {number} densityScale - The inner coefficient for the exponential-decay
+ *  density function, with units of length.
+ * @export
+ * @interface RayleighProfile
+ */
+export interface RayleighProfile {
 	// Units of inverse length
 	scattering: Vec3;
 	absorption: Vec3;
@@ -38,26 +87,40 @@ interface RayleighProfile {
 	// Units of length
 	densityScale: number;
 }
+/**
+ * @see {@link RayleighProfile}
+ */
+export type MieProfile = RayleighProfile;
 
-interface MieProfile {
-	// Units of inverse length
+/**
+ * The profile of light scattering and absorption for Ozone in a medium. Its
+ * altitude-dependent density is modelled with a hardcoded tent function.
+ * @prop {Vec3} scattering - Optical depth of scattered light per unit length
+ * @prop {Vec3} absorption - Optical depth of absorbed light per unit length
+ * @export
+ * @interface OzoneProfile
+ */
+export interface OzoneProfile {
 	scattering: Vec3;
 	absorption: Vec3;
-
-	// Units of length
-	densityScale: number;
 }
 
-interface OzoneProfile {
-	// Units of inverse length
-	scattering: Vec3;
-	absorption: Vec3;
-
-	// Ozone uses hardcode density function
-}
-
-// Units are in megameters
-interface Atmosphere {
+/**
+ * The parameters for the atmosphere and planet the scene is surrounded by.
+ * Units are in megameters, since that is what the GPU atmosphere code uses.
+ * @prop {RayleighProfile} rayleighMm - The profile for Rayleigh particles.
+ * @prop {MieProfile} mieMm - The profile for Mie particles.
+ * @prop {OzoneProfile} ozoneMm - The profile for Ozone particles.
+ * @prop {number} planetRadiusMm - The uniform radius of the spherical planet,
+ *  where the atmosphere begins.
+ * @prop {number} atmosphereRadiusMm - The uniform radius of the atmosphere, the
+ *  outer boundary of the atmosphere. It is the sum of the planet's radius and
+ *  the thickness of the atmosphere.
+ * @prop {Vec3} groundAlbedo - The albedo for the planet's surface. Unused.
+ * @export
+ * @interface Atmosphere
+ */
+export interface Atmosphere {
 	rayleighMm: RayleighProfile;
 	mieMm: MieProfile;
 	ozoneMm: OzoneProfile;
@@ -65,7 +128,6 @@ interface Atmosphere {
 	planetRadiusMm: number;
 	atmosphereRadiusMm: number;
 
-	// Unitless albedo
 	groundAlbedo: Vec3;
 }
 
@@ -98,7 +160,23 @@ function atmosphereEarth(): Atmosphere {
 	};
 }
 
-interface CelestialLight {
+/**
+ * Parameters for a directional light illuminating the scene. Multiply `color`
+ * and `strength` to get the RGB spectral luminance of light incident to the
+ * scene.
+ * @prop {Vec3} color - The relative strengths of red, green, and blue light
+ *  respectively.
+ * @prop {number} strength - The wavelength-independent magnitude of
+ *  luminance/radiance for this light.
+ * @prop {Vec3} forward - The normalized direction of all rays emanating from
+ *  this light source.
+ * @prop {number} angularRadius - The angle subtended by the light modelled as a
+ *  disk (or distant sphere). Due to the parallel light rays this angle is the
+ *  same anywhere in the scene.
+ * @export
+ * @interface CelestialLight
+ */
+export interface CelestialLight {
 	color: Vec3;
 	strength: number;
 	forward: Vec3;
@@ -114,6 +192,17 @@ function lightSun(): CelestialLight {
 	};
 }
 
+/**
+ * The matrices and vectors for a perspective camera in the scene.
+ * @prop {Mat4} invProj - Inverse of the perspective projection matrix
+ * @prop {Mat4} invView - Inverse of the view matrix
+ * @prop {Mat4} projView - Precomputed product of the perspective projection and
+ * 	view matrix.
+ * @prop {Vec4} position - The world-space position of the camera in the scene.
+ * @prop {Vec4} forward - The world-space direction of the camera in the scene.
+ * @export
+ * @interface Camera
+ */
 export interface Camera {
 	invProj: Mat4;
 	invView: Mat4;
@@ -122,7 +211,15 @@ export interface Camera {
 	forward: Vec4;
 }
 
-interface Time {
+/**
+ * The timing information for a scene.
+ * @prop {number} timeSeconds - The time in seconds
+ * @prop {number} deltaTimeSeconds - The time in seconds that has elapsed since
+ *  the last frame.
+ * @export
+ * @interface Time
+ */
+export interface Time {
 	timeSeconds: number;
 	deltaTimeSeconds: number;
 }
@@ -159,14 +256,46 @@ const SIZEOF_GPU_GLOBAL_UBO = wgpuRoundUp(
 		SIZEOF_GPU_TIME
 );
 
+/**
+ * The backing data for {@link GlobalUBO}, closely matching its gpu
+ * representation.
+ * @prop {Camera} ocean_camera - A camera that is used as the perspective for
+ *  the generation of the screen-space warped ocean surface.
+ * @prop {Camera} camera - A second camera that is used for rendering the scene.
+ *  Usually should match `ocean_camera`, but can be different for debug or
+ *  demonstration purposes.
+ * @prop {Atmosphere} atmosphere - The parameters to define the participating
+ *  medium of the sky in the scene.
+ * @prop {CelestialLight} light - The primary directional light used in the
+ *  scene, coming from space.
+ * @prop {Time} time - The timing information for the scene, for a specific
+ *  frame.
+ * @export
+ * @interface GlobalUBOData
+ */
+export interface GlobalUBOData {
+	ocean_camera: Camera;
+	camera: Camera;
+	atmosphere: Atmosphere;
+	light: CelestialLight;
+	time: Time;
+}
+
+/**
+ * A UBO containing various parameters integral to rendering. It is intended for
+ * a single instance to be shared, with the same buffer bound to many pipelines.
+ * @export
+ * @class GlobalUBO
+ * @extends {UBO}
+ */
 export class GlobalUBO extends UBO {
-	public readonly data: {
-		ocean_camera: Camera;
-		camera: Camera;
-		atmosphere: Atmosphere;
-		light: CelestialLight;
-		time: Time;
-	} = {
+	/**
+	 * The data that will be packed and laid out in proper byte order in
+	 * {@link packed}, to be written to the GPU.
+	 * @type {GlobalUBOData}
+	 * @memberof GlobalUBO
+	 */
+	public readonly data: GlobalUBOData = {
 		atmosphere: atmosphereEarth(),
 		light: lightSun(),
 		camera: {

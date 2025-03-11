@@ -33,6 +33,13 @@ class DFFTParametersUBO extends UBO {
 const BYTES_PER_COMPLEX_BUFFER_ELEMENT = 16;
 const REQUIRED_OUTPUT_FORMAT: GPUTextureFormat = "rgba16float";
 
+/**
+ * This contains the resources for performing a 2D discrete fast fourier
+ * transform on a square grid. It supports 2 parallel executions at the same
+ * time, if you pack two complex pairs into the four channel RGBA input data.
+ * @export
+ * @class DFFTResources
+ */
 export class DFFTResources {
 	private parametersUBO: DFFTParametersUBO;
 	private intermediateDFTs: GPUBuffer;
@@ -43,8 +50,13 @@ export class DFFTResources {
 		depthOrArrayLayers: number;
 	};
 
-	// Work with buffers instead of textures, since webgpu is restrictive on which storage textures can be read_write
-	// A possible workaround is using two functions for the perform kernel, identical up to swapping source/destination buffer. This would save copying during IO, but might not be necessary.
+	/*
+	 * We work with buffers instead of textures, since webgpu is restrictive on
+	 * which storage textures can be read_write without extensions. A possible
+	 * workaround is using two functions for the perform kernel, identical up to
+	 * swapping source/destination buffer. This would save copying during IO, but
+	 * might not be necessary.
+	 */
 	private complexBuffer0: GPUBuffer;
 	private complexBuffer1: GPUBuffer;
 	private stepCounterBuffer: GPUBuffer;
@@ -77,9 +89,12 @@ export class DFFTResources {
 	private resetStepCounterKernel: GPUComputePipeline;
 
 	/**
-	 * Creates a collection of pipelines capable of perform a Discrete Fourier Transform on a 2D square grid whose side length is a power of 2.
+	 * Initializes all the pipelines and intermediate buffers for the
+	 * performance of the DFFT on a square grid of size 2^N, where N is
+	 * {@link log2GridSize}.
 	 * @param {GPUDevice} device
-	 * @param {number} log2GridSize - The exponent used to calculate the grid size. Must be greater than 4.
+	 * @param {number} log2GridSize - The exponent used to calculate the grid
+	 *  size. Must be greater than 4.
 	 * @memberof DFFTResources
 	 */
 	constructor(device: GPUDevice, log2GridSize: number, layerCount: number) {
@@ -359,8 +374,6 @@ export class DFFTResources {
 		device.queue.submit([commandEncoder.finish()]);
 	}
 
-	// static debugCounter: number = 0;
-	debugBuffersCopied = false;
 	private recordPerformOnBuffer0(
 		commandEncoder: GPUCommandEncoder,
 		endTimestampWrites: GPUComputePassTimestampWrites | undefined
@@ -405,14 +418,29 @@ export class DFFTResources {
 	}
 
 	/**
-	 * Performs the 2D DFFT on a grid of complex numbers (two channel). The inverse is not scaled.
-	 *
+	 * Performs two parallel Discrete Fast Fourier Transforms on a 2D square
+	 * grid of pairs of complex numbers.
+	 * - The source and destination textures must be 2D. They must be square and
+	 *   match the size passed during initialization. The source must be
+	 *   {@link REQUIRED_INPUT_FORMAT} and the destination must be
+	 *   {@link REQUIRED_OUTPUT_FORMAT}. This method will throw an error upon
+	 *   any incompatibilities.
+	 * - For consideration if parameter {@link inverse} is true: Typically, the
+	 *   inverse of the forward fourier transform needs to be scaled by 1/N,
+	 *   where N is the size of the input data (N^2 in the case of our 2D
+	 *   transform). We skip this, and it is up to the consumer of the output to
+	 *   scale or interpret the data as needed.
 	 * @param {GPUDevice} device
-	 * @param {GPUCommandEncoder} commandEncoder
-	 * @param {GPUTexture} sourceTextureArray - The texture to copy the input from. Its format should be "rg32float"
-	 * @param {GPUTexture} destinationTextureArray - The texture to copy the output into. Its format should be "rg32float"
-	 * @param {boolean} inverse - Whether to perform an inverse transform or not.
-	 * @param {(GPUComputePassTimestampWrites | undefined)} endTimestampWrites
+	 * @param {GPUCommandEncoder} commandEncoder - The command encoder to record
+	 *  into.
+	 * @param {GPUTexture} sourceTextureArray - The texture to copy the input
+	 *  from.
+	 * @param {GPUTexture} destinationTextureArray - The texture to copy the
+	 *  output into.
+	 * @param {boolean} inverse - Whether to perform the inverse Fourier
+	 *  transform instead.
+	 * @param {(GPUComputePassTimestampWrites | undefined)} endTimestampWrites -
+	 * deprecated
 	 * @memberof DFFTResources
 	 */
 	recordPerform(

@@ -30,11 +30,13 @@
 	flex: 1;
 
 	/*
-	relative allows absolute children (canvas & GUI pane) to snap to the edge of the rendering area and not some other parent
-	It also allows the canvas to fill the exact visible area and overflow: hidden any extra
+	relative allows absolute children (canvas & GUI pane) to snap to the edge of
+	the rendering area and not some other parent It also allows the canvas to fill
+	the exact visible area and overflow: hidden any extra
 
-	Other techniques seems to always add a scrollbar for the canvas when zooming or even at 100% zoom
-	This arrangement keeps the canvas filling the available area which is what I want.
+	Other techniques seems to always add a scrollbar for the canvas when zooming
+	or even at 100% zoom This arrangement keeps the canvas filling the available
+	area which is what we want.
 	*/
 	position: relative;
 	overflow: hidden;

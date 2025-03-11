@@ -3,7 +3,19 @@ import { packShaders } from "./Shaders";
 
 const modulesByInclude = new Map<string, Set<string>>();
 
-// Allow import of wgsl shaders, with pre-processing
+/**
+ * A Vite plugin that preprocesses the contents of each imported '.wgsl' file as
+ * a transformation step.
+ * - The output is valid WebGPU shader language. The inputs are not, if they
+ *   include any preprocessing directives.
+ * - This also attaches a {@link ViteDevServer} watcher for '.inc.wgsl' files, a
+ *   custom file type used as includes for the preprocessing system. The watcher
+ *   triggers hot reloads of '.wgsl' modules whose unmodified source references
+ *   the include.
+ * @see {@link packShaders} for details of what transformations are performed.
+ * @see {@link https://vite.dev/config/} for how to use this plugin.
+ * @returns The Vite {@link PluginOption}.
+ */
 export const wgslPlugin: () => PluginOption = () => ({
 	name: "wgsl-plugin",
 	transform: (src: string, id: string) => {
@@ -26,10 +38,12 @@ export const wgslPlugin: () => PluginOption = () => ({
 	},
 	configureServer: (server: ViteDevServer) => {
 		/*
-		 * Our .wgsl shader preprocessing directly loads .inc.wgsl, side-stepping import
-		 * detection for hot reloading and resulting in changes to .inc.wgsl not causing
-		 * reloads. To fix this, we attach a custom watcher to the dev server that
-		 * causes a reload any time a changed file is a .inc.wgsl.
+		 * Our shader preprocessing loads includes from disk, causing 'inc.wgsl'
+		 * modules not being added to the module graph. Thus changes to
+		 * .inc.wgsl do not invalidate the .wgsl modules, and even upon a hot
+		 * reload the preprocess transform. To fix this, we attach a custom
+		 * watcher to the dev server that causes necessary invalidations and
+		 * reloads.
 		 */
 
 		const SUFFIX = ".inc.wgsl";

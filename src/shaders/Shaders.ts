@@ -7,6 +7,10 @@ interface ShaderInclude {
 }
 
 const FLAGS_PREFIX = "#flags ";
+/**
+ * Find the flags definition directive, a line that lists all valid conditional
+ * flags.
+ */
 function gatherFlags(filename: string, source: string): string[] {
 	let flags: string[] = [];
 	let foundPrefix = false;
@@ -36,27 +40,26 @@ function gatherFlags(filename: string, source: string): string[] {
 }
 
 /*
-A conditional block looks like the following:
-
-#ifdef [FLAG]
-
-#else
-
-#endif
-
-FLAG is a string, taken to be all remaining characters excluding the single space after IF
-FLAG is not any sort of expression like "TEXTURE_MODE == 2", it should look more like "ENABLE_TEXTURE_MODE_TWO"
-FLAG is a boolean flag set outside of the include file, enabled/disabled before parsing the include
-
-If FLAG is enabled, only the lines between IFDEF and ELSE are kept, the others are discarded.
-If FLAG is not enabled, only the lines between ELSE and ENDIF are kept, the others are discard.
-
-IFDEF and ENDIF may not be omitted.
-ELSE may be omitted.
-
-At this point, nesting is not supported.
-*/
-
+ * A conditional block looks like the following:
+ *
+ * #ifdef [FLAG]
+ *
+ * #else
+ *
+ * #endif
+ *
+ * FLAG is a string, taken to be all remaining characters excluding the single space after IF
+ * FLAG is not any sort of expression like "TEXTURE_MODE == 2", it should look more like "ENABLE_TEXTURE_MODE_TWO"
+ * FLAG is a boolean flag set outside of the include file, enabled/disabled before parsing the include
+ *
+ * If FLAG is enabled, only the lines between IFDEF and ELSE are kept, the others are discarded.
+ * If FLAG is not enabled, only the lines between ELSE and ENDIF are kept, the others are discard.
+ *
+ * IFDEF and ENDIF may not be omitted.
+ * ELSE may be omitted.
+ *
+ * At this point, nesting is not supported.
+ */
 function replaceConditionalBlocks(
 	filename: string,
 	source: ShaderInclude,
@@ -194,18 +197,25 @@ function replaceConditionalBlocks(
 	return sourceOut;
 }
 
-// This is utilized as a plugin in vite.config.ts, to preprocess each shader as a part of typescript compilation
+/**
+ * Preprocesses the given WebGPU shader language source file in plaintext.
+ * @export
+ * @param {string} filePath - The path to the shader source file.
+ * @param {string} source - The plaintext of the shader source file.
+ * @return {{ source: string; includes: string[] }} The processed the source and
+ * 	the referenced includes that were discovered during the process.
+ */
 export function packShaders(
-	id: string,
+	filePath: string,
 	source: string
 ): { source: string; includes: string[] } {
 	const INCLUDE_PREFIX = "#include ";
 
 	const includeMappings = new Map<string, ShaderInclude>();
 
-	console.log(`Preprocessing shader ${id}`);
+	console.log(`Preprocessing shader ${filePath}`);
 
-	const includeWorkingPrefix = path.parse(id).dir;
+	const includeWorkingPrefix = path.parse(filePath).dir;
 
 	let lineIndex = 0;
 	const lines = source.split("\n");

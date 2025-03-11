@@ -1,5 +1,8 @@
 import { GUI as LilGUI, Controller as LilController } from "lil-gui";
 
+/**
+ * @see {@link QueryCategory} for the enum backed by this array.
+ */
 export const QueryCategories = [
 	"SkyviewLUT",
 	"AerialPerspectiveLUT",
@@ -8,11 +11,32 @@ export const QueryCategories = [
 	"AtmosphereCamera",
 	"FullscreenQuad",
 ] as const;
+/**
+ * Categories of rendering work that the renderer tracks the performance for by
+ * querying the device for timestamps.
+ */
 export type QueryCategory = (typeof QueryCategories)[number];
 
+/**
+ * @see {@link FrametimeCategory} for the enum backed by this array.
+ */
 export const FrametimeCategories = ["DrawToDraw", ...QueryCategories] as const;
+/**
+ * All categories of rendering work that the renderer tracks the compute and
+ * graphics time for.
+ */
 export type FrametimeCategory = (typeof FrametimeCategories)[number];
 
+/**
+ * Stores indices into a device query set, for timing some interval or scope of
+ * GPU work.
+ * @prop {GPUQuerySet} querySet - The query set that timestamps should be
+ *  written into.
+ * @prop {GPUSize32} beginWriteIndex - An index into the query set, where the
+ *  timestamp for the beginning of the work should be written.
+ * @prop {GPUSize32} endWriteIndex - An index into the query set, where the
+ *  timestamp for the end of the work should be written.
+ */
 export interface TimestampQueryInterval {
 	querySet: GPUQuerySet;
 	beginWriteIndex: GPUSize32;
@@ -23,9 +47,15 @@ class ArithmeticSumArray {
 	private values: number[];
 	private sum = 0.0;
 	private average_ = 0.0;
-	// Count how many values are valid. Starts at zero, goes to values.length, and stays there. Necessary to keep runningSum valid before the buffer can be filled once.
+	/*
+	 * Count how many values are valid. Starts at zero, goes to values.length,
+	 * and stays there. Necessary to keep runningSum valid before the buffer can
+	 * be filled once.
+	 */
 	private count = 0;
-	// Index into values of next value to write
+	/*
+	 * Index into values of next value to write
+	 */
 	private index = 0;
 
 	constructor(capacity: number) {
@@ -51,14 +81,23 @@ class ArithmeticSumArray {
 	}
 }
 
+/**
+ * This manages storing the frametimes across various categories for a fixed
+ * amount of past frames. The mechanism for updating times is querying the GPU
+ * each frame for timestamps, then asynchronously mapping a host-device buffer.
+ * This leads to frames being missed, so this object is only good for gathering
+ * an average. `PerformanceTracker` is unsuitable if frametimes are
+ * unpredictable and the timing of mapping the backing buffer coincidentally
+ * leads to aliasing of the true frametime history.
+ *
+ * @export
+ * @class PerformanceTracker
+ */
 export class PerformanceTracker {
 	// Defined only when timestamp querying is supported
 	private readonly queryBuffers:
 		| {
 				querySet: GPUQuerySet;
-				// We cannot read directly from the buffer that WebGPU writes the timestamps to
-				// So we use a copy operation, then an async mapping.
-				// Since we cannot map until unmapping at the end of this async operation, we set a flag to avoid that until then.
 				writeBuffer: GPUBuffer;
 				readBuffer: GPUBuffer;
 				mappingLock: boolean;
@@ -80,6 +119,12 @@ export class PerformanceTracker {
 		frametimeControllers: Map<FrametimeCategory, LilController>;
 	};
 
+	/**
+	 * Bind the frametime values and averageFPS to the passed UI, under a single
+	 * top-level folder.
+	 * @param {LilGUI} gui - The GUI to bind to
+	 * @memberof PerformanceTracker
+	 */
 	setupUI(gui: LilGUI) {
 		const performanceFolder = gui.addFolder("Performance").close();
 		performanceFolder
@@ -100,6 +145,38 @@ export class PerformanceTracker {
 		});
 	}
 
+	/**
+	 * Begin each frame by calling this before any other methods. This also
+	 * records the host's frame-to-frame time.
+	 * @param {number} deltaTimeMilliseconds - The time since last frame, to be
+	 *  recorded for displaying the overall average FPS.
+	 * @memberof PerformanceTracker
+	 */
+	startFrame(deltaTimeMilliseconds: number) {
+		this.frametimeAverages.get("DrawToDraw")?.push(deltaTimeMilliseconds);
+		this.timestampQueryIndex = 0;
+		this.timestampIndexMapping.clear();
+	}
+
+	/**
+	 * Call this before recording each interval of GPU work you wish to time. If
+	 * timestamp querying is supported, this will return a query set and two
+	 * indices that should be passed to the WebGPU api when starting
+	 * render/compute passes. If the interval of work you wish to time spans
+	 * multiple passes, pass the begin index as the start of the first pass and
+	 * the end index as the end of the last pass.
+	 * @see {@link GPUComputePassTimestampWrites} or
+	 *  {@link GPURenderPassTimestampWrites} for how the returned value needs to
+	 *  be consumed by WebGPU.
+	 * @param {QueryCategory} category - The category that the GPU timestamps
+	 *  will be recorded under. Calling this twice for the same category will
+	 *  overwrite the old timestamps, and may lead to an overflow of the memory
+	 *  of the query set causing a crash in the WebGPU instance.
+	 * @return {(TimestampQueryInterval | undefined)} Returns the device query
+	 *  set and indices that should be written into, or `undefined` if querying
+	 *  is not supported.
+	 * @memberof PerformanceTracker
+	 */
 	pushTimestampQueryInterval(
 		category: QueryCategory
 	): TimestampQueryInterval | undefined {
@@ -120,12 +197,16 @@ export class PerformanceTracker {
 		};
 	}
 
-	startFrame(deltaTimeMilliseconds: number) {
-		this.frametimeAverages.get("DrawToDraw")?.push(deltaTimeMilliseconds);
-		this.timestampQueryIndex = 0;
-		this.timestampIndexMapping.clear();
-	}
-
+	/**
+	 * Call this once all timed commands have been recorded. The encoder's
+	 * current recording point needs to be logically after all work being timed
+	 * so that there is no race-condition on the copied timestamps. This usually
+	 * means just putting all the work for each `PerformanceTracker` on the same
+	 * encoder.
+	 * @param {GPUCommandEncoder} commandEncoder - The command encoder to record
+	 * 	into.
+	 * @memberof PerformanceTracker
+	 */
 	recordCopyBuffers(commandEncoder: GPUCommandEncoder) {
 		if (
 			this.queryBuffers == undefined ||
@@ -150,6 +231,12 @@ export class PerformanceTracker {
 		);
 	}
 
+	/**
+	 * Call this after executing all command buffers with commands that touch
+	 * the timing data that will be read by `PerformanceTracker`. This copies
+	 * all the timing and updates the bound UI.
+	 * @memberof PerformanceTracker
+	 */
 	asyncUpdateFrametimeAverages() {
 		if (
 			this.queryBuffers == undefined ||

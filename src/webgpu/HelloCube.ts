@@ -24,7 +24,7 @@ const POSSIBLE_WEBGPU_FEATURES = new Set<string>([
 	"dual-source-blending",
 ]);
 
-export class HelloCubeApp implements RendererApp {
+class HelloCubeApp implements RendererApp {
 	quit = false;
 
 	private device: GPUDevice;
@@ -238,6 +238,10 @@ export class HelloCubeApp implements RendererApp {
 	}
 }
 
+/**
+ * Constructor for {@link HelloCubeApp}.
+ * @see {@link RendererAppConstructor} for parameters.
+ */
 export const HelloCubeAppConstructor: RendererAppConstructor = (
 	device,
 	presentFormat

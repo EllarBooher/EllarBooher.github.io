@@ -1,7 +1,7 @@
 import { memo, ReactElement } from "react";
 import "./App.css";
 import { Link } from "react-router";
-import { samplesByQueryParam } from "./webgpu/Samples";
+import { samplesBySearchParam } from "./webgpu/Samples";
 
 const emailLink = (
 	<a target="_blank" rel="noreferrer" href="mailto:estelle.booher@gmail.com">
@@ -55,7 +55,7 @@ const DisplayCard = memo(function DisplayCard({
 
 function App() {
 	const webGPUCards: ReactElement[] = [];
-	samplesByQueryParam.forEach((value, key) => {
+	samplesBySearchParam.forEach((value, key) => {
 		webGPUCards.push(
 			<DisplayCard
 				key={key}

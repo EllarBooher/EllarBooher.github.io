@@ -4,8 +4,29 @@ import TransmittanceLUTPak from "../../../shaders/sky-sea/transmittance_LUT.wgsl
 
 const TRANSMITTANCE_LUT_FORMAT: GPUTextureFormat = "rgba32float";
 
+/**
+ * Contains the resources for the creation of a lookup table for atmospheric
+ * transmittance from point to upper edge of atmosphere, parameterized by
+ * altitude and zenith angle of the querying ray. This LUT only needs to be
+ * updated when the atmosphere parameters change.
+ * @see `/shaders/sky-sea/transmittance_LUT.wgsl` for the shader implementation
+ *  details.
+ * @export
+ * @class TransmittanceLUTPassResources
+ */
 export class TransmittanceLUTPassResources {
+	/**
+	 * The transmittance lookup table texture.
+	 * @type {GPUTexture}
+	 * @memberof TransmittanceLUTPassResources
+	 */
 	public readonly texture: GPUTexture;
+
+	/**
+	 * The view into {@link texture}.
+	 * @type {GPUTextureView}
+	 * @memberof TransmittanceLUTPassResources
+	 */
 	public readonly view: GPUTextureView;
 
 	/*
@@ -18,6 +39,14 @@ export class TransmittanceLUTPassResources {
 	private group0: GPUBindGroup;
 	private group1: GPUBindGroup;
 
+	/**
+	 * Initializes all resources related to the transmittance lookup table.
+	 * @param {GPUDevice} device
+	 * @param {Extent2D} dimensions - The dimensions to use for the LUT texture.
+	 * @param {GlobalUBO} globalUBO - The global UBO to bind and use when
+	 * 	rendering the LUT.
+	 * @memberof TransmittanceLUTPassResources
+	 */
 	constructor(device: GPUDevice, dimensions: Extent2D, globalUBO: GlobalUBO) {
 		this.texture = device.createTexture({
 			size: dimensions,
@@ -91,6 +120,12 @@ export class TransmittanceLUTPassResources {
 		});
 	}
 
+	/**
+	 * Records the population of the lookup table.
+	 * @param {GPUCommandEncoder} commandEncoder - The command encoder to record
+	 *  into.
+	 * @memberof TransmittanceLUTPassResources
+	 */
 	record(commandEncoder: GPUCommandEncoder) {
 		const passEncoder = commandEncoder.beginComputePass({
 			label: "Transmittance LUT",

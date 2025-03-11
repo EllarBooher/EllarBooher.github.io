@@ -86,8 +86,16 @@ class WaveSurfaceDisplacementUBO extends UBO {
 	}
 }
 
-// Holds a compute pass for computing the displacement of a bunch of vertices,
-// then a graphics pass for rasterizing these vertices
+/**
+ * This contains all of the resources for rendering the ocean surface into a
+ * GBuffer.
+ * - Mesh displacement and gradients can be sampled from maps or generated
+ *   procedurally from sine or cosine waves. This is decided per-frame at draw
+ *   time.
+ * - Also produces foam, when texture maps are used for the displacement.
+ * @export
+ * @class WaveSurfaceDisplacementPassResources
+ */
 export class WaveSurfaceDisplacementPassResources {
 	private oceanSurfaceRasterizationPipeline: GPURenderPipeline;
 
@@ -116,13 +124,17 @@ export class WaveSurfaceDisplacementPassResources {
 	private indices: GPUBuffer;
 
 	/**
-	 * Creates an instance of WaveSurfaceDisplacementPassResources.
+	 * Initializes all resources.
 	 * @param {GPUDevice} device
-	 * @param {GlobalUBO} globalUBO
-	 * @param {GPUTextureFormat} colorFormat
-	 * @param {GPUTextureFormat} normalFormat
-	 * @param {GPUTextureFormat} depthFormat
-	 * @param {FFTWaveDisplacementMaps} displacementMaps
+	 * @param {GlobalUBO} globalUBO - The GlobalUBO instance that will be bound
+	 *  once and referenced in all recordings
+	 * @param {GPUTextureFormat} colorWithSurfaceWorldDepthInAlpha - The format
+	 *  for ocean color
+	 * @param {GPUTextureFormat} normalWithSurfaceFoamInAlpha - The format for
+	 *  ocean normals
+	 * @param {GPUTextureFormat} depthFormat - The format for ocean depth
+	 * @param {FFTWaveDisplacementMaps} displacementMaps - 2D array textures
+	 *  that multiple cascades of ocean wave spectra.
 	 * @memberof WaveSurfaceDisplacementPassResources
 	 */
 	constructor(
@@ -443,6 +455,32 @@ export class WaveSurfaceDisplacementPassResources {
 		});
 	}
 
+	/**
+	 * Fills the provided color/depth attachments with the generated ocean
+	 * surface.
+	 * @param {GPUDevice} device
+	 * @param {GPUCommandEncoder} commandEncoder - The command encoder to record
+	 *  all passes into.
+	 * @param {(TimestampQueryInterval | undefined)} timestampInterval - The
+	 *  interval to record timing information into.
+	 * @param {number} turbulenceMapIndex - The index into which of the
+	 *  already-bound turbulence maps to use for foam generation, if the option
+	 *  is enabled.
+	 * @param {boolean} settings.gerstner - Whether or not to enable gerstner
+	 *  waves. Valid for both the mapped and procedural wave sampling methods.
+	 * @param {boolean} settings.fft - Whether or not to sample the
+	 *  already-bound displacement maps for the creation of the ocean surface.
+	 * @param {number} settings.foamScale - A scaling factor applied to the
+	 *  generated foam. Multiplied after the bias.
+	 * @param {number} settings.foamBias - A linear bias applied to the
+	 *  generated foam. Added before the scale.
+	 * @param {{ extent: Vec2; colorWithSurfaceWorldDepthInAlpha:
+	 *  GPUTextureView; normalWithSurfaceFoamInAlpha: GPUTextureView; depth:
+	 *  GPUTextureView; }} attachments - The views into the GBuffer to fill.
+	 * @param {Vec2} attachments.extent - The extent of the texture backing the
+	 *  views. All attachments should have the same extent.
+	 * @memberof WaveSurfaceDisplacementPassResources
+	 */
 	record(
 		device: GPUDevice,
 		commandEncoder: GPUCommandEncoder,

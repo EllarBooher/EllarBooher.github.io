@@ -2,29 +2,13 @@ import { UBO } from "./UBO";
 import {
 	RenderOutputCategory,
 	RenderOutputTexture,
+	RenderOutputTransform,
 } from "./RenderOutputController";
 import FullscreenQuadPak from "../../shaders/sky-sea/fullscreen_quad.wgsl";
 import { Vec4, vec4 } from "wgpu-matrix";
 import { TimestampQueryInterval } from "./PerformanceTracker";
 
-export class RenderOutputTransform {
-	flip = false;
-	colorGain: {
-		r: number;
-		g: number;
-		b: number;
-	} = { r: 1.0, g: 1.0, b: 1.0 };
-	channelMasks: {
-		r: boolean;
-		g: boolean;
-		b: boolean;
-	} = { r: true, g: true, b: true };
-	swapBARG = false;
-	mipLevel = 0;
-	arrayLayer = 0;
-}
-
-export class FullscreenQuadUBOData {
+class FullscreenQuadUBOData {
 	color_gain: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
 	vertex_scale: Vec4 = vec4.create(1.0, 1.0, 1.0, 1.0);
 	swap_ba_rg = false;
@@ -33,7 +17,7 @@ export class FullscreenQuadUBOData {
 	mip_level_u32 = 0;
 }
 
-export class FullscreenQuadUBO extends UBO {
+class FullscreenQuadUBO extends UBO {
 	data: FullscreenQuadUBOData = new FullscreenQuadUBOData();
 
 	constructor(device: GPUDevice) {
@@ -55,6 +39,15 @@ export class FullscreenQuadUBO extends UBO {
 	}
 }
 
+/**
+ * Contains the resources for a graphics pass that draws a single quad with a
+ * single texture mapped to it. Multiple textures can be bound, and selected at
+ * draw time.
+ * @see {@link RenderOutputTransform} for transformations that can be applied to
+ * 	the sampled texture values.
+ * @export
+ * @class FullscreenQuadPassResources
+ */
 export class FullscreenQuadPassResources {
 	// keep layout for resetting textures when resizing them
 	private group0Layout: GPUBindGroupLayout;
@@ -81,6 +74,16 @@ export class FullscreenQuadPassResources {
 
 	public readonly outputFormat: GPUTextureFormat;
 
+	/**
+	 * Generate and save bind groups for a given category, so it can be read at
+	 * draw time.
+	 * @param {GPUDevice} device
+	 * @param {RenderOutputCategory} category - The category that can be passed
+	 * 	at draw time to use this texture for sampling.
+	 * @param {RenderOutputTexture} texture - The texture to generate bindings
+	 * 	for.
+	 * @memberof FullscreenQuadPassResources
+	 */
 	setOutput(
 		device: GPUDevice,
 		category: RenderOutputCategory,
@@ -126,6 +129,15 @@ export class FullscreenQuadPassResources {
 		});
 	}
 
+	/**
+	 * Enumerates properties of bound textures by category. Useful for
+	 * reflecting in UI without references to the underlying textures.
+	 * @return { Iterable<{ category: RenderOutputCategory; mipLevelCount:
+	 *  number; depthOrArrayLayerCount: number; }>} Returns the properties and
+	 *  category of each texture that is bound. Only one texture will exist for
+	 *  each category.
+	 * @memberof FullscreenQuadPassResources
+	 */
 	getAllTextureProperties(): Iterable<{
 		category: RenderOutputCategory;
 		mipLevelCount: number;
@@ -142,6 +154,14 @@ export class FullscreenQuadPassResources {
 		);
 	}
 
+	/**
+	 * Instantiates all resources.
+	 * @param {GPUDevice} device
+	 * @param {GPUTextureFormat} outputFormat - The texture format that will be
+	 *  used for the render pipelines attachments. This must match the format of
+	 *  the texture view used as the attachment at draw time.
+	 * @memberof FullscreenQuadPassResources
+	 */
 	constructor(device: GPUDevice, outputFormat: GPUTextureFormat) {
 		this.outputFormat = outputFormat;
 
@@ -317,6 +337,23 @@ export class FullscreenQuadPassResources {
 		});
 	}
 
+	/**
+	 * Record the rendering of a fullscreen quad, sampling the texture that
+	 * has been bound to the requested category.
+	 * @see {@link setOutput} for how to bind the texture that will used here.
+	 * @param {GPUDevice} device
+	 * @param {GPUCommandEncoder} commandEncoder - The command encoder to record
+	 * 	into.
+	 * @param {GPUTextureView} presentView - The texture view to use as the
+	 * 	output attachment.
+	 * @param {RenderOutputCategory} id - The category selecting the bound
+	 * 	texture to use.
+	 * @param {RenderOutputTransform} transform - The transformation to apply to
+	 * 	the sampled texture values in the fragment stage.
+	 * @param {TimestampQueryInterval} [timestamps] - The interval to record
+	 * 	timing information into.
+	 * @memberof FullscreenQuadPassResources
+	 */
 	record(
 		device: GPUDevice,
 		commandEncoder: GPUCommandEncoder,

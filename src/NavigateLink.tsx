@@ -1,7 +1,7 @@
 import { useLocation, useSearchParams, Link } from "react-router";
 import "./NavigateLink.css";
 import { memo, Fragment } from "react";
-import { defaultSample, samplesByQueryParam } from "./webgpu/Samples";
+import { defaultSample, samplesBySearchParam } from "./webgpu/Samples";
 
 const pathSegmentToTitles = new Map<string, string>([
 	["", "Estelle Booher"],
@@ -44,7 +44,7 @@ export const NavigationHeader = memo(function NavigationHeader() {
 			<Fragment key="sample-caboose">
 				{" > "}
 				<Link to={location.pathname + location.search}>
-					{samplesByQueryParam.get(sampleQueryParam)?.name ??
+					{samplesBySearchParam.get(sampleQueryParam)?.name ??
 						defaultSample.name}
 				</Link>
 			</Fragment>

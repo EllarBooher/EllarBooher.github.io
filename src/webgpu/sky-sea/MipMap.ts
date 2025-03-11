@@ -1,13 +1,26 @@
 import MipMapPak from "../../shaders/sky-sea/mipmap.wgsl";
 
+// Currently the only supported texture format for mipmapping
 const MIP_MAP_TEXTURE_FORMAT = "rgba16float";
 
+// TODO: keep the bindings internal and hand out handles.
+
+/**
+ * External bindings used for filling the mipmaps of a single texture.
+ * @see {@link MipMapGenerationPassResources}
+ */
 export interface MipMapGenerationTextureBindings {
 	bindGroupsByMipLevel: GPUBindGroup[];
 	level0Size: { width: number; height: number };
 	arrayLevelCount: number;
 }
 
+/**
+ * This contains the resources for generating mipmaps for 2D textures, including
+ * texture arrays.
+ * @export
+ * @class MipMapGenerationPassResources
+ */
 export class MipMapGenerationPassResources {
 	/*
 	 * @group(0) @binding(0) var out_next_mip_level: texture_storage_2d<rgba16float, write>;
@@ -23,6 +36,17 @@ export class MipMapGenerationPassResources {
 	// Workgroup size is (1,1,1)
 	private fillMipMapSmallerKernel: GPUComputePipeline;
 
+	/**
+	 * Validates a texture for generating mipmaps, and throw an error upon any
+	 * incompatibilities. This then generates the device bind groups that will
+	 * be used to access the texture when writing mipmaps. The returned value
+	 * can be kept and reused each time that mip-level 0 is updated to generate
+	 * new mipmaps.
+	 * @param {GPUDevice} device
+	 * @param {GPUTexture} texture - The texture to generate bindings for.
+	 * @return The bindings can be used for generating mipmaps.
+	 * @memberof MipMapGenerationPassResources
+	 */
 	createBindGroups(
 		device: GPUDevice,
 		texture: GPUTexture
@@ -104,7 +128,7 @@ export class MipMapGenerationPassResources {
 		};
 	}
 
-	constructor(device: GPUDevice /*, texture: GPUTexture */) {
+	constructor(device: GPUDevice) {
 		this.fillMipMapTextureInOutLayout = device.createBindGroupLayout({
 			label: "MipMap Generation fillMipMap Texture In-Out",
 			entries: [
@@ -155,7 +179,19 @@ export class MipMapGenerationPassResources {
 		});
 	}
 
-	updateMipMaps(
+	/**
+	 * Record the commands that update mip-maps for a texture. This generates
+	 * mip-map levels 1 through N from level 0, where N is the number of
+	 * elements in {@link MipMapGenerationTextureBindings.bindGroupsByMipLevel}.
+	 * This can be called repeatedly across frames to generate up-to-date
+	 * mip-maps.
+	 * @param {GPUComputePassEncoder} fillMipMapsPass - A parent pass to record
+	 *  commands into.
+	 * @param {MipMapGenerationTextureBindings} target - The bindings for the
+	 *  texture to access the mip levels of.
+	 * @memberof MipMapGenerationPassResources
+	 */
+	recordUpdateMipMaps(
 		fillMipMapsPass: GPUComputePassEncoder,
 		target: MipMapGenerationTextureBindings
 	) {

@@ -837,6 +837,10 @@ class SkySeaApp implements RendererApp {
 	}
 }
 
+/**
+ * Constructor for {@link SkySeaApp}.
+ * @see {@link RendererAppConstructor}
+ */
 export const SkySeaAppConstructor: RendererAppConstructor = (
 	device,
 	presentFormat

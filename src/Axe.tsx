@@ -21,7 +21,7 @@ const runAxe = (): (() => void) => {
 	};
 };
 
-const Axe = (): (() => void) | null => {
+const Axe = (): undefined => {
 	const [mutationCount, setMutationCount] = useState(0); // State variable to track DOM mutations
 	const axeRunner = useRef(runAxe());
 
@@ -44,7 +44,7 @@ const Axe = (): (() => void) | null => {
 		runAxeFunction(); // Run axe immediately on page load, route changes, and DOM mutations
 	}, [mutationCount]);
 
-	return null;
+	return undefined;
 };
 
 export default Axe;

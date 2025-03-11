@@ -2,9 +2,9 @@ import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { Extent3D } from "./Common";
 
 /**
- * @see {@link RenderOutputCategory} for the enum this array backs.
+ * @see {@link RenderOutputTag} for the enum this array backs.
  */
-export const RenderOutputCategories = [
+export const RenderOutputTags = [
 	"Scene",
 	"GBufferColor",
 	"GBufferNormal",
@@ -23,7 +23,7 @@ export const RenderOutputCategories = [
 /**
  * Identifiers for render output targets supported by the renderer.
  */
-export type RenderOutputCategory = (typeof RenderOutputCategories)[number];
+export type RenderOutputTag = (typeof RenderOutputTags)[number];
 
 /**
  * Stores a view to a texture, alongside information like the depth, mip levels,
@@ -119,7 +119,7 @@ type NestedUniform<T, B> = T extends object
 const RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES: ({
 	[K in keyof RenderOutputTransform]?: RenderOutputTransform[K];
 } & {
-	id: RenderOutputCategory;
+	id: RenderOutputTag;
 })[] = [
 	{ id: "AtmosphereTransmittanceLUT", flip: true },
 	{
@@ -153,7 +153,7 @@ const RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES: ({
  * This manages the selection from a list of possible targets that can be
  * presented as the final output of the renderer, alongside persisting
  * transformations to use when rendering that target. See
- * {@link RenderOutputCategories} for the possible outputs, and
+ * {@link RenderOutputTags} for the possible outputs, and
  * {@link RenderOutputTransform} for the properties that are transformed during
  * rendering.
  * @export
@@ -161,14 +161,11 @@ const RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES: ({
  */
 export class RenderOutputController {
 	private options: {
-		outputTexture: RenderOutputCategory;
-		renderOutputTransforms: Map<
-			RenderOutputCategory,
-			RenderOutputTransform
-		>;
+		outputTexture: RenderOutputTag;
+		renderOutputTransforms: Map<RenderOutputTag, RenderOutputTransform>;
 	};
 	private textureProperties: Map<
-		RenderOutputCategory,
+		RenderOutputTag,
 		{ mipLevelCount: number; depthOrArrayLayerCount: number }
 	>;
 	private controllers:
@@ -176,16 +173,16 @@ export class RenderOutputController {
 		| undefined;
 
 	/**
-	 * @returns The category and transform of the currently selected render
+	 * @returns The target and transform of the currently selected render
 	 * output.
 	 * @memberof RenderOutputController
 	 */
 	current(): {
-		category: RenderOutputCategory;
+		tag: RenderOutputTag;
 		transform: RenderOutputTransform;
 	} {
 		return {
-			category: this.options.outputTexture,
+			tag: this.options.outputTexture,
 			transform: structuredClone(
 				this.options.renderOutputTransforms.get(
 					this.options.outputTexture
@@ -223,8 +220,8 @@ export class RenderOutputController {
 	 * Set the per-texture data for a given render output, restricting what
 	 * values can be set in the UI, such as not accessing out-of-bounds mipmap
 	 * levels.
-	 * @param {RenderOutputCategory} props.category - The render output to tweak
-	 *  the parameters for.
+	 * @param {RenderOutputTag} props.tag - The render output to tweak the
+	 *  parameters for.
 	 * @param {number} prop.mipLevelCount - The upper bound of what mip level
 	 *  can be set in the UI.
 	 * @param {number} prop.depthOrArrayLayerCount - The upper bound of what
@@ -232,26 +229,26 @@ export class RenderOutputController {
 	 * @memberof RenderOutputController
 	 */
 	setTextureProperties(props: {
-		category: RenderOutputCategory;
+		tag: RenderOutputTag;
 		mipLevelCount: number;
 		depthOrArrayLayerCount: number;
 	}): void {
-		this.textureProperties.set(props.category, {
+		this.textureProperties.set(props.tag, {
 			mipLevelCount: props.mipLevelCount,
 			depthOrArrayLayerCount: props.depthOrArrayLayerCount,
 		});
 
-		if (props.category == this.options.outputTexture) {
+		if (props.tag == this.options.outputTexture) {
 			this.updateVariableControllerBounds();
 		}
 	}
 
-	private setOutput(category: RenderOutputCategory): void {
+	private setOutput(tag: RenderOutputTag): void {
 		if (this.controllers === undefined) {
 			return;
 		}
 
-		this.options.outputTexture = category;
+		this.options.outputTexture = tag;
 
 		/*
 		 * There is a tradeoff for using LilGUI without wrapping
@@ -325,7 +322,7 @@ export class RenderOutputController {
 			})
 			.name("Render Output")
 			.listen()
-			.onFinishChange((v: RenderOutputCategory) => {
+			.onFinishChange((v: RenderOutputTag) => {
 				this.setOutput(v);
 			});
 
@@ -421,8 +418,8 @@ export class RenderOutputController {
 		this.options = {
 			outputTexture: "Scene",
 			renderOutputTransforms: new Map(
-				RenderOutputCategories.map((category) => {
-					return [category, new RenderOutputTransform()];
+				RenderOutputTags.map((tag) => {
+					return [tag, new RenderOutputTransform()];
 				})
 			),
 		};

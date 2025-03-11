@@ -1,6 +1,6 @@
 import { UBO } from "./UBO";
 import {
-	RenderOutputCategory,
+	RenderOutputTag,
 	RenderOutputTexture,
 	RenderOutputTransform,
 } from "./RenderOutputController";
@@ -55,7 +55,7 @@ export class FullscreenQuadPassResources {
 	private group0Layout3D: GPUBindGroupLayout;
 
 	private group0ByOutputTexture: Map<
-		RenderOutputCategory,
+		RenderOutputTag,
 		{
 			texture: RenderOutputTexture;
 			bindGroup: GPUBindGroup;
@@ -75,10 +75,10 @@ export class FullscreenQuadPassResources {
 	public readonly outputFormat: GPUTextureFormat;
 
 	/**
-	 * Generate and save bind groups for a given category, so it can be read at
+	 * Generate and save bind groups for a given tag, so it can be read at
 	 * draw time.
 	 * @param {GPUDevice} device
-	 * @param {RenderOutputCategory} category - The category that can be passed
+	 * @param {RenderOutputTag} tag - The tag that can be passed
 	 * 	at draw time to use this texture for sampling.
 	 * @param {RenderOutputTexture} texture - The texture to generate bindings
 	 * 	for.
@@ -86,7 +86,7 @@ export class FullscreenQuadPassResources {
 	 */
 	setOutput(
 		device: GPUDevice,
-		category: RenderOutputCategory,
+		tag: RenderOutputTag,
 		texture: RenderOutputTexture
 	): void {
 		let layout = this.group0Layout;
@@ -110,7 +110,7 @@ export class FullscreenQuadPassResources {
 			}
 		}
 
-		this.group0ByOutputTexture.set(category, {
+		this.group0ByOutputTexture.set(tag, {
 			texture: texture,
 			bindGroup: device.createBindGroup({
 				layout: layout,
@@ -130,23 +130,23 @@ export class FullscreenQuadPassResources {
 	}
 
 	/**
-	 * Enumerates properties of bound textures by category. Useful for
+	 * Enumerates properties of bound textures by tag. Useful for
 	 * reflecting in UI without references to the underlying textures.
-	 * @return { Iterable<{ category: RenderOutputCategory; mipLevelCount:
+	 * @return { Iterable<{ tag: RenderOutputTag; mipLevelCount:
 	 *  number; depthOrArrayLayerCount: number; }>} Returns the properties and
-	 *  category of each texture that is bound. Only one texture will exist for
-	 *  each category.
+	 *  tag of each texture that is bound. Only one texture will exist for
+	 *  each tag.
 	 * @memberof FullscreenQuadPassResources
 	 */
 	getAllTextureProperties(): Iterable<{
-		category: RenderOutputCategory;
+		tag: RenderOutputTag;
 		mipLevelCount: number;
 		depthOrArrayLayerCount: number;
 	}> {
 		return [...this.group0ByOutputTexture.entries()].map(
-			([category, { texture }]) => {
+			([tag, { texture }]) => {
 				return {
-					category: category,
+					tag: tag,
 					mipLevelCount: texture.mipLevelCount,
 					depthOrArrayLayerCount: texture.extent.depthOrArrayLayers,
 				};
@@ -339,14 +339,14 @@ export class FullscreenQuadPassResources {
 
 	/**
 	 * Record the rendering of a fullscreen quad, sampling the texture that
-	 * has been bound to the requested category.
+	 * has been bound to the requested tag.
 	 * @see {@link setOutput} for how to bind the texture that will used here.
 	 * @param {GPUDevice} device
 	 * @param {GPUCommandEncoder} commandEncoder - The command encoder to record
 	 * 	into.
 	 * @param {GPUTextureView} presentView - The texture view to use as the
 	 * 	output attachment.
-	 * @param {RenderOutputCategory} id - The category selecting the bound
+	 * @param {RenderOutputTag} tag - The tag selecting the bound
 	 * 	texture to use.
 	 * @param {RenderOutputTransform} transform - The transformation to apply to
 	 * 	the sampled texture values in the fragment stage.
@@ -358,13 +358,13 @@ export class FullscreenQuadPassResources {
 		device: GPUDevice,
 		commandEncoder: GPUCommandEncoder,
 		presentView: GPUTextureView,
-		id: RenderOutputCategory,
+		tag: RenderOutputTag,
 		transform: RenderOutputTransform,
 		timestamps?: TimestampQueryInterval
 	): void {
 		const clearColor = { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
 
-		const bindGroup0 = this.group0ByOutputTexture.get(id);
+		const bindGroup0 = this.group0ByOutputTexture.get(tag);
 		if (bindGroup0 === undefined) {
 			console.warn("FullscreenQuadPass: No texture to output.");
 			return;

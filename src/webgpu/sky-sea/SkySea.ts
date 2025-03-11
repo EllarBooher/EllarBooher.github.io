@@ -11,7 +11,7 @@ import { AtmosphereCameraPassResources } from "./atmosphere/AtmosphereCamera.ts"
 import { AerialPerspectiveLUTPassResources } from "./atmosphere/AerialPerspectiveLUT.ts";
 
 import {
-	RenderOutputCategory,
+	RenderOutputTag,
 	RenderOutputTexture,
 	RenderOutputController,
 } from "./RenderOutputController.ts";
@@ -517,11 +517,11 @@ class SkySeaApp implements RendererApp {
 					"FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial",
 					fftWaveViews.Dydx_Dydz_Dxdx_Dzdz_Spatial,
 				],
-			] as [RenderOutputCategory, RenderOutputTexture][]
-		).forEach(([category, texture]) => {
+			] as [RenderOutputTag, RenderOutputTexture][]
+		).forEach(([tag, texture]) => {
 			this.fullscreenQuadPassResources.setOutput(
 				this.device,
-				category,
+				tag,
 				texture
 			);
 		});
@@ -720,7 +720,7 @@ class SkySeaApp implements RendererApp {
 			this.device,
 			commandEncoder,
 			presentView,
-			output.category,
+			output.tag,
 			output.transform,
 			this.performance.pushTimestampQueryInterval("FullscreenQuad")
 		);

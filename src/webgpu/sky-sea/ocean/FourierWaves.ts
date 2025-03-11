@@ -295,6 +295,13 @@ interface TurbulenceJacobianEntry {
 	mipMapBindings: MipMapGenerationTextureBindings;
 }
 
+/**
+ * Produce a spectrum of ocean waves on a square grid, using the fourier
+ * transform to transform from frequency to space, to produce displacement and
+ * gradient maps that can be applied to an ocean surface mesh.
+ * @export
+ * @class FFTWaveSpectrumResources
+ */
 export class FFTWaveSpectrumResources {
 	/*
 	 * We produce a discrete spectrum of waves, for which the various values

@@ -12,8 +12,6 @@ const SKYVIEW_LUT_FORMAT: GPUTextureFormat = "rgba32float";
  * - This is called the Sky View LUT since this gives the view of the
  *   unobstructed sky from a fixed position.
  * - The LUT is parameterized by azimuth and zenith of the outgoing view ray.
- * @see `/shaders/sky-sea/skyview_LUT.wgsl` for the shader implementation
- *  details.
  * @export
  * @class SkyViewLUTPassResources
  */

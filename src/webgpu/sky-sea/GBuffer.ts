@@ -1,4 +1,5 @@
 import { Extent2D } from "./Common.ts";
+import { RenderOutputTexture } from "./RenderOutputController.ts";
 
 const GBUFFER_COLOR_FORMAT: GPUTextureFormat = "rgba16float";
 const GBUFFER_COLOR_SAMPLE_TYPE: GPUTextureSampleType = "float";
@@ -7,40 +8,88 @@ const GBUFFER_DEPTH_FORMAT: GPUTextureFormat = "depth32float";
 const GBUFFER_NORMAL_FORMAT: GPUTextureFormat = "rgba16float";
 const GBUFFER_NORMAL_SAMPLE_TYPE: GPUTextureSampleType = "float";
 
+export interface GBufferFormats {
+	colorWithSurfaceWorldDepthInAlpha: GPUTextureFormat;
+	normalWithSurfaceFoamStrengthInAlpha: GPUTextureFormat;
+	depth: GPUTextureFormat;
+}
+
 /**
  * Stores color and depth textures in a GBuffer, in a format that is consumed by
  * render pipelines in the renderer. The textures by WebGPU format are:
- * - `rgba16float`  - Color with world-space distance to the texel packed into
- *                    the alpha channel.
- * - `rgba16float`  - World-space normals with ocean-surface foam strength
- *                    packed into the alpha channel.
- * - `depth32float` - Framebuffer depth.
+ * - `rgba16float`  binding 0 (read/write groups) - Color with world-space
+ *   distance to the texel packed into the alpha channel.
+ * - `rgba16float`  binding 1 (read/write groups) - World-space normals with
+ *   ocean-surface foam strength packed into the alpha channel.
+ * - `depth32float` binding 2 (read group only)   - Framebuffer depth.
  * @export
  * @class GBuffer
  */
 export class GBuffer {
-	colorWithSurfaceWorldDepthInAlpha: GPUTexture;
-	colorWithSurfaceWorldDepthInAlphaView: GPUTextureView;
+	private colorWithSurfaceWorldDepthInAlpha: GPUTexture;
+	public readonly colorWithSurfaceWorldDepthInAlphaView: GPUTextureView;
 
-	normalWithSurfaceFoamStrengthInAlpha: GPUTexture;
-	normalWithSurfaceFoamStrengthInAlphaView: GPUTextureView;
+	private normalWithSurfaceFoamStrengthInAlpha: GPUTexture;
+	public readonly normalWithSurfaceFoamStrengthInAlphaView: GPUTextureView;
 
 	// Depth used for graphics pipelines that render into the gbuffer
-	depth: GPUTexture;
-	depthView: GPUTextureView;
+	private depth: GPUTexture;
+	public readonly depthView: GPUTextureView;
 
-	// Keep both layout and group around for reuse across other pipelines
+	public get extent(): Extent2D {
+		return {
+			width: this.colorWithSurfaceWorldDepthInAlpha.width,
+			height: this.colorWithSurfaceWorldDepthInAlpha.height,
+		};
+	}
 
-	// binding 0: color
-	// binding 1: normal
+	public get formats(): GBufferFormats {
+		return {
+			colorWithSurfaceWorldDepthInAlpha:
+				this.colorWithSurfaceWorldDepthInAlpha.format,
+			normalWithSurfaceFoamStrengthInAlpha:
+				this.normalWithSurfaceFoamStrengthInAlpha.format,
+			depth: this.depth.format,
+		};
+	}
 
-	// texture_2d
-	readGroupLayout: GPUBindGroupLayout;
-	readGroup: GPUBindGroup;
+	public colorRenderables(): {
+		colorWithSurfaceWorldDepthInAlpha: RenderOutputTexture;
+		normalWithSurfaceFoamStrengthInAlpha: RenderOutputTexture;
+	} {
+		return {
+			colorWithSurfaceWorldDepthInAlpha: new RenderOutputTexture(
+				this.colorWithSurfaceWorldDepthInAlpha
+			),
+			normalWithSurfaceFoamStrengthInAlpha: new RenderOutputTexture(
+				this.normalWithSurfaceFoamStrengthInAlpha
+			),
+		};
+	}
 
-	// texture_storage_2d
-	writeGroupLayout: GPUBindGroupLayout;
-	writeGroup: GPUBindGroup;
+	/**
+	 * Contains all bindings for reading the GBuffer in a shader.
+	 * @see {@link GBuffer} for descriptions of the targets including formats.
+	 * @type {GPUBindGroupLayout}
+	 * @memberof GBuffer
+	 */
+	public readonly readGroupLayout: GPUBindGroupLayout;
+	/**
+	 * @see {@link readGroupLayout}
+	 * @type {GPUBindGroupLayout}
+	 * @memberof GBuffer
+	 */
+	public readonly readGroup: GPUBindGroup;
+
+	private writeGroupLayout: GPUBindGroupLayout;
+
+	/**
+	 * Contains all bindings for writing to the GBuffer in a shader.
+	 * @see {@link GBuffer} for descriptions of the targets including formats.
+	 * @type {GPUBindGroupLayout}
+	 * @memberof GBuffer
+	 */
+	public readonly writeGroup: GPUBindGroup;
 
 	/**
 	 * Instantiates all textures and bind groups for the GBuffer.

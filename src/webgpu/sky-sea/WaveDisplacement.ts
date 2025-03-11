@@ -3,6 +3,7 @@ import { GlobalUBO, UBO } from "./UBO";
 import WaveSurfaceDisplacementPak from "../../shaders/sky-sea/wave_surface_displacement.wgsl";
 import { FFTWaveDisplacementMaps } from "./FourierWaves";
 import { TimestampQueryInterval } from "./PerformanceTracker";
+import { GBuffer, GBufferFormats } from "./GBuffer";
 
 interface WaveCascade {
 	patch_size_meters: number;
@@ -128,11 +129,8 @@ export class WaveSurfaceDisplacementPassResources {
 	 * @param {GPUDevice} device
 	 * @param {GlobalUBO} globalUBO - The GlobalUBO instance that will be bound
 	 *  once and referenced in all recordings
-	 * @param {GPUTextureFormat} colorWithSurfaceWorldDepthInAlpha - The format
-	 *  for ocean color
-	 * @param {GPUTextureFormat} normalWithSurfaceFoamInAlpha - The format for
-	 *  ocean normals
-	 * @param {GPUTextureFormat} depthFormat - The format for ocean depth
+	 * @param {GBufferFormats} formats - The formats of the gbuffer to use as color
+	 * 	attachments.
 	 * @param {FFTWaveDisplacementMaps} displacementMaps - 2D array textures
 	 *  that multiple cascades of ocean wave spectra.
 	 * @memberof WaveSurfaceDisplacementPassResources
@@ -140,9 +138,7 @@ export class WaveSurfaceDisplacementPassResources {
 	constructor(
 		device: GPUDevice,
 		globalUBO: GlobalUBO,
-		colorFormat: GPUTextureFormat,
-		normalFormat: GPUTextureFormat,
-		depthFormat: GPUTextureFormat,
+		formats: GBufferFormats,
 		displacementMaps: FFTWaveDisplacementMaps
 	) {
 		// The number of vertices we use for the ocean surface mesh projected from screen space
@@ -439,7 +435,14 @@ export class WaveSurfaceDisplacementPassResources {
 			fragment: {
 				module: shaderModule,
 				entryPoint: "rasterizationFragment",
-				targets: [{ format: colorFormat }, { format: normalFormat }],
+				targets: [
+					{
+						format: formats.colorWithSurfaceWorldDepthInAlpha,
+					},
+					{
+						format: formats.normalWithSurfaceFoamStrengthInAlpha,
+					},
+				],
 			},
 			primitive: {
 				topology: "triangle-list",
@@ -447,7 +450,7 @@ export class WaveSurfaceDisplacementPassResources {
 				frontFace: "cw",
 			},
 			depthStencil: {
-				format: depthFormat,
+				format: formats.depth,
 				depthWriteEnabled: true,
 				depthCompare: "less",
 			},
@@ -492,12 +495,7 @@ export class WaveSurfaceDisplacementPassResources {
 			foamScale: number;
 			foamBias: number;
 		},
-		attachments: {
-			extent: Vec2;
-			colorWithSurfaceWorldDepthInAlpha: GPUTextureView;
-			normalWithSurfaceFoamInAlpha: GPUTextureView;
-			depth: GPUTextureView;
-		}
+		gbuffer: GBuffer
 	): void {
 		this.settingsUBO.data.patch_world_half_extent = settings.fft
 			? 100.0
@@ -505,7 +503,10 @@ export class WaveSurfaceDisplacementPassResources {
 		this.settingsUBO.data.b_gerstner = settings.gerstner;
 		this.settingsUBO.data.b_displacement_map = settings.fft;
 		this.settingsUBO.data.foam_bias = settings.foamBias;
-		this.settingsUBO.data.gbuffer_extent = attachments.extent;
+		this.settingsUBO.data.gbuffer_extent = vec2.create(
+			gbuffer.extent.width,
+			gbuffer.extent.height
+		);
 		this.settingsUBO.data.foam_scale = settings.foamScale;
 		this.settingsUBO.writeToGPU(device.queue);
 
@@ -516,17 +517,17 @@ export class WaveSurfaceDisplacementPassResources {
 					clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
 					loadOp: "clear",
 					storeOp: "store",
-					view: attachments.colorWithSurfaceWorldDepthInAlpha,
+					view: gbuffer.colorWithSurfaceWorldDepthInAlphaView,
 				},
 				{
 					clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
 					loadOp: "clear",
 					storeOp: "store",
-					view: attachments.normalWithSurfaceFoamInAlpha,
+					view: gbuffer.normalWithSurfaceFoamStrengthInAlphaView,
 				},
 			],
 			depthStencilAttachment: {
-				view: attachments.depth,
+				view: gbuffer.depthView,
 				depthClearValue: 1.0,
 				depthLoadOp: "clear",
 				depthStoreOp: "store",

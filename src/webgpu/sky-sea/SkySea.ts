@@ -1,6 +1,6 @@
 import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { RendererApp, RendererAppConstructor } from "../RendererApp.ts";
-import { mat4, vec2, vec3, vec4 } from "wgpu-matrix";
+import { mat4, vec3, vec4 } from "wgpu-matrix";
 import { Camera, GlobalUBO } from "./UBO.ts";
 import { Extent2D } from "./Common.ts";
 
@@ -436,9 +436,7 @@ class SkySeaApp implements RendererApp {
 			new WaveSurfaceDisplacementPassResources(
 				this.device,
 				this.globalUBO,
-				this.gbuffer.colorWithSurfaceWorldDepthInAlpha.format,
-				this.gbuffer.normalWithSurfaceFoamStrengthInAlpha.format,
-				this.gbuffer.depth.format,
+				this.gbuffer.formats,
 				this.fftWaveSpectrumResources.displacementMaps()
 			);
 
@@ -458,6 +456,8 @@ class SkySeaApp implements RendererApp {
 			presentFormat
 		);
 
+		const gbufferRenderables = this.gbuffer.colorRenderables();
+
 		(
 			[
 				[
@@ -468,15 +468,11 @@ class SkySeaApp implements RendererApp {
 				],
 				[
 					"GBufferColor",
-					new RenderOutputTexture(
-						this.gbuffer.colorWithSurfaceWorldDepthInAlpha
-					),
+					gbufferRenderables.colorWithSurfaceWorldDepthInAlpha,
 				],
 				[
 					"GBufferNormal",
-					new RenderOutputTexture(
-						this.gbuffer.normalWithSurfaceFoamStrengthInAlpha
-					),
+					gbufferRenderables.normalWithSurfaceFoamStrengthInAlpha,
 				],
 				[
 					"AtmosphereTransmittanceLUT",
@@ -702,17 +698,7 @@ class SkySeaApp implements RendererApp {
 				foamBias: this.parameters.oceanSurfaceSettings.foamBias,
 				foamScale: this.parameters.oceanSurfaceSettings.foamScale,
 			},
-			{
-				extent: vec2.create(
-					this.gbuffer.colorWithSurfaceWorldDepthInAlpha.width,
-					this.gbuffer.colorWithSurfaceWorldDepthInAlpha.height
-				),
-				colorWithSurfaceWorldDepthInAlpha:
-					this.gbuffer.colorWithSurfaceWorldDepthInAlphaView,
-				normalWithSurfaceFoamInAlpha:
-					this.gbuffer.normalWithSurfaceFoamStrengthInAlphaView,
-				depth: this.gbuffer.depthView,
-			}
+			this.gbuffer
 		);
 
 		this.skyviewLUTPassResources.record(
@@ -795,19 +781,16 @@ class SkySeaApp implements RendererApp {
 
 		this.gbuffer = new GBuffer(this.device, finalScaledSize, this.gbuffer);
 
+		const gbufferRenderables = this.gbuffer.colorRenderables();
 		this.fullscreenQuadPassResources.setOutput(
 			this.device,
 			"GBufferColor",
-			new RenderOutputTexture(
-				this.gbuffer.colorWithSurfaceWorldDepthInAlpha
-			)
+			gbufferRenderables.colorWithSurfaceWorldDepthInAlpha
 		);
 		this.fullscreenQuadPassResources.setOutput(
 			this.device,
 			"GBufferNormal",
-			new RenderOutputTexture(
-				this.gbuffer.normalWithSurfaceFoamStrengthInAlpha
-			)
+			gbufferRenderables.normalWithSurfaceFoamStrengthInAlpha
 		);
 
 		this.atmosphereCameraPassResources.resize(

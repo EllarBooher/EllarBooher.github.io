@@ -100,7 +100,9 @@ function replaceConditionalBlocks(
 		ELSE,
 		ENDIF,
 	}
-	const getPrefix = (line: string) => {
+	const getPrefix = (
+		line: string
+	): { prefix: LinePrefix; remainder: string } => {
 		let prefix = LinePrefix.None;
 		let prefixLength = 0;
 		if (line.startsWith(IF_PREFIX)) {

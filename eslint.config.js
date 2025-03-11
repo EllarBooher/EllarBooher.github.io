@@ -69,6 +69,7 @@ export default tseslint.config(
 					caughtErrorsIgnorePattern: "^_[^_].*$|^_$",
 				},
 			],
+			"@typescript-eslint/explicit-function-return-type": "error",
 		},
 	}
 );

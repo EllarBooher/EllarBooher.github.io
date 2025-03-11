@@ -175,7 +175,7 @@ class HelloCubeApp implements RendererApp {
 		this.pipeline = this.device.createRenderPipeline(pipelineDescriptor);
 	}
 
-	setupUI(gui: GUI) {
+	setupUI(gui: GUI): void {
 		POSSIBLE_WEBGPU_FEATURES.forEach((feature) => {
 			const supported = this.supportedFeatures.has(feature);
 			gui.add({ enabled: supported }, "enabled")

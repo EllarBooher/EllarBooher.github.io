@@ -197,7 +197,7 @@ export class AerialPerspectiveLUTPassResources {
 	record(
 		commandEncoder: GPUCommandEncoder,
 		timestampInterval: TimestampQueryInterval | undefined
-	) {
+	): void {
 		const aerialPerspectiveLUTPassEncoder = commandEncoder.beginComputePass(
 			{
 				timestampWrites:

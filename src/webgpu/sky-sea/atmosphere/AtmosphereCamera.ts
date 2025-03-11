@@ -243,7 +243,7 @@ export class AtmosphereCameraPassResources {
 		multiscatterLUT: GPUTextureView,
 		skyviewLUT: GPUTextureView,
 		aerialPerspectiveLUT: GPUTextureView
-	) {
+	): void {
 		this.outputColor = device.createTexture({
 			format: this.outputColor.format,
 			size: size,
@@ -299,7 +299,7 @@ export class AtmosphereCameraPassResources {
 		commandEncoder: GPUCommandEncoder,
 		timestampInterval: TimestampQueryInterval | undefined,
 		gbuffer: GBuffer
-	) {
+	): void {
 		const atmosphereCameraPassEncoder = commandEncoder.beginComputePass({
 			timestampWrites:
 				timestampInterval !== undefined

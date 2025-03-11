@@ -9,6 +9,7 @@ import {
 } from "./MipMap.ts";
 import { vec2, Vec2 } from "wgpu-matrix";
 import { TimestampQueryInterval } from "./PerformanceTracker.ts";
+import { Extent3D } from "./Common.ts";
 
 // The dimension of the fourier grid, i.e., the sqrt of the number of unique waves for our discrete fourier transform
 const GRID_SIZE = 512;
@@ -127,7 +128,7 @@ class FourierWavesUBO extends UBO {
  * values returned are dependent, and should not be used directly as two
  * independent values
  */
-function randGaussian2DBoxMuller() {
+function randGaussian2DBoxMuller(): [number, number] {
 	// https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
 
 	const u_0 = Math.random();
@@ -170,9 +171,16 @@ export class FFTWaveDisplacementMaps {
 	private Dydx_Dydz_Dxdx_Dzdz_Spatial: GPUTexture;
 	private turbulenceJacobian: GPUTexture[];
 
-	get mipLevelCount() {
+	/**
+	 * The number of mip levels for every map in this collection.
+	 * @readonly
+	 * @type {number}
+	 * @memberof FFTWaveDisplacementMaps
+	 */
+	get mipLevelCount(): number {
 		return this.Dx_Dy_Dz_Dxdz_Spatial.mipLevelCount;
 	}
+
 	/**
 	 * Contains `(Dx,Dy,Dz,d/dz Dx)` packed in RGBA, where `(Dx,Dy,Dz)` is the
 	 * displacement of the ocean surface at the sampled point and `d/di` is the
@@ -297,7 +305,15 @@ export class FFTWaveSpectrumResources {
 	 */
 	private gridSize: number;
 	private cascadeCount: number;
-	private get textureGridSize() {
+
+	/**
+	 * The extent used by every texture parameterized by the fourier grid.
+	 * @readonly
+	 * @private
+	 * @type {Extent3D}
+	 * @memberof FFTWaveSpectrumResources
+	 */
+	private get textureGridSize(): Extent3D {
 		return {
 			width: this.gridSize,
 			height: this.gridSize,
@@ -337,9 +353,10 @@ export class FFTWaveSpectrumResources {
 	 * Gets the index of the turbulence-jacobian map that will be (or was)
 	 * written into this frame.
 	 * @readonly
+	 * @type {number}
 	 * @memberof FFTWaveSpectrumResources
 	 */
-	public get turbulenceMapIndex() {
+	public get turbulenceMapIndex(): number {
 		return this.turbulenceJacobianIndex;
 	}
 
@@ -703,7 +720,7 @@ export class FFTWaveSpectrumResources {
 			},
 		});
 
-		function nyquistWaveNumber(spatialSampleDistance: number) {
+		function nyquistWaveNumber(spatialSampleDistance: number): number {
 			const wavelength = 2.0 * spatialSampleDistance;
 			return (2.0 * Math.PI) / wavelength;
 		}
@@ -937,7 +954,7 @@ export class FFTWaveSpectrumResources {
 		commandEncoder: GPUCommandEncoder,
 		settings: FFTWavesSettings,
 		timestampInterval: TimestampQueryInterval | undefined
-	) {
+	): void {
 		const settingsChanged =
 			settings.gravity != this.waveSettings.gravity ||
 			settings.waveSwell != this.waveSettings.waveSwell ||

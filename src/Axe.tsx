@@ -5,7 +5,7 @@ import React from "react";
 import ReactDOM from "react-dom";
 import { useState, useRef, useEffect } from "react";
 
-const runAxe = () => {
+const runAxe = (): (() => void) => {
 	let axeRunning = false;
 
 	return () => {
@@ -21,7 +21,7 @@ const runAxe = () => {
 	};
 };
 
-const Axe = () => {
+const Axe = (): (() => void) | null => {
 	const [mutationCount, setMutationCount] = useState(0); // State variable to track DOM mutations
 	const axeRunner = useRef(runAxe());
 
@@ -33,7 +33,7 @@ const Axe = () => {
 
 		observer.observe(document, { subtree: true, childList: true });
 
-		return () => {
+		return (): void => {
 			axeRunner.current = runAxe();
 			observer.disconnect();
 		};

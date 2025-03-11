@@ -377,7 +377,7 @@ export class DFFTResources {
 	private recordPerformOnBuffer0(
 		commandEncoder: GPUCommandEncoder,
 		endTimestampWrites: GPUComputePassTimestampWrites | undefined
-	) {
+	): void {
 		const stepCount = 2 * this.parametersUBO.data.log_2_size;
 
 		const passEncoder = commandEncoder.beginComputePass({
@@ -450,7 +450,7 @@ export class DFFTResources {
 		destinationTextureArray: GPUTexture,
 		inverse: boolean,
 		endTimestampWrites: GPUComputePassTimestampWrites | undefined
-	) {
+	): void {
 		// We require this format so it maps perfectly to our buffers of complex numbers (WGSL type: vec4<f32>)
 		const REQUIRED_INPUT_FORMAT: GPUTextureFormat = "rgba32float";
 		if (sourceTextureArray.format != REQUIRED_INPUT_FORMAT) {

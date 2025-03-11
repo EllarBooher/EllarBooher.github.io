@@ -28,7 +28,7 @@ const RenderingCanvas = function RenderingCanvas({
 }: {
 	app: RendererApp;
 	onError: (err: unknown) => void;
-}) {
+}): JSX.Element {
 	const animateRequestRef = useRef<number>();
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const guiPaneRef = useRef<HTMLDivElement>(null);
@@ -56,7 +56,7 @@ const RenderingCanvas = function RenderingCanvas({
 	useEffect(() => {
 		resizeCanvas();
 		window.addEventListener("resize", resizeCanvas);
-		return () => {
+		return (): void => {
 			window.removeEventListener("resize", resizeCanvas);
 		};
 	}, [resizeCanvas]);
@@ -121,7 +121,7 @@ const RenderingCanvas = function RenderingCanvas({
 
 		animateRequestRef.current = requestAnimationFrame(animate);
 
-		return () => {
+		return (): void => {
 			if (animateRequestRef.current !== undefined) {
 				cancelAnimationFrame(animateRequestRef.current);
 			}
@@ -159,7 +159,11 @@ const RenderingCanvas = function RenderingCanvas({
  * a given sample, before serving it on a canvas.
  * @param {SampleEntry} sample - The sample load, run, and display.
  */
-const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
+const AppLoader = function AppLoader({
+	sample,
+}: {
+	sample: SampleEntry;
+}): JSX.Element {
 	const [errors, setErrors] = useState<string[]>();
 	const appRef = useRef<RendererApp>();
 	const appLoadingPromiseRef = useRef<Promise<void>>();
@@ -227,7 +231,7 @@ const AppLoader = function AppLoader({ sample }: { sample: SampleEntry }) {
 				setInitialized(true);
 			});
 
-		return () => {
+		return (): void => {
 			shouldUpdate = false;
 		};
 	}, [sample, handleError]);

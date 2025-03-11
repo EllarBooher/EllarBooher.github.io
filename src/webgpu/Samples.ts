@@ -55,7 +55,7 @@ export const defaultSample: SampleEntry = {
 		"clip-distances",
 		"dual-source-blending",
 	]),
-	import: () =>
+	import: (): Promise<RendererAppConstructor> =>
 		import("./HelloCube").then((value) => {
 			return value.HelloCubeAppConstructor;
 		}),
@@ -83,7 +83,7 @@ export const samplesBySearchParam = new Map<string, SampleEntry>([
 				"timestamp-query",
 				"float32-filterable",
 			]),
-			import: () =>
+			import: (): Promise<RendererAppConstructor> =>
 				import("./sky-sea/SkySea").then((value) => {
 					return value.SkySeaAppConstructor;
 				}),

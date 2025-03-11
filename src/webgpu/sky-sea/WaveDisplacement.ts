@@ -498,7 +498,7 @@ export class WaveSurfaceDisplacementPassResources {
 			normalWithSurfaceFoamInAlpha: GPUTextureView;
 			depth: GPUTextureView;
 		}
-	) {
+	): void {
 		this.settingsUBO.data.patch_world_half_extent = settings.fft
 			? 100.0
 			: 300.0;

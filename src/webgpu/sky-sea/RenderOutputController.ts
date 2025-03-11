@@ -1,4 +1,5 @@
 import { Controller as LilController, GUI as LilGUI } from "lil-gui";
+import { Extent3D } from "./Common";
 
 /**
  * @see {@link RenderOutputCategory} for the enum this array backs.
@@ -33,11 +34,28 @@ export class RenderOutputTexture {
 	readonly view: GPUTextureView;
 	readonly viewDimension: GPUTextureViewDimension;
 
-	get mipLevelCount() {
+	/**
+	 * The number of mip levels in the texture.
+	 * @readonly
+	 * @type {number}
+	 * @memberof RenderOutputTexture
+	 */
+	get mipLevelCount(): number {
 		return this.texture.mipLevelCount;
 	}
-	get depthOrArrayLayerCount() {
-		return this.texture.depthOrArrayLayers;
+
+	/**
+	 * The extent of the texture.
+	 * @readonly
+	 * @type {Extent3D}
+	 * @memberof RenderOutputTexture
+	 */
+	get extent(): Extent3D {
+		return {
+			width: this.texture.width,
+			height: this.texture.height,
+			depthOrArrayLayers: this.texture.depthOrArrayLayers,
+		};
 	}
 
 	/**
@@ -162,7 +180,10 @@ export class RenderOutputController {
 	 * output.
 	 * @memberof RenderOutputController
 	 */
-	current() {
+	current(): {
+		category: RenderOutputCategory;
+		transform: RenderOutputTransform;
+	} {
 		return {
 			category: this.options.outputTexture,
 			transform: structuredClone(
@@ -173,7 +194,7 @@ export class RenderOutputController {
 		};
 	}
 
-	private updateVariableControllerBounds() {
+	private updateVariableControllerBounds(): void {
 		if (this.controllers === undefined) {
 			return;
 		}
@@ -214,7 +235,7 @@ export class RenderOutputController {
 		category: RenderOutputCategory;
 		mipLevelCount: number;
 		depthOrArrayLayerCount: number;
-	}) {
+	}): void {
 		this.textureProperties.set(props.category, {
 			mipLevelCount: props.mipLevelCount,
 			depthOrArrayLayerCount: props.depthOrArrayLayerCount,
@@ -225,7 +246,7 @@ export class RenderOutputController {
 		}
 	}
 
-	private setOutput(category: RenderOutputCategory) {
+	private setOutput(category: RenderOutputCategory): void {
 		if (this.controllers === undefined) {
 			return;
 		}
@@ -263,7 +284,7 @@ export class RenderOutputController {
 		this.updateVariableControllerBounds();
 	}
 
-	private setUniformColorScale(scale: number) {
+	private setUniformColorScale(scale: number): void {
 		const currentTransform = this.options.renderOutputTransforms.get(
 			this.options.outputTexture
 		)!;
@@ -277,7 +298,7 @@ export class RenderOutputController {
 	 * @param {LilGUI} gui - The root level GUI to attach to.
 	 * @memberof RenderOutputController
 	 */
-	setupUI(gui: LilGUI) {
+	setupUI(gui: LilGUI): void {
 		const outputTextureFolder = gui.addFolder("Render Output").close();
 		outputTextureFolder
 			.add({ outputTexture: "Scene" }, "outputTexture", {

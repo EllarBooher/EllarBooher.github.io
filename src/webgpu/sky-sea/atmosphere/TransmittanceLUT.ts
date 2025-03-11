@@ -126,7 +126,7 @@ export class TransmittanceLUTPassResources {
 	 *  into.
 	 * @memberof TransmittanceLUTPassResources
 	 */
-	record(commandEncoder: GPUCommandEncoder) {
+	record(commandEncoder: GPUCommandEncoder): void {
 		const passEncoder = commandEncoder.beginComputePass({
 			label: "Transmittance LUT",
 		});

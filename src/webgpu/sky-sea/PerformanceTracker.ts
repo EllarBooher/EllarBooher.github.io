@@ -43,6 +43,9 @@ export interface TimestampQueryInterval {
 	endWriteIndex: GPUSize32;
 }
 
+/**
+ * A ring buffer storing the arithmetic average of some fixed amount values.
+ */
 class ArithmeticSumArray {
 	private values: number[];
 	private sum = 0.0;
@@ -62,11 +65,23 @@ class ArithmeticSumArray {
 		this.values = new Array<number>(capacity).fill(0.0);
 	}
 
-	get average() {
+	/**
+	 * Returns the average of stored values.
+	 * @readonly
+	 * @type {number}
+	 * @memberof ArithmeticSumArray
+	 */
+	public get average(): number {
 		return this.average_;
 	}
 
-	public push(value: number) {
+	/**
+	 * Pushes a new value into the buffer, dropping the oldest if there is more
+	 * than the buffer can fit.
+	 * @param {number} value
+	 * @memberof ArithmeticSumArray
+	 */
+	public push(value: number): void {
 		if (this.index >= this.values.length) {
 			this.index = 0;
 		}
@@ -125,7 +140,7 @@ export class PerformanceTracker {
 	 * @param {LilGUI} gui - The GUI to bind to
 	 * @memberof PerformanceTracker
 	 */
-	setupUI(gui: LilGUI) {
+	setupUI(gui: LilGUI): void {
 		const performanceFolder = gui.addFolder("Performance").close();
 		performanceFolder
 			.add(this.uiDisplay, "averageFPS")
@@ -152,7 +167,7 @@ export class PerformanceTracker {
 	 *  recorded for displaying the overall average FPS.
 	 * @memberof PerformanceTracker
 	 */
-	startFrame(deltaTimeMilliseconds: number) {
+	startFrame(deltaTimeMilliseconds: number): void {
 		this.frametimeAverages.get("DrawToDraw")?.push(deltaTimeMilliseconds);
 		this.timestampQueryIndex = 0;
 		this.timestampIndexMapping.clear();
@@ -207,7 +222,7 @@ export class PerformanceTracker {
 	 * 	into.
 	 * @memberof PerformanceTracker
 	 */
-	recordCopyBuffers(commandEncoder: GPUCommandEncoder) {
+	recordCopyBuffers(commandEncoder: GPUCommandEncoder): void {
 		if (
 			this.queryBuffers == undefined ||
 			this.queryBuffers.readBuffer.mapState !== "unmapped"
@@ -237,7 +252,7 @@ export class PerformanceTracker {
 	 * all the timing and updates the bound UI.
 	 * @memberof PerformanceTracker
 	 */
-	asyncUpdateFrametimeAverages() {
+	asyncUpdateFrametimeAverages(): void {
 		if (
 			this.queryBuffers == undefined ||
 			this.queryBuffers.readBuffer.mapState !== "unmapped"

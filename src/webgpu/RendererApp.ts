@@ -209,7 +209,7 @@ export async function initializeApp(props: {
 			.finally(() => {
 				app.quit = true;
 			});
-		device.onuncapturederror = (ev) => {
+		device.onuncapturederror = (ev): void => {
 			app.quit = true;
 			props.onUncapturedError(ev);
 		};

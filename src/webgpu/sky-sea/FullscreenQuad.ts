@@ -88,7 +88,7 @@ export class FullscreenQuadPassResources {
 		device: GPUDevice,
 		category: RenderOutputCategory,
 		texture: RenderOutputTexture
-	) {
+	): void {
 		let layout = this.group0Layout;
 		switch (texture.viewDimension) {
 			case "2d": {
@@ -148,7 +148,7 @@ export class FullscreenQuadPassResources {
 				return {
 					category: category,
 					mipLevelCount: texture.mipLevelCount,
-					depthOrArrayLayerCount: texture.depthOrArrayLayerCount,
+					depthOrArrayLayerCount: texture.extent.depthOrArrayLayers,
 				};
 			}
 		);
@@ -361,7 +361,7 @@ export class FullscreenQuadPassResources {
 		id: RenderOutputCategory,
 		transform: RenderOutputTransform,
 		timestamps?: TimestampQueryInterval
-	) {
+	): void {
 		const clearColor = { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
 
 		const bindGroup0 = this.group0ByOutputTexture.get(id);

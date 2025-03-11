@@ -53,7 +53,7 @@ const DisplayCard = memo(function DisplayCard({
 	);
 });
 
-function App() {
+function App(): JSX.Element {
 	const webGPUCards: ReactElement[] = [];
 	samplesBySearchParam.forEach((value, key) => {
 		webGPUCards.push(

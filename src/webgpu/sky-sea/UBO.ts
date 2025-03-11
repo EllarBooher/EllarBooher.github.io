@@ -55,7 +55,7 @@ export abstract class UBO {
 	 *  write command into.
 	 * @memberof UBO
 	 */
-	public writeToGPU(queue: GPUQueue) {
+	public writeToGPU(queue: GPUQueue): void {
 		const values = this.packed();
 
 		if (values.byteLength != this.buffer.size) {
@@ -237,7 +237,7 @@ const ALIGNOF_GPU_TIME = 16;
 const SIZEOF_GPU_TIME = 16;
 
 // https://gpuweb.github.io/gpuweb/wgsl/#roundup
-function wgpuRoundUp(k: number, n: number) {
+function wgpuRoundUp(k: number, n: number): number {
 	return Math.ceil(n / k) * k;
 }
 

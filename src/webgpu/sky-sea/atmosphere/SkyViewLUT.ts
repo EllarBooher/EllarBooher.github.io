@@ -183,7 +183,7 @@ export class SkyViewLUTPassResources {
 	record(
 		commandEncoder: GPUCommandEncoder,
 		timestampInterval: TimestampQueryInterval | undefined
-	) {
+	): void {
 		const skyviewLUTPassEncoder = commandEncoder.beginComputePass({
 			timestampWrites:
 				timestampInterval !== undefined

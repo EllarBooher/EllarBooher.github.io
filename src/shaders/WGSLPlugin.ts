@@ -16,9 +16,9 @@ const modulesByInclude = new Map<string, Set<string>>();
  * @see {@link https://vite.dev/config/} for how to use this plugin.
  * @returns The Vite {@link PluginOption}.
  */
-export const wgslPlugin: () => PluginOption = () => ({
+export const wgslPlugin = (): PluginOption => ({
 	name: "wgsl-plugin",
-	transform: (src: string, id: string) => {
+	transform: (src: string, id: string): TransformResult | undefined => {
 		if (!id.endsWith(".inc.wgsl") && id.endsWith(".wgsl")) {
 			const packed = packShaders(id, src);
 			packed.includes.forEach((includeFullPath) => {
@@ -36,7 +36,7 @@ export const wgslPlugin: () => PluginOption = () => ({
 			} satisfies TransformResult;
 		}
 	},
-	configureServer: (server: ViteDevServer) => {
+	configureServer: (server: ViteDevServer): void => {
 		/*
 		 * Our shader preprocessing loads includes from disk, causing 'inc.wgsl'
 		 * modules not being added to the module graph. Thus changes to
@@ -49,11 +49,11 @@ export const wgslPlugin: () => PluginOption = () => ({
 		const SUFFIX = ".inc.wgsl";
 
 		server.watcher.add("**/*" + SUFFIX);
-		function onWatchChange(_: string) {
+		function onWatchChange(_: string): void {
 			server.hot.send({ type: "full-reload" });
 		}
 
-		const filterPath = (path: string) => {
+		const filterPath = (path: string): void => {
 			if (!path.endsWith(SUFFIX)) {
 				return;
 			}

@@ -159,7 +159,7 @@ export class MultiscatterLUTPassResources {
 		});
 	}
 
-	record(commandEncoder: GPUCommandEncoder) {
+	record(commandEncoder: GPUCommandEncoder): void {
 		const passEncoder = commandEncoder.beginComputePass({
 			label: "Multiscatter LUT",
 		});

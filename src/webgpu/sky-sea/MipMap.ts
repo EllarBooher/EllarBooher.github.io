@@ -194,7 +194,7 @@ export class MipMapGenerationPassResources {
 	recordUpdateMipMaps(
 		fillMipMapsPass: GPUComputePassEncoder,
 		target: MipMapGenerationTextureBindings
-	) {
+	): void {
 		target.bindGroupsByMipLevel.forEach((bindGroup, index) => {
 			fillMipMapsPass.setBindGroup(0, bindGroup);
 

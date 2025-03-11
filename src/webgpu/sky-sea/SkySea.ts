@@ -79,7 +79,7 @@ function setupUI(
 	gui: LilGUI,
 	paramsToBind: ValidParamsGuard<SkySeaAppParameters>,
 	handleResize: () => void
-) {
+): void {
 	gui.add(paramsToBind, "renderScale", RENDER_SCALES)
 		.name("Render Resolution Scale")
 		.decimals(1)
@@ -321,7 +321,7 @@ class SkySeaApp implements RendererApp {
 		};
 	}
 
-	setupUI(gui: LilGUI) {
+	setupUI(gui: LilGUI): void {
 		setupUI(gui, this.parameters, () => {
 			this.updateResizableResources();
 		});
@@ -543,7 +543,7 @@ class SkySeaApp implements RendererApp {
 		device.queue.submit([commandEncoder.finish()]);
 	}
 
-	tickTime(deltaTimeMilliseconds: number) {
+	tickTime(deltaTimeMilliseconds: number): void {
 		const NON_FFT_WAVE_PERIOD_SECONDS = 60.0;
 		const FFT_WAVE_PERIOD_SECONDS = 100.0;
 
@@ -577,7 +577,7 @@ class SkySeaApp implements RendererApp {
 		}
 	}
 
-	updateGlobalUBO(aspectRatio: number) {
+	updateGlobalUBO(aspectRatio: number): void {
 		const parameters = this.parameters;
 
 		this.globalUBO.data.time.deltaTimeSeconds =
@@ -746,8 +746,10 @@ class SkySeaApp implements RendererApp {
 		this.performance.asyncUpdateFrametimeAverages();
 	}
 
-	updateResizableResources() {
-		const calcScaledSize = (renderScale: number) => {
+	updateResizableResources(): void {
+		const calcScaledSize = (
+			renderScale: number
+		): { width: number; height: number } => {
 			return {
 				width: Math.floor(this.unscaledResolution.width * renderScale),
 				height: Math.floor(
@@ -756,7 +758,7 @@ class SkySeaApp implements RendererApp {
 			};
 		};
 
-		const validateSize = (size: Extent2D) => {
+		const validateSize = (size: Extent2D): boolean => {
 			const WEBGPU_MAX_DIMENSION = 8192;
 			const WEBGPU_MAX_BUFFER_BYTES = 268435456;
 			const BYTES_PER_RGBA32FLOAT = 16;
@@ -829,7 +831,7 @@ class SkySeaApp implements RendererApp {
 		}
 	}
 
-	handleResize(newWidth: number, newHeight: number) {
+	handleResize(newWidth: number, newHeight: number): void {
 		this.unscaledResolution.width = newWidth;
 		this.unscaledResolution.height = newHeight;
 

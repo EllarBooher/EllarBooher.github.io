@@ -115,7 +115,6 @@ export class PerformanceTracker {
 				querySet: GPUQuerySet;
 				writeBuffer: GPUBuffer;
 				readBuffer: GPUBuffer;
-				mappingLock: boolean;
 		  }
 		| undefined;
 	private readonly frametimeAverages: Map<
@@ -333,7 +332,6 @@ export class PerformanceTracker {
 		const BYTES_PER_TIMESTAMP_SAMPLE = 8;
 		const numberOfTimestamps = 2 * QueryCategories.length;
 		this.queryBuffers = {
-			mappingLock: false,
 			querySet: device.createQuerySet({
 				type: "timestamp",
 				count: numberOfTimestamps,

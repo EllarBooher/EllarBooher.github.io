@@ -7,9 +7,9 @@
 
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
-#include atmosphere_common.inc.wgsl
-#include raycast.inc.wgsl
-#include atmosphere_raymarch.inc.wgsl MULTISCATTERING SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE
+#include atmosphere/atmosphere_common.inc.wgsl
+#include util/raycast.inc.wgsl
+#include atmosphere/atmosphere_raymarch.inc.wgsl MULTISCATTERING SCATTERING_NONLINEAR_SAMPLE LIGHT_ILLUMINANCE_IS_ONE
 
 // All units are Mm/megameters (10^6 meters) unless marked km/kilometers (10^3 meters)
 

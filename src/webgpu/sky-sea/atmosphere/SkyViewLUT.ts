@@ -1,6 +1,6 @@
 import { Extent2D } from "../Common.ts";
-import { GlobalUBO } from "../UBO.ts";
-import SkyViewLUTPak from "../../../shaders/sky-sea/skyview_LUT.wgsl";
+import { GlobalUBO } from "../GlobalUBO.ts";
+import SkyViewLUTPak from "../../../shaders/sky-sea/atmosphere/skyview_LUT.wgsl";
 import { TimestampQueryInterval } from "../PerformanceTracker.ts";
 
 const SKYVIEW_LUT_FORMAT: GPUTextureFormat = "rgba32float";

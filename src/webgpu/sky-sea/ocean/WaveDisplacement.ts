@@ -1,9 +1,10 @@
 import { Vec2, vec2, Vec3, vec3 } from "wgpu-matrix";
-import { GlobalUBO, UBO } from "./UBO";
-import WaveSurfaceDisplacementPak from "../../shaders/sky-sea/wave_surface_displacement.wgsl";
+import { UBO } from "../util/UBO";
+import { GlobalUBO } from "../GlobalUBO";
+import WaveSurfaceDisplacementPak from "../../../shaders/sky-sea/ocean/wave_surface_displacement.wgsl";
 import { FFTWaveDisplacementMaps } from "./FourierWaves";
-import { TimestampQueryInterval } from "./PerformanceTracker";
-import { GBuffer, GBufferFormats } from "./GBuffer";
+import { TimestampQueryInterval } from "../PerformanceTracker";
+import { GBuffer, GBufferFormats } from "../GBuffer";
 
 interface WaveCascade {
 	patch_size_meters: number;

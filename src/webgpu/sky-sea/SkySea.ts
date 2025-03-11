@@ -1,13 +1,13 @@
 import { Controller as LilController, GUI as LilGUI } from "lil-gui";
 import { RendererApp, RendererAppConstructor } from "../RendererApp.ts";
 import { mat4, vec3, vec4 } from "wgpu-matrix";
-import { Camera, GlobalUBO } from "./UBO.ts";
+import { Camera, GlobalUBO } from "./GlobalUBO.ts";
 import { Extent2D } from "./Common.ts";
 
 import { TransmittanceLUTPassResources } from "./atmosphere/TransmittanceLUT.ts";
 import { MultiscatterLUTPassResources } from "./atmosphere/MultiscatterLUT.ts";
 import { SkyViewLUTPassResources } from "./atmosphere/SkyViewLUT.ts";
-import { AtmosphereCameraPassResources } from "./atmosphere/AtmosphereCamera.ts";
+import { AtmosphereCameraPassResources } from "./AtmosphereCamera.ts";
 import { AerialPerspectiveLUTPassResources } from "./atmosphere/AerialPerspectiveLUT.ts";
 
 import {
@@ -16,8 +16,11 @@ import {
 	RenderOutputController,
 } from "./RenderOutputController.ts";
 import { GBuffer } from "./GBuffer.ts";
-import { FFTWaveSpectrumResources, FFTWavesSettings } from "./FourierWaves.ts";
-import { WaveSurfaceDisplacementPassResources } from "./WaveDisplacement.ts";
+import {
+	FFTWaveSpectrumResources,
+	FFTWavesSettings,
+} from "./ocean/FourierWaves.ts";
+import { WaveSurfaceDisplacementPassResources } from "./ocean/WaveDisplacement.ts";
 import { FullscreenQuadPassResources } from "./FullscreenQuad.ts";
 import { PerformanceTracker } from "./PerformanceTracker.ts";
 

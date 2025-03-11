@@ -217,7 +217,17 @@ export function packShaders(
 
 	console.log(`Preprocessing shader ${filePath}`);
 
-	const includeWorkingPrefix = path.parse(filePath).dir;
+	/*
+	 * Find which project folder in shaders/ the source is in. includes will be
+	 * relative to that.
+	 */
+
+	// TODO: better validation for includes that escape their project, for
+	// invalid or empty paths, etc
+	const includeWorkingPrefix = path.join(
+		import.meta.dirname,
+		path.relative(import.meta.dirname, filePath).split(path.sep)[0]
+	);
 
 	let lineIndex = 0;
 	const lines = source.split("\n");

@@ -1,5 +1,5 @@
 import { UBO } from "./UBO";
-import DFFTShaderPak from "../../shaders/sky-sea/fft.wgsl";
+import DFFTShaderPak from "../../../shaders/sky-sea/util/fft.wgsl";
 
 class DFFTParametersUBO extends UBO {
 	public readonly data: {

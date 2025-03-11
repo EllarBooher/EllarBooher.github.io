@@ -2,7 +2,7 @@
 
 #include constants.inc.wgsl
 #include types.inc.wgsl
-#include raycast.inc.wgsl
+#include util/raycast.inc.wgsl
 
 const CASCADE_CAPACITY = 4u;
 

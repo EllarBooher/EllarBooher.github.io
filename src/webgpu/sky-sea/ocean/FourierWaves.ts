@@ -1,15 +1,16 @@
-import FourierWavesShaderPak from "../../shaders/sky-sea/fourier_waves.wgsl";
+import FourierWavesShaderPak from "../../../shaders/sky-sea/ocean/fourier_waves.wgsl";
 
-import { GlobalUBO, UBO } from "./UBO.ts";
-import { DFFTResources } from "./FFT.ts";
-import { RenderOutputTexture } from "./RenderOutputController.ts";
+import { UBO } from "../util/UBO.ts";
+import { GlobalUBO } from "../GlobalUBO.ts";
+import { DFFTResources } from "../util/FFT.ts";
+import { RenderOutputTexture } from "../RenderOutputController.ts";
 import {
 	MipMapGenerationPassResources,
 	MipMapGenerationTextureBindings,
-} from "./MipMap.ts";
+} from "../util/MipMap.ts";
 import { vec2, Vec2 } from "wgpu-matrix";
-import { TimestampQueryInterval } from "./PerformanceTracker.ts";
-import { Extent3D } from "./Common.ts";
+import { TimestampQueryInterval } from "../PerformanceTracker.ts";
+import { Extent3D } from "../Common.ts";
 
 // The dimension of the fourier grid, i.e., the sqrt of the number of unique waves for our discrete fourier transform
 const GRID_SIZE = 512;

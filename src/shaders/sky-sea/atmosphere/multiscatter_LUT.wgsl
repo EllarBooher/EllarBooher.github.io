@@ -1,5 +1,5 @@
 #include types.inc.wgsl
-#include raycast.inc.wgsl
+#include util/raycast.inc.wgsl
 
 @group(0) @binding(0) var multiscatter_lut: texture_storage_2d<rgba32float, write>;
 @group(0) @binding(1) var lut_sampler: sampler;
@@ -7,8 +7,8 @@
 
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 
-#include atmosphere_common.inc.wgsl
-#include atmosphere_raymarch.inc.wgsl ISOTROPIC_PHASE LIGHT_ILLUMINANCE_IS_ONE HIGH_SAMPLE_COUNT
+#include atmosphere/atmosphere_common.inc.wgsl
+#include atmosphere/atmosphere_raymarch.inc.wgsl ISOTROPIC_PHASE LIGHT_ILLUMINANCE_IS_ONE HIGH_SAMPLE_COUNT
 
 // See 'atmosphere_common.inc.wgsl' for sources on what this method is based on.
 

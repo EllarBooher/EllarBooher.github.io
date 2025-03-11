@@ -1,6 +1,6 @@
 import { Extent2D } from "../Common.ts";
-import { GlobalUBO } from "../UBO.ts";
-import TransmittanceLUTPak from "../../../shaders/sky-sea/transmittance_LUT.wgsl";
+import { GlobalUBO } from "../GlobalUBO.ts";
+import TransmittanceLUTPak from "../../../shaders/sky-sea/atmosphere/transmittance_LUT.wgsl";
 
 const TRANSMITTANCE_LUT_FORMAT: GPUTextureFormat = "rgba32float";
 

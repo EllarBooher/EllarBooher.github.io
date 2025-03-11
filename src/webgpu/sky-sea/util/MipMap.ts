@@ -1,4 +1,4 @@
-import MipMapPak from "../../shaders/sky-sea/mipmap.wgsl";
+import MipMapPak from "../../../shaders/sky-sea/util/mipmap.wgsl";
 
 // Currently the only supported texture format for mipmapping
 const MIP_MAP_TEXTURE_FORMAT = "rgba16float";

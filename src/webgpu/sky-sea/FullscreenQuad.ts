@@ -1,4 +1,4 @@
-import { UBO } from "./UBO";
+import { UBO } from "./util/UBO";
 import {
 	RenderOutputTag,
 	RenderOutputTexture,

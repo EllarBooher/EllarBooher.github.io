@@ -670,7 +670,7 @@ class SkySeaApp implements RendererApp {
 		}
 		const presentView = presentTexture.createView();
 
-		this.performance.startFrame(deltaTimeMilliseconds);
+		this.performance.beginFrame(deltaTimeMilliseconds);
 
 		this.tickTime(deltaTimeMilliseconds);
 
@@ -684,13 +684,13 @@ class SkySeaApp implements RendererApp {
 			this.device,
 			commandEncoder,
 			this.parameters.fourierWavesSettings,
-			this.performance.pushTimestampQueryInterval("FFTWaves")
+			this.performance.queueTimestampInterval("FFTWaves")
 		);
 
 		this.waveSurfaceDisplacementPassResources.record(
 			this.device,
 			commandEncoder,
-			this.performance.pushTimestampQueryInterval("OceanSurface"),
+			this.performance.queueTimestampInterval("OceanSurface"),
 			this.fftWaveSpectrumResources.turbulenceMapIndex,
 			{
 				gerstner: this.parameters.oceanSurfaceSettings.gerstner,
@@ -703,15 +703,15 @@ class SkySeaApp implements RendererApp {
 
 		this.skyviewLUTPassResources.record(
 			commandEncoder,
-			this.performance.pushTimestampQueryInterval("SkyviewLUT")
+			this.performance.queueTimestampInterval("SkyviewLUT")
 		);
 		this.aerialPerspectiveLUTPassResources.record(
 			commandEncoder,
-			this.performance.pushTimestampQueryInterval("AerialPerspectiveLUT")
+			this.performance.queueTimestampInterval("AerialPerspectiveLUT")
 		);
 		this.atmosphereCameraPassResources.record(
 			commandEncoder,
-			this.performance.pushTimestampQueryInterval("AtmosphereCamera"),
+			this.performance.queueTimestampInterval("AtmosphereCamera"),
 			this.gbuffer
 		);
 
@@ -722,14 +722,14 @@ class SkySeaApp implements RendererApp {
 			presentView,
 			output.tag,
 			output.transform,
-			this.performance.pushTimestampQueryInterval("FullscreenQuad")
+			this.performance.queueTimestampInterval("FullscreenQuad")
 		);
 
-		this.performance.recordCopyBuffers(commandEncoder);
+		this.performance.preSubmitCommands(commandEncoder);
 
 		this.device.queue.submit([commandEncoder.finish()]);
 
-		this.performance.asyncUpdateFrametimeAverages();
+		this.performance.postSubmitCommands();
 	}
 
 	updateResizableResources(): void {

@@ -167,7 +167,7 @@ export class PerformanceTracker {
 	 *  recorded for displaying the overall average FPS.
 	 * @memberof PerformanceTracker
 	 */
-	startFrame(deltaTimeMilliseconds: number): void {
+	beginFrame(deltaTimeMilliseconds: number): void {
 		this.frametimeAverages.get("DrawToDraw")?.push(deltaTimeMilliseconds);
 		this.timestampQueryIndex = 0;
 		this.timestampIndexMapping.clear();
@@ -192,7 +192,7 @@ export class PerformanceTracker {
 	 *  is not supported.
 	 * @memberof PerformanceTracker
 	 */
-	pushTimestampQueryInterval(
+	queueTimestampInterval(
 		category: QueryCategory
 	): TimestampQueryInterval | undefined {
 		if (this.queryBuffers === undefined) {
@@ -222,7 +222,7 @@ export class PerformanceTracker {
 	 * 	into.
 	 * @memberof PerformanceTracker
 	 */
-	recordCopyBuffers(commandEncoder: GPUCommandEncoder): void {
+	preSubmitCommands(commandEncoder: GPUCommandEncoder): void {
 		if (
 			this.queryBuffers == undefined ||
 			this.queryBuffers.readBuffer.mapState !== "unmapped"
@@ -252,7 +252,7 @@ export class PerformanceTracker {
 	 * all the timing and updates the bound UI.
 	 * @memberof PerformanceTracker
 	 */
-	asyncUpdateFrametimeAverages(): void {
+	postSubmitCommands(): void {
 		if (
 			this.queryBuffers == undefined ||
 			this.queryBuffers.readBuffer.mapState !== "unmapped"

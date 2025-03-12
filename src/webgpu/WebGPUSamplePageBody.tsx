@@ -34,6 +34,7 @@ const RenderingCanvas = function RenderingCanvas({
 	const animateRequestRef = useRef<number>();
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const guiPaneRef = useRef<HTMLDivElement>(null);
+	const hibernateRef = useRef(false);
 	const guiRef = useRef<GUI>();
 	const [guiDocked, setGUIDocked] = useState<boolean>(false);
 	const lastTimeRef = useRef<number>();
@@ -43,11 +44,17 @@ const RenderingCanvas = function RenderingCanvas({
 
 		if (canvas) {
 			const devicePixelRatio = window.devicePixelRatio;
-			canvas.width = canvas.offsetWidth * devicePixelRatio;
-			canvas.height = canvas.offsetHeight * devicePixelRatio;
+			canvas.width = Math.max(canvas.offsetWidth * devicePixelRatio, 1);
+			canvas.height = Math.max(canvas.offsetHeight * devicePixelRatio, 1);
 
 			// TODO: can we miss this event? can canvas dimensions and context.getCurrentTexture() be out of sync?
 			try {
+				if (canvas.width <= 1 || canvas.height <= 1) {
+					hibernateRef.current = true;
+					console.log("Hibernate");
+					return;
+				}
+				hibernateRef.current = false;
 				app.handleResize?.(canvas.width, canvas.height);
 			} catch (err) {
 				onError(err);
@@ -74,12 +81,14 @@ const RenderingCanvas = function RenderingCanvas({
 
 				const drawTexture = drawContext.getCurrentTexture();
 				try {
-					app.draw(
-						drawTexture,
-						canvasRef.current!.width / canvasRef.current!.height,
-						time,
-						deltaTime
-					);
+					if (!hibernateRef.current) {
+						app.draw(
+							drawTexture,
+							canvasRef.current!.width / canvasRef.current!.height,
+							time,
+							deltaTime
+						);
+					}
 				} catch (err) {
 					onError(err);
 				}

@@ -174,10 +174,9 @@ fn computeInitialAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
     let texel_coord: vec2<u32> = global_id.xy;
 	let array_layer: u32 = global_id.z;
-    let size = textureDimensions(out_initial_amplitude);
+    let size: vec2<u32> = textureDimensions(out_initial_amplitude);
     if texel_coord.x >= size.x
 		|| texel_coord.y >= size.y
-		|| array_layer > textureNumLayers(out_initial_amplitude)
 	{
         return;
     }
@@ -265,7 +264,6 @@ fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
     let size = textureDimensions(in_initial_amplitude);
     if texel_coord.x >= size.x
 		|| texel_coord.y >= size.y
-		|| array_layer > textureNumLayers(in_initial_amplitude)
 	{
         return;
     }
@@ -369,68 +367,65 @@ fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
 @group(0) @binding(3) var in_Dydx_Dydz_Dxdx_Dzdz_spatial_array: texture_2d_array<f32>;
 @group(0) @binding(4) var<uniform> u_global_0: GlobalUBO;
 
-@compute @workgroup_size(16, 16)
+@compute @workgroup_size(16, 16, 1)
 fn accumulateTurbulence(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
 	let texel_coord = vec2<u32>(global_id.xy);
+	let array_layer: u32 = global_id.z;
     let size = textureDimensions(out_turbulence_jacobian_array);
     if texel_coord.x >= size.x || texel_coord.y >= size.y {
         return;
     }
 
 	// TODO: support for mipmapping and lambda scaling factor present in wave_surface_displacement.wgsl
-
 	const mip = 0u;
 
-	for(var array_layer = 0u; array_layer <= textureNumLayers(out_turbulence_jacobian_array); array_layer++)
-	{
-		let Dx_Dy_Dz_Dxdz = textureLoad(in_Dx_Dy_Dz_Dxdz_spatial_array, texel_coord, array_layer, mip);
-		let Dydx_Dydz_Dxdx_Dzdz = textureLoad(in_Dydx_Dydz_Dxdx_Dzdz_spatial_array, texel_coord, array_layer, mip);
+	let Dx_Dy_Dz_Dxdz = textureLoad(in_Dx_Dy_Dz_Dxdz_spatial_array, texel_coord, array_layer, mip);
+	let Dydx_Dydz_Dxdx_Dzdz = textureLoad(in_Dydx_Dydz_Dxdx_Dzdz_spatial_array, texel_coord, array_layer, mip);
 
-		let Dydx = Dydx_Dydz_Dxdx_Dzdz.x;
-		let Dydz = Dydx_Dydz_Dxdx_Dzdz.y;
+	let Dydx = Dydx_Dydz_Dxdx_Dzdz.x;
+	let Dydz = Dydx_Dydz_Dxdx_Dzdz.y;
 
-		let Dxdz = Dx_Dy_Dz_Dxdz.w;
-		let Dzdx = Dxdz;
+	let Dxdz = Dx_Dy_Dz_Dxdz.w;
+	let Dzdx = Dxdz;
 
-		var Dxdx = Dydx_Dydz_Dxdx_Dzdz.z;
-		var Dzdz = Dydx_Dydz_Dxdx_Dzdz.w;
+	var Dxdx = Dydx_Dydz_Dxdx_Dzdz.z;
+	var Dzdz = Dydx_Dydz_Dxdx_Dzdz.w;
 
-		var jacobian_xx = 1.0;
-		var jacobian_zz = 1.0;
-		var jacobian_xz = 0.0;
-		var jacobian_zx = 0.0;
+	var jacobian_xx = 1.0;
+	var jacobian_zz = 1.0;
+	var jacobian_xz = 0.0;
+	var jacobian_zx = 0.0;
 
-		jacobian_xx += Dxdx;
-		jacobian_zz += Dzdz;
+	jacobian_xx += Dxdx;
+	jacobian_zz += Dzdz;
 
-		jacobian_xz += Dxdz;
-		jacobian_zx += Dzdx;
+	jacobian_xz += Dxdz;
+	jacobian_zx += Dzdx;
 
-		let jacobian = jacobian_xx * jacobian_zz - jacobian_xz * jacobian_zx;
-		let turbulence_previous = textureLoad(in_turbulence_jacobian_array, texel_coord, array_layer, mip).x;
+	let jacobian = jacobian_xx * jacobian_zz - jacobian_xz * jacobian_zx;
+	let turbulence_previous = textureLoad(in_turbulence_jacobian_array, texel_coord, array_layer, mip).x;
 
-		/*
-		 * Function that causes foam to linger.
-		 *
-		 * Note this is not actually the turbulence of the displacement as a
-		 * field, but instead an ad-hoc visually appealing approximation.
-		 *
-		 * This creates foam even when jacobian is nonnegative, but visually
-		 * this does not look too strange. Utilizing this value takes a lot of
-		 * tweaking with scaling/bias factors anyway.
-		 *
-		 * I found this on a few examples on github, and I'd like to know where
-		 * it originates since I struggled to come up with my own function that
-		 * works well.
-		 */
-		let turbulence = min(
-			turbulence_previous + u_global_0.time.delta_time_seconds * 0.5 / max(jacobian, 0.5),
-			jacobian
-		);
+	/*
+	 * Function that causes foam to linger.
+	 *
+	 * Note this is not actually the turbulence of the displacement as a
+	 * field, but instead an ad-hoc visually appealing approximation.
+	 *
+	 * This creates foam even when jacobian is nonnegative, but visually
+	 * this does not look too strange. Utilizing this value takes a lot of
+	 * tweaking with scaling/bias factors anyway.
+	 *
+	 * I found this on a few examples on github, and I'd like to know where
+	 * it originates since I struggled to come up with my own function that
+	 * works well.
+	 */
+	let turbulence = min(
+		turbulence_previous + u_global_0.time.delta_time_seconds * 0.5 / max(jacobian, 0.5),
+		jacobian
+	);
 
-		textureStore(out_turbulence_jacobian_array, texel_coord, array_layer,
-			vec4<f32>(turbulence, jacobian, 0.0, 0.0)
-		);
-	}
+	textureStore(out_turbulence_jacobian_array, texel_coord, array_layer,
+		vec4<f32>(turbulence, jacobian, 0.0, 0.0)
+	);
 }

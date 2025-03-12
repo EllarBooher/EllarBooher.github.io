@@ -1066,7 +1066,8 @@ export class FFTWaveSpectrumResources {
 
 		accumulateTurbulencePass.dispatchWorkgroups(
 			this.gridSize / 16,
-			this.gridSize / 16
+			this.gridSize / 16,
+			this.cascadeCount / 1
 		);
 
 		accumulateTurbulencePass.end();

@@ -1,0 +1,9 @@
+.citation {
+	display: flex;
+	gap: 1rem;
+	padding: 0.5rem;
+}
+
+.citation > p {
+	margin: 0;
+}

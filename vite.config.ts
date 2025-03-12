@@ -3,10 +3,12 @@ import react from "@vitejs/plugin-react";
 import { wgslPlugin } from "./src/shaders/WGSLPlugin";
 import eslint from "@nabla/vite-plugin-eslint";
 import checker from "vite-plugin-checker";
+import staticAsset from "./src/StaticAssetPlugin";
 
 export default defineConfig({
 	plugins: [
 		wgslPlugin(),
+		staticAsset({ extensions: [".md"] }),
 		react(),
 		eslint({
 			eslintOptions: {

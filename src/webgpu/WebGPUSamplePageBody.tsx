@@ -11,6 +11,8 @@ import { SampleEntry, samplesBySearchParam } from "./Samples";
 import { RendererApp, initializeApp } from "./RendererApp";
 import { GUI } from "lil-gui";
 import "./WebGPUSamplePageBody.css";
+import { NavigationHeader } from "../NavigateLink";
+import EmbeddedReadme from "./EmbeddedReadme";
 
 /**
  * This component contains the UI and canvas HTML elements used to display and
@@ -284,6 +286,7 @@ export const WebGPUSamplePageBody = memo(function WebGPUSamplePageBody() {
 
 	const sampleSidebarLinks: ReactElement[] = [];
 	const sampleNavCards: ReactElement[] = [];
+
 	samplesBySearchParam.forEach((value, key) => {
 		const sampleLink = `/webgpu-samples?sample=${key}`;
 		sampleSidebarLinks.push(
@@ -330,11 +333,21 @@ export const WebGPUSamplePageBody = memo(function WebGPUSamplePageBody() {
 		</nav>
 	);
 
+	const readme = <EmbeddedReadme projectFolder={sample.projectFolder} />;
+
 	return (
-		<main className="sample">
-			<h1 className="visuallyhidden">WebGPU Animated Sample</h1>
-			{sampleSidebar}
-			<AppLoader sample={sample} />
-		</main>
+		<div className="sample-container">
+			<div
+				style={{ display: "flex", minHeight: "100vh", flexDirection: "column" }}
+			>
+				<NavigationHeader />
+				<div className="sample">
+					<h1 className="visuallyhidden">WebGPU Animated Sample</h1>
+					{sampleSidebar}
+					<AppLoader sample={sample} />
+				</div>
+			</div>
+			<div style={{ flex: "0 0 0" }}>{readme}</div>
+		</div>
 	);
 });

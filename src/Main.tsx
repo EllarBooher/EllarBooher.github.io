@@ -23,15 +23,7 @@ createRoot(root).render(
 						</>
 					}
 				/>
-				<Route
-					path="webgpu-samples"
-					element={
-						<div className="sample-container">
-							<NavigationHeader />
-							<WebGPUSamplePageBody />
-						</div>
-					}
-				/>
+				<Route path="webgpu-samples" element={<WebGPUSamplePageBody />} />
 				<Route path="*" element={<Navigate to="/" replace />} />
 			</Routes>
 		</HashRouter>

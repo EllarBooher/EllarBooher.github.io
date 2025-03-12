@@ -57,7 +57,8 @@
 .sample {
 	display: flex;
 	flex: 1;
-	min-height: 0; /* ensure that sample body (sidebars + canvas) don't exceed height of parent */
+
+	/* min-height: 0; ensure that sample body (sidebars + canvas) don't exceed height of parent */
 }
 
 .sample-text {

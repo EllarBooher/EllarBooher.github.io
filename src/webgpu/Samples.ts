@@ -11,6 +11,8 @@ import { RendererAppConstructor } from "./RendererApp";
  * The display and initialization properties of a single WebGPU sample.
  * @prop {string} name - A pretty-formatted name labelling the sample.
  * @prop {string} description - A short description for the sample.
+ * @prop {string} [projectFolder] - An optional name for the folder that
+ * 	contains the README.md for the project, at the same level as this module.
  * @prop {ReadonlyMap<keyof GPUSupportedLimits, number>} requiredLimits   - A
  *  set of WebGPU limits that running the sample requires.
  * @prop {ReadonlySet<GPUFeatureName>} requiredFeatures - A set of WebGPU
@@ -23,6 +25,7 @@ import { RendererAppConstructor } from "./RendererApp";
 export interface SampleEntry {
 	name: string;
 	description: string;
+	projectFolder?: string;
 	requiredLimits: ReadonlyMap<keyof GPUSupportedLimits, number>;
 	requiredFeatures: ReadonlySet<GPUFeatureName>;
 	optionalFeatures: ReadonlySet<GPUFeatureName>;
@@ -77,6 +80,7 @@ export const samplesBySearchParam = new Map<string, SampleEntry>([
 			name: "Sky and Sea",
 			description:
 				"Real-time rendering of a dynamic sun over the open ocean, with various models for surface waves and raymarched atmospheric scattering.",
+			projectFolder: "sky-sea",
 			requiredLimits: new Map([["maxStorageTexturesPerShaderStage", 8]]),
 			requiredFeatures: new Set(),
 			optionalFeatures: new Set([

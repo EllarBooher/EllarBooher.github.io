@@ -314,14 +314,17 @@ export const WebGPUSamplePageBody = memo(function WebGPUSamplePageBody() {
 	}
 	if (sample == undefined) {
 		return (
-			<main className="sample">
-				<div className="sample-text">
-					<h1>WebGPU Samples</h1>
-					<nav aria-label="WebGPU Samples" className="nav-card-container">
-						{sampleNavCards}
-					</nav>
-				</div>
-			</main>
+			<>
+				<NavigationHeader />
+				<main className="sample">
+					<div className="sample-text">
+						<h1>WebGPU Samples</h1>
+						<nav aria-label="WebGPU Samples" className="nav-card-container">
+							{sampleNavCards}
+						</nav>
+					</div>
+				</main>
+			</>
 		);
 	}
 

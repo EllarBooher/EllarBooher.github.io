@@ -57,8 +57,7 @@
 .sample {
 	display: flex;
 	flex: 1;
-
-	/* min-height: 0; ensure that sample body (sidebars + canvas) don't exceed height of parent */
+	min-height: 0; /* ensure that sample body (sidebars + canvas) don't exceed height of parent */
 }
 
 .sample-text {
@@ -73,6 +72,7 @@
 }
 
 .sample-sidebar {
+	width: 10rem;
 	background-color: rgb(2 48 71);
 	justify-items: center;
 }
@@ -97,4 +97,38 @@
 
 .sample-sidebar > ul > li > a {
 	flex: 1;
+}
+
+.readme-container {
+	display: flex;
+	flex: 0;
+}
+
+.readme-sidebar {
+	width: 10rem;
+	flex-shrink: 0;
+}
+
+.readme-body {
+	padding: 1rem;
+	flex: 1;
+	flex-shrink: 1;
+	background-color: rgb(55 95 113);
+	overflow-x: hidden;
+}
+
+.readme-body > h1 {
+	padding-bottom: 1rem;
+}
+
+.readme-body > h2 {
+	padding-inline: 1rem;
+}
+
+.readme-body > *:not(h1, h2) {
+	padding-inline: 2rem;
+}
+
+.readme-body > * > p {
+	overflow-wrap: anywhere;
 }

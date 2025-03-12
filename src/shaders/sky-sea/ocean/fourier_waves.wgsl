@@ -50,22 +50,22 @@ fn quantizeFrequency(frequency: f32, fundamental_frequency: f32) -> f32
 }
 
 fn waveParameters(
-	settings: ptr<uniform, FourierWavesUBO>,
+	settings: FourierWavesUBO,
 	patch_extent_meters: f32,
 	texel_coord: vec2<u32>
 ) -> WaveParameters
 {
 	var result: WaveParameters;
 
-	let wave_coord_offset = i32((*settings).fourier_grid_size / 2u);
-	let g = (*settings).gravity;
+	let wave_coord_offset = i32(settings.fourier_grid_size / 2u);
+	let g = settings.gravity;
 
 	result.wave_coord = vec2<i32>(i32(texel_coord.x), i32(texel_coord.y)) - vec2<i32>(wave_coord_offset);
 
 	const QUANTIZED_FREQUENCIES = true;
 	if (QUANTIZED_FREQUENCIES)
 	{
-		let frequency_quantization_step = 2.0 * PI / (*settings).wave_period_seconds;
+		let frequency_quantization_step = 2.0 * PI / settings.wave_period_seconds;
 		let non_quantized_fundamental_wave_number = 2.0 * PI / patch_extent_meters;
 		let fundamental_frequency = quantizeFrequency(
 			sqrt(g * non_quantized_fundamental_wave_number),
@@ -103,11 +103,11 @@ fn waveParameters(
 	return result;
 }
 
-fn waveSpectrumJONSWAP(settings: ptr<uniform, FourierWavesUBO>, frequency: f32, peak_frequency: f32) -> f32
+fn waveSpectrumJONSWAP(settings: FourierWavesUBO, frequency: f32, peak_frequency: f32) -> f32
 {
-	let wind_speed = (*settings).wind_speed_meters_per_second;
-	let wind_fetch = (*settings).wind_fetch_meters;
-	let g = (*settings).gravity;
+	let wind_speed = settings.wind_speed_meters_per_second;
+	let wind_fetch = settings.wind_fetch_meters;
+	let g = settings.gravity;
 
 	let alpha = 0.076 * pow(wind_speed * wind_speed / (wind_fetch * g), 0.22);
 	let gamma = 3.3;
@@ -148,10 +148,10 @@ fn gammaApprox(z: f32) -> f32
 	return sqrt(2.0 * PI) * pow(z + r + 0.5, z + 0.5) * exp(-(z + r + 0.5)) * s;
 }
 
-fn waveDirectionalSpreading(settings: ptr<uniform, FourierWavesUBO>, frequency: f32, peak_frequency: f32, angle: f32) -> f32
+fn waveDirectionalSpreading(settings: FourierWavesUBO, frequency: f32, peak_frequency: f32, angle: f32) -> f32
 {
 	let f_ratio = peak_frequency / frequency;
-	let swell = (*settings).wave_swell;
+	let swell = settings.wave_swell;
 
 	let s = 16.0 * tanh(f_ratio) * swell * swell;
 
@@ -183,7 +183,7 @@ fn computeInitialAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
     }
 
 	let gaussian_pair = textureLoad(in_gaussian_random_pairs, texel_coord, array_layer, 0).xy;
-	let wave = waveParameters(&u_fourier_waves, u_fourier_waves.cascades[array_layer].wave_patch_extent_meters, texel_coord);
+	let wave = waveParameters(u_fourier_waves, u_fourier_waves.cascades[array_layer].wave_patch_extent_meters, texel_coord);
 	let wave_number_min_max = u_fourier_waves.cascades[array_layer].wave_number_min_max;
 
 	if (abs(wave.wave_number) < wave.delta_wave_number
@@ -207,8 +207,8 @@ fn computeInitialAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
 
 	let peak_frequency = 22.0 * pow(g * g / (wind_speed * wind_fetch), 1.0 / 3.0);
 
-	let spectrum = waveSpectrumJONSWAP(&u_fourier_waves, wave.frequency, peak_frequency)
-		* waveDirectionalSpreading(&u_fourier_waves, wave.frequency, peak_frequency, wave.wind_angle);
+	let spectrum = waveSpectrumJONSWAP(u_fourier_waves, wave.frequency, peak_frequency)
+		* waveDirectionalSpreading(u_fourier_waves, wave.frequency, peak_frequency, wave.wind_angle);
 
 	let magnitude = sqrt(
 		2.0
@@ -270,7 +270,7 @@ fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
         return;
     }
 
-	let wave = waveParameters(&u_fourier_waves, u_fourier_waves.cascades[array_layer].wave_patch_extent_meters, texel_coord);
+	let wave = waveParameters(u_fourier_waves, u_fourier_waves.cascades[array_layer].wave_patch_extent_meters, texel_coord);
 	let wave_number_min_max = u_fourier_waves.cascades[array_layer].wave_number_min_max;
 
 	if (abs(wave.wave_number) < wave.delta_wave_number

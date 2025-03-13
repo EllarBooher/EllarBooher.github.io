@@ -50,7 +50,6 @@
 
 .gui-pane-floating {
 	position: absolute;
-	height: 10vh; /* stop lil-gui from exceeding height when transitioning to closed */
 	right: 0;
 }
 

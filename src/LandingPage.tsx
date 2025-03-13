@@ -1,7 +1,8 @@
 import { memo, ReactElement } from "react";
-import "./App.css";
+import "./LandingPage.css";
 import { Link } from "react-router";
 import { samplesBySearchParam } from "./webgpu/Samples";
+import { NavigationHeader } from "./NavigateLink";
 
 const emailLink = (
 	<a target="_blank" rel="noreferrer" href="mailto:estelle.booher@gmail.com">
@@ -53,7 +54,7 @@ const DisplayCard = memo(function DisplayCard({
 	);
 });
 
-function App(): JSX.Element {
+export default memo(function LandingPage(): JSX.Element {
 	const webGPUCards: ReactElement[] = [];
 	samplesBySearchParam.forEach((value, key) => {
 		webGPUCards.push(
@@ -120,6 +121,7 @@ function App(): JSX.Element {
 
 	return (
 		<>
+			<NavigationHeader />
 			<main className="landing-main">
 				<h1 className="visuallyhidden">Portfolio Landing Page</h1>
 				<p>
@@ -152,6 +154,4 @@ function App(): JSX.Element {
 			</footer>
 		</>
 	);
-}
-
-export default App;
+});

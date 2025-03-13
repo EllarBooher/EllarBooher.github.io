@@ -10,7 +10,7 @@ import { Link, useSearchParams } from "react-router";
 import { SampleEntry, samplesBySearchParam } from "./Samples";
 import { RendererApp, initializeApp } from "./RendererApp";
 import { GUI } from "lil-gui";
-import "./WebGPUSamplePageBody.css";
+import "./WebGPUSamplePage.css";
 import { NavigationHeader } from "../NavigateLink";
 import EmbeddedReadme from "./EmbeddedReadme";
 
@@ -150,7 +150,7 @@ const RenderingCanvas = function RenderingCanvas({
 
 	/*
 	 * The precise hierarchy of these elements is important for the desired
-	 * effect. See `WebGPUSamplePageBody.css` for the specifics.
+	 * effect. See `WebGPUSamplePage.css` for the specifics.
 	 */
 	return (
 		<>
@@ -290,7 +290,7 @@ const AppLoader = function AppLoader({
  * no valid sample matches the query param, a landing page with a grid of cards
  * containing descriptions of each sample is shown.
  */
-export const WebGPUSamplePageBody = memo(function WebGPUSamplePageBody() {
+export default memo(function WebGPUSamplePage(): JSX.Element {
 	const [searchParams, setSearchParams] = useSearchParams();
 
 	const sampleSidebarLinks: ReactElement[] = [];

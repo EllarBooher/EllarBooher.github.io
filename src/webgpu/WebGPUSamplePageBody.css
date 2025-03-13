@@ -54,10 +54,25 @@
 	right: 0;
 }
 
-.sample {
+.sample-main {
 	display: flex;
+	flex-direction: row;
+}
+
+.sample-body {
 	flex: 1;
-	min-height: 0; /* ensure that sample body (sidebars + canvas) don't exceed height of parent */
+}
+
+.sample-app-container {
+	display: flex;
+	flex-direction: row;
+	background-color: #023047;
+
+	/*
+	 * We have sample end neatly at 100vh when page is scrolled all the way up.
+	 * This assumes that only the header is offsetting the top
+	 */
+	height: calc(100vh - var(--header-height));
 }
 
 .sample-text {
@@ -97,14 +112,4 @@
 
 .sample-sidebar > ul > li > a {
 	flex: 1;
-}
-
-.readme-container {
-	display: flex;
-	flex: 0;
-}
-
-.readme-sidebar {
-	width: 10rem;
-	flex-shrink: 0;
 }

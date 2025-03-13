@@ -20,6 +20,7 @@ export default memo(function EmbeddedReadme({
 
 	useEffect(() => {
 		if (projectFolder === undefined) {
+			setReadmeText(undefined);
 			return;
 		}
 		import(`./${projectFolder}/README.md`)

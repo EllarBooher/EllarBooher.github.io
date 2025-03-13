@@ -52,8 +52,10 @@ export const NavigationHeader = memo(function NavigationHeader() {
 	}
 
 	return (
-		<nav className="main-nav" aria-label="Main">
-			{navSteps}
-		</nav>
+		<header>
+			<nav className="main-nav" aria-label="Main">
+				{navSteps}
+			</nav>
+		</header>
 	);
 });

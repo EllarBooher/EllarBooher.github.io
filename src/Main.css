@@ -27,13 +27,8 @@ main {
 	display: flex;
 	flex-direction: column;
 	min-height: 100vh;
-}
 
-/* Ensure that canvas + ui only takes up 100vh so it fits on the screen */
-.sample-container {
-	height: 100vh;
-	display: flex;
-	flex-direction: column;
+	--header-height: 3rem;
 }
 
 #root > main {

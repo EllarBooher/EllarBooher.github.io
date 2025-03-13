@@ -345,30 +345,23 @@ export const WebGPUSamplePageBody = memo(function WebGPUSamplePageBody() {
 		</nav>
 	);
 
-	const display = (
-		<div
-			style={{ display: "flex", minHeight: "100vh", flexDirection: "column" }}
-		>
-			<NavigationHeader />
-			<div className="sample">
-				<h1 className="visuallyhidden">WebGPU Animated Sample</h1>
-				{sampleSidebar}
-				<AppLoader sample={sample} />
-			</div>
-		</div>
-	);
-
-	const readme = (
-		<div className="readme-container">
-			<div className="readme-sidebar" />
-			<EmbeddedReadme projectFolder={sample.projectFolder} />
+	const app = (
+		<div className="sample-app-container">
+			<h1 className="visuallyhidden">WebGPU Animated Sample</h1>
+			<AppLoader sample={sample} />
 		</div>
 	);
 
 	return (
-		<div className="sample-container">
-			{display}
-			{readme}
-		</div>
+		<>
+			<NavigationHeader />
+			<main className="sample-main">
+				{sampleSidebar}
+				<div className="sample-body">
+					{app}
+					<EmbeddedReadme projectFolder={sample.projectFolder} />
+				</div>
+			</main>
+		</>
 	);
 });

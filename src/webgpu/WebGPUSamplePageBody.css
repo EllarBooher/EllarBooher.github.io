@@ -108,27 +108,3 @@
 	width: 10rem;
 	flex-shrink: 0;
 }
-
-.readme-body {
-	padding: 1rem;
-	flex: 1;
-	flex-shrink: 1;
-	background-color: rgb(55 95 113);
-	overflow-x: hidden;
-}
-
-.readme-body > h1 {
-	padding-bottom: 1rem;
-}
-
-.readme-body > h2 {
-	padding-inline: 1rem;
-}
-
-.readme-body > *:not(h1, h2) {
-	padding-inline: 2rem;
-}
-
-.readme-body > * > p {
-	overflow-wrap: anywhere;
-}

@@ -361,9 +361,7 @@ export const WebGPUSamplePageBody = memo(function WebGPUSamplePageBody() {
 	const readme = (
 		<div className="readme-container">
 			<div className="readme-sidebar" />
-			<div className="readme-body">
-				<EmbeddedReadme projectFolder={sample.projectFolder} />
-			</div>
+			<EmbeddedReadme projectFolder={sample.projectFolder} />
 		</div>
 	);
 

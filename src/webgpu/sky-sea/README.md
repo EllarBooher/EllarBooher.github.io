@@ -1,8 +1,48 @@
 # WebGPU Sky and Sea
 
+## Features
+
+- Ocean
+  - Gerstner waves, also known as trochoid waves
+  - FFT acceleration for millions of waves instead of a few dozen
+  - Gravity-waves with directional spreading and JONSWAP spectrum
+  - Parameterized wind
+  - Cascades that divide full frequency spectrum for more detail
+  - Foam that forms and dissipates based on surface jacobian
+  - Ocean surface mesh projected from screen-space to world-space
+  - Rasterization into GBuffer with per vertex displacement and per fragment normals
+- Atmosphere
+  - Dynamic time of day
+  - Raymarched scattering integral of directional light contribution
+  - Atmosphere medium with Rayleigh, Mie, and Ozone scattering
+  - Multiple scattering and aerial perspective
+  - Composited sun-disk
+  - Lookup tables for transmittance, view of the sky, multiscattering, and aerial perspective
+- Ocean surface lighting sums contributions from sky-dome, direct sunlight, and underwater up-scattering
+- Able to display most intermediate resources (such as the complex amplitudes of the ocean FFT spectrum) to the screen
+
 ## About
 
 Work in progress
+
+## Further Work
+
+- Improve the tiling to make it aperiodic, see [[7]](#lutz-2024) for an option for the technique
+- Better level-of-detail for the distant ocean
+  - Currently displacement maps are sampled with mipmaps and anisotropic filtering, this still leads to instability when the camera moves due to the unstable vertex positions of the ocean surface mesh
+  - The distant ocean needs to be modelled in a way that captures the variance of the slopes, potentially see the BRDF technique in [[3]](#bruneton-2010)
+- The ocean surface needs a more realistic lighting model. It is currently lacking:
+  - Light transmitting through waves
+  - Secondary bounces
+  - Refraction
+  - Accurate estimation of the luminance from underwater
+- More realistic foam and spray
+  - Handle loops in wave crests
+- Underwater camera
+- Clouds
+- Volumetric shadows
+- Moon
+- Smooth the sun-disk
 
 ## Citations
 

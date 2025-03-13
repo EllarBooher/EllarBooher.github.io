@@ -7,14 +7,14 @@
   - FFT acceleration for millions of waves instead of a few dozen
   - Gravity-waves with directional spreading and JONSWAP spectrum
   - Parameterized wind
-  - Cascades that divide full frequency spectrum for more detail
+  - Cascades that subdivide full frequency spectrum for more detail
   - Foam that forms and dissipates based on surface jacobian
   - Ocean surface mesh projected from screen-space to world-space
   - Rasterization into GBuffer with per vertex displacement and per fragment normals
 - Atmosphere
   - Dynamic time of day
-  - Raymarched scattering integral of directional light contribution
-  - Atmosphere medium with Rayleigh, Mie, and Ozone scattering
+  - Scattering integral estimated via raymarching
+  - Medium with Rayleigh, Mie, and Ozone scattering
   - Multiple scattering and aerial perspective
   - Composited sun-disk
   - Lookup tables for transmittance, view of the sky, multiscattering, and aerial perspective

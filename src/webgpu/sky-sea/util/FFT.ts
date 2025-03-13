@@ -42,7 +42,7 @@ const REQUIRED_OUTPUT_FORMAT: GPUTextureFormat = "rgba16float";
  */
 export class DFFTResources {
 	private parametersUBO: DFFTParametersUBO;
-	private intermediateDFTs: GPUBuffer;
+	private butterfliesBuffer: GPUBuffer;
 
 	private gridSize3D: {
 		width: number;
@@ -64,14 +64,14 @@ export class DFFTResources {
 
 	/*
 	 * @group(0) @binding(0) var<uniform> u_parameters: DFFTParameters;
-	 * @group(0) @binding(1) var<storage, write> out_intermediate_dfts_log2n_by_n: array<TwoPointDFT>;
+	 * @group(0) @binding(1) var<storage, write> out_butterflies_log2n_by_n: array<TwoPointButterfly>;
 	 */
-	private intermediateDFTsBindGroup: GPUBindGroup;
-	private intermediateDFTsKernel: GPUComputePipeline;
+	private butterfliesBindGroup: GPUBindGroup;
+	private computeButterfliesKernel: GPUComputePipeline;
 
 	/*
 	 * @group(0) @binding(0) var<uniform> u_parameters: DFFTParameters;
-	 * @group(0) @binding(1) var<storage, read> intermediate_dfts_log2n_by_n: array<TwoPointDFT>;
+	 * @group(0) @binding(1) var<storage, read> butterflies_log2n_by_n: array<TwoPointButterfly>;
 	 * @group(0) @binding(2) var<storage, read_write> buffer_0: array<vec2<f32>>;
 	 * @group(0) @binding(3) var<storage, read_write> buffer_1: array<vec2<f32>>;
 	 * @group(0) @binding(4) var<uniform> step_counter: u32;
@@ -123,10 +123,10 @@ export class DFFTResources {
 
 		this.parametersUBO.writeToGPU(device.queue);
 
-		const TWO_POINT_DFT_SIZE_BYTES = 16;
-		this.intermediateDFTs = device.createBuffer({
+		const DFFT_BUTTERFLY_SIZE_BYTES = 16;
+		this.butterfliesBuffer = device.createBuffer({
 			label: "DFFT Precompute Stage Steps",
-			size: log2GridSize * gridSize * TWO_POINT_DFT_SIZE_BYTES,
+			size: log2GridSize * gridSize * DFFT_BUTTERFLY_SIZE_BYTES,
 			usage: GPUBufferUsage.STORAGE,
 		});
 
@@ -151,7 +151,7 @@ export class DFFTResources {
 			],
 		});
 
-		this.intermediateDFTsBindGroup = device.createBindGroup({
+		this.butterfliesBindGroup = device.createBindGroup({
 			label: "DFFT Precompute Stage Group 0",
 			layout: precomputeBindGroup0Layout,
 			entries: [
@@ -163,7 +163,7 @@ export class DFFTResources {
 				},
 				{
 					binding: 1,
-					resource: { buffer: this.intermediateDFTs },
+					resource: { buffer: this.butterfliesBuffer },
 				},
 			],
 		});
@@ -173,7 +173,7 @@ export class DFFTResources {
 			bindGroupLayouts: [precomputeBindGroup0Layout],
 		});
 
-		this.intermediateDFTsKernel = device.createComputePipeline({
+		this.computeButterfliesKernel = device.createComputePipeline({
 			label: "DFFT Precompute Stage",
 			compute: {
 				module: shaderModule,
@@ -269,7 +269,7 @@ export class DFFTResources {
 				},
 				{
 					binding: 1,
-					resource: { buffer: this.intermediateDFTs },
+					resource: { buffer: this.butterfliesBuffer },
 				},
 				{
 					binding: 2,
@@ -366,8 +366,8 @@ export class DFFTResources {
 		const passEncoder = commandEncoder.beginComputePass({
 			label: "DFFT Precompute Steps",
 		});
-		passEncoder.setPipeline(this.intermediateDFTsKernel);
-		passEncoder.setBindGroup(0, this.intermediateDFTsBindGroup);
+		passEncoder.setPipeline(this.computeButterfliesKernel);
+		passEncoder.setBindGroup(0, this.butterfliesBindGroup);
 		passEncoder.dispatchWorkgroups(gridSize / 2 / 2, 1);
 		passEncoder.end();
 

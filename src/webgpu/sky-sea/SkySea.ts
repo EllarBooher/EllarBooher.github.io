@@ -234,18 +234,18 @@ function setupUI(
 		debugFolder
 			.add(paramsToBind.debugCamera, "translationX")
 			.name("Camera X")
-			.min(-100.0)
-			.max(100.0),
+			.min(-5000.0)
+			.max(5000.0),
 		debugFolder
 			.add(paramsToBind.debugCamera, "translationY")
 			.name("Camera Y")
 			.min(10.0)
-			.max(1000.0),
+			.max(5000.0),
 		debugFolder
 			.add(paramsToBind.debugCamera, "translationZ")
 			.name("Camera Z")
-			.min(-100.0)
-			.max(100.0),
+			.min(-5000.0)
+			.max(5000.0),
 
 		debugFolder
 			.add(paramsToBind.debugCamera, "eulerAnglesX")

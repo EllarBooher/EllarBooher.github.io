@@ -161,13 +161,13 @@ fn getOceanSurfaceDisplacement(
 
 fn projectNDCToOceanSurface(
 	ndc: vec2<f32>,
-	ndc_offset: vec2<f32>,
+	horizon_distance: f32,
 	camera: Camera,
 ) -> vec3<f32>
 {
 	let near_plane = 1.0;
 	let direction_view_space = camera.inv_proj * vec4<f32>(
-		ndc + ndc_offset,
+		ndc,
 		near_plane,
 		1.0
 	);
@@ -179,31 +179,40 @@ fn projectNDCToOceanSurface(
 		direction_world,
 		u_global.atmosphere.planet_radius_Mm * METERS_PER_MM
 	);
-	let t = mix(10000.0, ocean_hit.t0, f32(ocean_hit.hit && ocean_hit.t0 > 0.0));
 
-	if (ocean_hit.hit && ocean_hit.t0 > 0.0)
+	if(!ocean_hit.hit)
 	{
-		return camera.position.xyz + ocean_hit.t0 * direction_world;
+		// Let these vertices get depth culled, it's hard to salvage them
+		return vec3<f32>(0.0, -100000.0, 0.0);
 	}
 
-	return normalize(camera.position.xyz + 10000.0 * direction_world) * u_global.atmosphere.planet_radius_Mm * METERS_PER_MM - vec3<f32>(0.0, u_global.atmosphere.planet_radius_Mm * METERS_PER_MM, 0.0);
+	// Hacky way to snap to horizon, since raycasting can be very inaccurate at the edge
+	let t = mix(
+		ocean_hit.t0,
+		horizon_distance,
+		smoothstep(0.2, 1.0, ocean_hit.t0 / horizon_distance)
+	);
+	let flat_position = camera.position.xyz + t * direction_world;
+	let planet_radius = u_global.atmosphere.planet_radius_Mm * METERS_PER_MM;
+	return planet_radius * normalize(flat_position + vec3<f32>(0.0, planet_radius, 0.0))
+		- vec3<f32>(0.0, planet_radius, 0.0);
 }
 fn projectNDCToOceanSurfaceWithPivot(
 	ndc: vec2<f32>,
-	ndc_offset: vec2<f32>,
+	horizon_distance: f32,
 	camera: Camera,
 	pivot: vec3<f32>,
 ) -> vec3<f32>
 {
-	let world_position = projectNDCToOceanSurface(ndc, ndc_offset, camera);
+	let world_position = projectNDCToOceanSurface(ndc,horizon_distance,camera);
 	let pivot_offset = world_position - pivot;
 	let pivot_distance = length(pivot_offset);
 
 	/*
 	 * Stretch all points away from a pivot, which should be some sort of
-	 * "center" of the projected ocean surface quad. This covers gaps at the
-	 * edges when waves grow too large, while being reactive to the shape of
-	 * the quad.
+	 * "center" of the projected ocean surface. This covers gaps at the
+	 * edges when waves grow too large, while being reactive to the overall
+	 * shape of the ocean surface.
 	 *
 	 * Some other solutions that might work, but weren't chosen over this due
 	 * to being too complicated or difficult to make work nicely:
@@ -279,94 +288,32 @@ fn screenSpaceWarped(@builtin(vertex_index) index : u32) -> VertexOut
 
 	let ndc_space_coord = mix(ndc_min, ndc_max, vert_coord);
 
+	let planet_radius = u_global.atmosphere.planet_radius_Mm * METERS_PER_MM;
+	let camera_radius = length(ocean_camera.position.xyz + vec3<f32>(0.0, planet_radius, 0.0));
+	let horizon_distance = sqrt(camera_radius * camera_radius - planet_radius * planet_radius);
+
 	let center_position = projectNDCToOceanSurface(
 		mix(ndc_min, ndc_max, 0.5),
-		vec2<f32>(0.0,0.0),
+		horizon_distance,
 		ocean_camera,
 	);
 
 	let cell_world_position = projectNDCToOceanSurfaceWithPivot(
 		ndc_space_coord,
-		vec2<f32>(0.0,0.0),
+		horizon_distance,
 		ocean_camera,
 		center_position
 	);
-	let neighbor_world_position = projectNDCToOceanSurfaceWithPivot(
-		ndc_space_coord,
-		vec2<f32>(1.0) / f32(u_settings.vertex_size - 1u),
-		ocean_camera,
-		center_position
-	);
-	let pixel_neighbor_world_position = projectNDCToOceanSurfaceWithPivot(
-		ndc_space_coord,
-		vec2<f32>(1.0) / u_settings.gbuffer_extent,
-		ocean_camera,
-		center_position
-	);
-
-	var cascade_position_weights = array<f32, CASCADE_CAPACITY>(1,1,1,1);
-	var cascade_normal_weights = array<f32, CASCADE_CAPACITY>(1,1,1,1);
 
 	/*
-	 * Disable this since mipmapping is good enough.
-	 * The eventual goal to enable this would be to transition to a
-	 * distant ocean BRDF in order to replace the normal perturbations we filter
-	 * out.
+	 * Weight further vertices so they displace less and don't disrupt the
+	 * horizon. It's hard to guarantee this with distances alone. Pretty hacky.
 	 */
-	const WITH_NYQUIST_FILTERING = false;
-	if(WITH_NYQUIST_FILTERING)
-	{
-		/*
-		* When projecting this grid of screen-space triangles to the ocean, each
-		* vertex and fragment is a sample of our ocean wave data. We don't want to
-		* sample waves outside the nyquist limit for a given cell/pixel.
-		*
-		* We filter cascades' effect on POSITION by the sample rate of the entire
-		* triangle/cell, i.e. per vertex.
-		*
-		* We filter cascades' effect on NORMAL by the sample rate of each pixel,
-		* i.e. per fragment.
-		*
-		* These criteria are distinct since normals are per pixel, while
-		* displacement visually relies on triangle rasterization and visible
-		* feature detail is bounded by the final distance of vertices.
-		*/
+	let fraction_to_horizon = distance(cell_world_position, ocean_camera.position.xyz) / horizon_distance;
+	let weight = 1.0 - smoothstep(0.3, 0.5, fraction_to_horizon);
 
-		// TODO: this is hardcoded right now, but should be updated as wave initial amplitudes are changed
-		const WAVE_NUMBER_FENCE_POSTS = array<f32, 5>(
-			0.001,
-			8.042477193189871,
-			32.169908772759484,
-			160.8495438637974,
-			1000
-		);
-
-		// Any wave with wavenumber greater than this should NOT be sampled
-		let cell_nyquist_wavenumber = (2.0 * PI) / (distance(neighbor_world_position, cell_world_position) * 2.0);
-		let pixel_nyquist_wavenumber = (2.0 * PI) / (distance(pixel_neighbor_world_position, cell_world_position) * 2.0);
-
-		for(var cascade = 0u; cascade < textureNumLayers(Dx_Dy_Dz_Dxdz_spatial); cascade++)
-		{
-			let wave_number_min = WAVE_NUMBER_FENCE_POSTS[cascade];
-			let wave_number_max = WAVE_NUMBER_FENCE_POSTS[cascade + 1u];
-
-			let wave_number_concentration = mix(wave_number_min, wave_number_max, 0.15);
-
-			let position_weight = 1.0 - smoothstep(
-				cell_nyquist_wavenumber * 1.0,
-				cell_nyquist_wavenumber * 2.5,
-				wave_number_concentration
-			);
-			let normal_weight = 1.0 - smoothstep(
-				pixel_nyquist_wavenumber * 1.0,
-				pixel_nyquist_wavenumber * 3.0,
-				wave_number_concentration
-			);
-
-			cascade_position_weights[cascade] = position_weight;
-			cascade_normal_weights[cascade] = normal_weight;
-		}
-	}
+	let cascade_position_weights = array<f32, CASCADE_CAPACITY>(weight,weight,weight,weight);
+	let cascade_normal_weights = array<f32, CASCADE_CAPACITY>(weight,weight,weight,weight);
 
 	let global_uv = cell_world_position.xz;
 	let displacement_result = getOceanSurfaceDisplacement(

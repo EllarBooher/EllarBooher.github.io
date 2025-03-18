@@ -267,6 +267,14 @@ const AppLoader = function AppLoader({
 		</div>
 	);
 
+	if (navigator.gpu === undefined) {
+		return (
+			<div className="sample-text">
+				<p>{`Your browser does not support WebGPU. Please try another.`}</p>
+			</div>
+		);
+	}
+
 	return (
 		<>
 			{initialized ? (

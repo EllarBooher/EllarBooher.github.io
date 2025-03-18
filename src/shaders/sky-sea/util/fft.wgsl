@@ -8,7 +8,7 @@ const TWO_PI = 6.28318530717958647693;
  */
 
 /*
- * Decimation-in-time Cooley-Tukey Inverse Discrete Fast Fourier Transform
+ * Decimation-in-time Inverse Discrete Fast Fourier Transform
  * Performed on a Square 2D Grid
  */
 
@@ -22,6 +22,8 @@ struct DFFTParameters
 /*
  * A two-point DFT, used as the atomic step in the recursive DFFT algorithm. A
  * single twist in the so-called "butterfly" diagram of an FFT.
+ * Butterfly indices are generated with the Stockham formulation, meaning that
+ * no permutation step is required before performing the actual algorithm.
  */
 struct TwoPointButterfly
 {

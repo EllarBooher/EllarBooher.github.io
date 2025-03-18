@@ -60,7 +60,7 @@ export default memo(function LandingPage(): JSX.Element {
 		webGPUCards.push(
 			<DisplayCard
 				key={key}
-				hyperlink={`/webgpu-samples?sample=${key}`}
+				hyperlink={`/webgpu?sample=${key}`}
 				externalLink={false}
 				thumbnailAssets={[]}
 				thumbnailAltTexts={[]}

@@ -5,7 +5,7 @@ import { defaultSample, samplesBySearchParam } from "./webgpu/Samples";
 
 const pathSegmentToTitles = new Map<string, string>([
 	["", "Estelle Booher"],
-	["webgpu-samples", "WebGPU Samples"],
+	["webgpu", "WebGPU Samples"],
 ]);
 
 export const NavigationHeader = memo(function NavigationHeader() {
@@ -39,7 +39,7 @@ export const NavigationHeader = memo(function NavigationHeader() {
 	}
 
 	const sampleQueryParam = searchParams.get("sample");
-	if (sampleQueryParam && location.pathname == "/webgpu-samples") {
+	if (sampleQueryParam && location.pathname == "/webgpu") {
 		navSteps.push(
 			<Fragment key="sample-caboose">
 				{" > "}

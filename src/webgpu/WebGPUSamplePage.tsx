@@ -297,7 +297,7 @@ export default memo(function WebGPUSamplePage(): JSX.Element {
 	const sampleNavCards: ReactElement[] = [];
 
 	samplesBySearchParam.forEach((value, key) => {
-		const sampleLink = `/webgpu-samples?sample=${key}`;
+		const sampleLink = `/webgpu?sample=${key}`;
 		sampleSidebarLinks.push(
 			<li key={key}>
 				<Link to={sampleLink} key={key}>

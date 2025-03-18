@@ -18,7 +18,7 @@ export default function staticAssetPlugin({
 			if (extensions.some((value) => id.endsWith(value))) {
 				return {
 					code: `
-		  export default \`${src}\`;
+		  export default \`${src.replaceAll("`", "\\`")}\`;
 		`,
 					map: { mappings: "" },
 				} satisfies TransformResult;

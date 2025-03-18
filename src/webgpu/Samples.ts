@@ -11,8 +11,8 @@ import { RendererAppConstructor } from "./RendererApp";
  * The display and initialization properties of a single WebGPU sample.
  * @prop {string} name - A pretty-formatted name labelling the sample.
  * @prop {string} description - A short description for the sample.
- * @prop {string} [projectFolder] - An optional name for the folder that
- * 	contains the README.md for the project, at the same level as this module.
+ * @prop {string} projectFolder - The name for the folder that contains the
+ *  README.md and source for the sample, at the same level as this module.
  * @prop {ReadonlyMap<keyof GPUSupportedLimits, number>} requiredLimits   - A
  *  set of WebGPU limits that running the sample requires.
  * @prop {ReadonlySet<GPUFeatureName>} requiredFeatures - A set of WebGPU
@@ -25,7 +25,7 @@ import { RendererAppConstructor } from "./RendererApp";
 export interface SampleEntry {
 	name: string;
 	description: string;
-	projectFolder?: string;
+	projectFolder: string;
 	requiredLimits: ReadonlyMap<keyof GPUSupportedLimits, number>;
 	requiredFeatures: ReadonlySet<GPUFeatureName>;
 	optionalFeatures: ReadonlySet<GPUFeatureName>;
@@ -38,6 +38,7 @@ export interface SampleEntry {
 export const defaultSample: SampleEntry = {
 	name: "Hello Cube",
 	description: "Tests WebGPU functionality with a simple spinning cube.",
+	projectFolder: "hello-cube",
 	requiredLimits: new Map(),
 	requiredFeatures: new Set(),
 	optionalFeatures: new Set([
@@ -59,7 +60,7 @@ export const defaultSample: SampleEntry = {
 		"dual-source-blending",
 	]),
 	import: (): Promise<RendererAppConstructor> =>
-		import("./HelloCube").then((value) => {
+		import("./hello-cube/HelloCube").then((value) => {
 			return value.HelloCubeAppConstructor;
 		}),
 };

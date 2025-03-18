@@ -1,6 +1,6 @@
-import HelloCubePak from "../shaders/hello_cube.wgsl";
+import HelloCubePak from "../../shaders/hello_cube.wgsl";
 import { mat4 } from "wgpu-matrix";
-import { RendererApp, RendererAppConstructor } from "./RendererApp";
+import { RendererApp, RendererAppConstructor } from "../RendererApp";
 import { GUI } from "lil-gui";
 
 // Draw a simple cube

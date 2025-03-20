@@ -305,7 +305,7 @@ export class RenderOutputController {
 					"FFTWaveTurbulenceJacobian",
 				"[FFT Waves] Spatial Domain (Dx, Dy, Dz, Dxdz)":
 					"FFTWaveDx_Dy_Dz_Dxdz_Spatial",
-				"[FFT Waves] Spatial Domain (Dydx, Dydz, Dxdx, Dzdx)":
+				"[FFT Waves] Spatial Domain (Dydx, Dydz, Dxdx, Dzdz)":
 					"FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial",
 			})
 			.name("Render Output")

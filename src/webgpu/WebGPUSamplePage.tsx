@@ -301,6 +301,35 @@ const AppLoader = function AppLoader({
 	);
 };
 
+interface WindowDimensions {
+	width: number;
+	height: number;
+}
+
+function getWindowDimensions(): WindowDimensions {
+	return {
+		width: window.innerWidth,
+		height: window.innerHeight,
+	};
+}
+
+function useWindowDimensions(): WindowDimensions {
+	const [windowDimensions, setWindowDimensions] = useState(
+		getWindowDimensions()
+	);
+
+	useEffect(() => {
+		function handleResize(): void {
+			setWindowDimensions(getWindowDimensions());
+		}
+
+		window.addEventListener("resize", handleResize);
+		return (): void => window.removeEventListener("resize", handleResize);
+	}, []);
+
+	return windowDimensions;
+}
+
 /**
  * The body of the WebGPU sample page, with a sidebar of links to all of the
  * samples. It loads the sample via the URL search param with key 'sample'. If
@@ -309,6 +338,7 @@ const AppLoader = function AppLoader({
  */
 export default memo(function WebGPUSamplePage(): JSX.Element {
 	const [searchParams, setSearchParams] = useSearchParams();
+	const { width } = useWindowDimensions();
 
 	const sampleSidebarLinks: ReactElement[] = [];
 	const sampleNavCards: ReactElement[] = [];
@@ -373,7 +403,7 @@ export default memo(function WebGPUSamplePage(): JSX.Element {
 		<>
 			<NavigationHeader />
 			<main className="sample-main">
-				{sampleSidebar}
+				{width > 768 ? sampleSidebar : undefined}
 				<div className="sample-body">
 					{app}
 					<EmbeddedReadme projectFolder={sample.projectFolder} />

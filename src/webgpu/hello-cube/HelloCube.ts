@@ -42,6 +42,10 @@ class HelloCubeApp implements RendererApp {
 
 	private supportedFeatures: GPUSupportedFeatures;
 
+	destroy(): void {
+		this.device.destroy();
+	}
+
 	presentationInterface(): { device: GPUDevice; format: GPUTextureFormat } {
 		return {
 			device: this.device,

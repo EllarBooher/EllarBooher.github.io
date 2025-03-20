@@ -251,6 +251,7 @@ const AppLoader = function AppLoader({
 
 		return (): void => {
 			shouldUpdate = false;
+			appRef.current?.destroy?.();
 		};
 	}, [sample, handleError]);
 

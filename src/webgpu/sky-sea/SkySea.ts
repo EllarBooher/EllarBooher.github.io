@@ -314,6 +314,10 @@ class SkySeaApp implements RendererApp {
 	private dummyFrameCounter: number;
 	private float32Filterable: boolean;
 
+	destroy(): void {
+		this.device.destroy();
+	}
+
 	presentationInterface(): {
 		device: GPUDevice;
 		format: GPUTextureFormat;

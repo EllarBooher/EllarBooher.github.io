@@ -20,6 +20,7 @@ export interface RendererApp {
 		deltaTimeMilliseconds: number
 	) => void;
 	setupUI?: (gui: GUI) => void;
+	destroy(): void;
 }
 
 /**

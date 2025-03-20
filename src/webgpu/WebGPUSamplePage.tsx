@@ -14,6 +14,47 @@ import "./WebGPUSamplePage.css";
 import { NavigationHeader } from "../NavigateLink";
 import EmbeddedReadme from "./EmbeddedReadme";
 
+const CanvasScreenshotWidget = ({
+	canvas,
+}: {
+	canvas: React.RefObject<HTMLCanvasElement>;
+}): JSX.Element => {
+	const [screenshotSource, setScreenshotSource] = useState<string>();
+
+	return (
+		<div
+			style={{
+				display: "flex",
+				flexDirection: "column",
+				position: "absolute",
+				width: "10rem",
+				height: "10rem",
+			}}
+		>
+			<button
+				style={{ alignSelf: "stretch" }}
+				onClick={() => {
+					const dataURL = canvas.current?.toDataURL("image/png");
+
+					setScreenshotSource(dataURL);
+				}}
+			>
+				Screenshot
+			</button>
+
+			{screenshotSource !== undefined ? (
+				<img
+					style={{
+						aspectRatio: "1",
+					}}
+					src={screenshotSource}
+					alt={"From Canvas"}
+				/>
+			) : undefined}
+		</div>
+	);
+};
+
 /**
  * This component contains the UI and canvas HTML elements used to display and
  * control the WebGPU sample app, while also handling the render loop and
@@ -175,6 +216,9 @@ const RenderingCanvas = function RenderingCanvas({
 				className={guiDocked ? undefined : "gui-pane-floating"}
 				ref={guiPaneRef}
 			/>
+			{import.meta.env.DEV ? (
+				<CanvasScreenshotWidget canvas={canvasRef} />
+			) : undefined}
 		</>
 	);
 };

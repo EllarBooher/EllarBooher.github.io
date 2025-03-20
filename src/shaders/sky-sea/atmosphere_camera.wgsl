@@ -349,7 +349,7 @@ fn sampleGeometryLuminance(
 
     let surface_position = position + direction * distance;
 
-	// Reflected luminance from the sky
+	// Perfect reflection of sky dome
     let reflection_direction = reflect(normalize(direction), normalize(material.normal));
 	let sky_luminance = sampleSkyViewLUT(atmosphere, surface_position, reflection_direction);
 	light_luminance_transfer +=
@@ -357,7 +357,13 @@ fn sampleGeometryLuminance(
 		* sky_luminance
 		* computeFresnelPerfectReflection(material, reflection_direction);
 
-	// Reflected and scattered luminance directly from light
+	// Diffuse scattering from sky dome
+	let sky_visible_solid_angle = 2.0 * PI * (0.5 * dot(vec3<f32>(0.0, 1.0, 0.0), material.normal) + 0.5);
+	let sky_indirect_luminance = sampleSkyViewLUT(atmosphere, surface_position, reflect(-light_direction, vec3<f32>(0.0,1.0,0.0)));
+	let sea_luminance = diffuseBRDF(material) * sky_visible_solid_angle * sky_indirect_luminance;
+	light_luminance_transfer += transmittance_to_surface * sea_luminance;
+
+	// Reflected/scattered direct sunlight
 	let surface_transmittance_to_sun = sampleTransmittanceLUT_Ray(
 		transmittance_lut,
         lut_sampler,
@@ -375,12 +381,6 @@ fn sampleGeometryLuminance(
 			diffuseBRDF(material),
 			computeFresnelMicrofacet(material, light_direction, -direction)
 		);
-
-	// Scattered luminance from below the sea (mostly near-surface interactions)
-	let sky_visible_solid_angle = mix(0.0, 2.0 * PI, 0.5 * dot(vec3<f32>(0.0, 1.0, 0.0), material.normal) + 0.5);
-	let sky_indirect_luminance = sampleSkyViewLUT(atmosphere, surface_position, reflect(-light_direction, vec3<f32>(0.0,1.0,0.0)));
-	let sea_luminance = diffuseBRDF(material) * sky_visible_solid_angle * sky_indirect_luminance;
-	light_luminance_transfer += transmittance_to_surface * sea_luminance;
 
     return light_luminance_transfer;
 }

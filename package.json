@@ -6,6 +6,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
+		"dev-host": "vite --host",
 		"build": "vite build",
 		"lint": "eslint . --cache-location './node_modules/@eslint/.eslintcache' && stylelint \"**/*.css\"",
 		"prod": "concurrently \"npm run lint\" \"npm run build\"",

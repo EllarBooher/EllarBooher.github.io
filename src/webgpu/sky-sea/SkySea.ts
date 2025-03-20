@@ -35,6 +35,32 @@ const AERIAL_PERSPECTIVE_LUT_EXTENT = {
 
 const RENDER_SCALES = [0.25, 0.3333, 0.5, 0.75, 1.0, 1.5, 2.0, 4.0];
 
+interface PerformanceConfig {
+	renderScale: number;
+	fftGridSizeLog2: number;
+	oceanSurfaceVertexSize: number;
+}
+const PERFORMANCE_CONFIG_NAMES = ["bad", "good"] as const;
+type PerformanceConfigName = (typeof PERFORMANCE_CONFIG_NAMES)[number];
+const PERFORMANCE_CONFIGS = new Map<PerformanceConfigName, PerformanceConfig>([
+	[
+		"bad",
+		{
+			renderScale: 0.5,
+			fftGridSizeLog2: 5, // 32
+			oceanSurfaceVertexSize: 128,
+		},
+	],
+	[
+		"good",
+		{
+			renderScale: 1.0,
+			fftGridSizeLog2: 9, // 512
+			oceanSurfaceVertexSize: 1024,
+		},
+	],
+]);
+
 interface CameraParameters {
 	translationX: number;
 	translationY: number;
@@ -288,31 +314,275 @@ function setupUI(
 	debugCameraControllers.forEach((c) => c.enable(false));
 }
 
-class SkySeaApp implements RendererApp {
-	private transmittanceLUTPassResources: TransmittanceLUTPassResources;
-	private multiscatterLUTPassResources: MultiscatterLUTPassResources;
-	private skyviewLUTPassResources: SkyViewLUTPassResources;
-	private aerialPerspectiveLUTPassResources: AerialPerspectiveLUTPassResources;
-	private fftWaveSpectrumResources: FFTWaveSpectrumResources;
-	private waveSurfaceDisplacementPassResources: WaveSurfaceDisplacementPassResources;
-	private atmosphereCameraPassResources: AtmosphereCameraPassResources;
-	private fullscreenQuadPassResources: FullscreenQuadPassResources;
+interface WebGPUResources {
+	transmittanceLUTPassResources: TransmittanceLUTPassResources;
+	multiscatterLUTPassResources: MultiscatterLUTPassResources;
+	skyviewLUTPassResources: SkyViewLUTPassResources;
+	aerialPerspectiveLUTPassResources: AerialPerspectiveLUTPassResources;
+	fftWaveSpectrumResources: FFTWaveSpectrumResources;
+	waveSurfaceDisplacementPassResources: WaveSurfaceDisplacementPassResources;
+	atmosphereCameraPassResources: AtmosphereCameraPassResources;
+	fullscreenQuadPassResources: FullscreenQuadPassResources;
 
-	private gbuffer: GBuffer;
+	gbuffer: GBuffer;
+
+	globalUBO: GlobalUBO;
+}
+
+function initializeResources(
+	device: GPUDevice,
+	performanceConfig: PerformanceConfig,
+	presentFormat: GPUTextureFormat
+): WebGPUResources {
+	const gbuffer = new GBuffer(device, { width: 1, height: 1 });
+
+	const globalUBO = new GlobalUBO(device);
+	globalUBO.writeToGPU(device.queue);
+
+	const transmittanceLUTPassResources = new TransmittanceLUTPassResources(
+		device,
+		TRANSMITTANCE_LUT_EXTENT,
+		globalUBO
+	);
+
+	const float32Filterable = device.features.has("float32-filterable");
+
+	const multiscatterLUTPassResources = new MultiscatterLUTPassResources(
+		device,
+		MULTISCATTER_LUT_EXTENT,
+		transmittanceLUTPassResources.view,
+		float32Filterable,
+		globalUBO
+	);
+
+	const skyviewLUTPassResources = new SkyViewLUTPassResources(
+		device,
+		SKYVIEW_LUT_EXTENT,
+		transmittanceLUTPassResources.view,
+		multiscatterLUTPassResources.view,
+		float32Filterable,
+		globalUBO
+	);
+
+	const aerialPerspectiveLUTPassResources =
+		new AerialPerspectiveLUTPassResources(
+			device,
+			AERIAL_PERSPECTIVE_LUT_EXTENT,
+			transmittanceLUTPassResources.view,
+			multiscatterLUTPassResources.view,
+			float32Filterable,
+			globalUBO
+		);
+
+	const fftWaveSpectrumResources = new FFTWaveSpectrumResources(
+		device,
+		globalUBO,
+		performanceConfig.fftGridSizeLog2
+	);
+	const fftWaveViews = fftWaveSpectrumResources.views();
+
+	const waveSurfaceDisplacementPassResources =
+		new WaveSurfaceDisplacementPassResources(
+			device,
+			globalUBO,
+			gbuffer.formats,
+			fftWaveSpectrumResources.displacementMaps()
+		);
+
+	const atmosphereCameraPassResources = new AtmosphereCameraPassResources(
+		device,
+		gbuffer.readGroupLayout,
+		transmittanceLUTPassResources.view,
+		multiscatterLUTPassResources.view,
+		skyviewLUTPassResources.view,
+		aerialPerspectiveLUTPassResources.view,
+		float32Filterable,
+		globalUBO
+	);
+
+	const fullscreenQuadPassResources = new FullscreenQuadPassResources(
+		device,
+		presentFormat
+	);
+
+	const gbufferRenderables = gbuffer.colorRenderables();
+
+	(
+		[
+			[
+				"Scene",
+				new RenderOutputTexture(
+					atmosphereCameraPassResources.outputColor
+				),
+			],
+			[
+				"GBufferColor",
+				gbufferRenderables.colorWithSurfaceWorldDepthInAlpha,
+			],
+			[
+				"GBufferNormal",
+				gbufferRenderables.normalWithSurfaceFoamStrengthInAlpha,
+			],
+			[
+				"AtmosphereTransmittanceLUT",
+				new RenderOutputTexture(transmittanceLUTPassResources.texture),
+			],
+			[
+				"AtmosphereMultiscatterLUT",
+				new RenderOutputTexture(multiscatterLUTPassResources.texture),
+			],
+			[
+				"AtmosphereSkyviewLUT",
+				new RenderOutputTexture(skyviewLUTPassResources.texture),
+			],
+			[
+				"AtmosphereAerialPerspectiveLUT",
+				new RenderOutputTexture(
+					aerialPerspectiveLUTPassResources.texture
+				),
+			],
+			["FFTWaveSpectrumGaussianNoise", fftWaveViews.gaussianNoise],
+			["FFTWaveInitialAmplitude", fftWaveViews.initialAmplitude],
+			[
+				"FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude",
+				fftWaveViews.packed_Dx_plus_iDy_Dz_iDxdz_Amplitude,
+			],
+			[
+				"FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude",
+				fftWaveViews.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,
+			],
+			["FFTWaveTurbulenceJacobian", fftWaveViews.turbulenceJacobian],
+			[
+				"FFTWaveDx_Dy_Dz_Dxdz_Spatial",
+				fftWaveViews.Dx_Dy_Dz_Dxdz_Spatial,
+			],
+			[
+				"FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial",
+				fftWaveViews.Dydx_Dydz_Dxdx_Dzdz_Spatial,
+			],
+		] as [RenderOutputTag, RenderOutputTexture][]
+	).forEach(([tag, texture]) => {
+		fullscreenQuadPassResources.setOutput(device, tag, texture);
+	});
+
+	const commandEncoder = device.createCommandEncoder({
+		label: "Atmosphere LUT Initialization",
+	});
+	transmittanceLUTPassResources.record(commandEncoder);
+	multiscatterLUTPassResources.record(commandEncoder);
+
+	device.queue.submit([commandEncoder.finish()]);
+
+	return {
+		aerialPerspectiveLUTPassResources: aerialPerspectiveLUTPassResources,
+		atmosphereCameraPassResources: atmosphereCameraPassResources,
+		fftWaveSpectrumResources: fftWaveSpectrumResources,
+		fullscreenQuadPassResources: fullscreenQuadPassResources,
+		gbuffer: gbuffer,
+		globalUBO: globalUBO,
+		multiscatterLUTPassResources: multiscatterLUTPassResources,
+		skyviewLUTPassResources: skyviewLUTPassResources,
+		transmittanceLUTPassResources: transmittanceLUTPassResources,
+		waveSurfaceDisplacementPassResources:
+			waveSurfaceDisplacementPassResources,
+	};
+}
+
+function updateGlobalUBO(
+	queue: GPUQueue,
+	globalUBO: GlobalUBO,
+	parameters: SkySeaAppParameters,
+	aspectRatio: number
+): void {
+	globalUBO.data.time.deltaTimeSeconds = parameters.time.deltaTimeSeconds;
+	globalUBO.data.time.timeSeconds = parameters.time.timeSeconds;
+
+	// offset the time so that the app starts during the day
+	const SUN_ROTATION_RAD_PER_HOUR = (2.0 * Math.PI) / 24.0;
+	const SUN_ANOMALY =
+		(12.0 - parameters.orbit.timeHours) * SUN_ROTATION_RAD_PER_HOUR;
+
+	const sunsetDirection = vec3.create(
+		-Math.sin(parameters.orbit.sunsetAzimuthRadians),
+		0.0,
+		Math.cos(parameters.orbit.sunsetAzimuthRadians)
+	);
+	const noonDirection = vec3.create(
+		Math.cos(parameters.orbit.sunsetAzimuthRadians) *
+			Math.cos(parameters.orbit.inclinationRadians),
+		Math.sin(parameters.orbit.inclinationRadians),
+		Math.sin(parameters.orbit.sunsetAzimuthRadians) *
+			Math.cos(parameters.orbit.inclinationRadians)
+	);
+	const sunDirection = vec3.add(
+		vec3.scale(sunsetDirection, Math.sin(SUN_ANOMALY)),
+		vec3.scale(noonDirection, Math.cos(SUN_ANOMALY))
+	);
+	vec3.scale(sunDirection, -1.0, globalUBO.data.light.forward);
+
+	const fov = (60 * Math.PI) / 180;
+	const near = 0.1;
+	const far = 1000;
+	const perspective = mat4.perspective(fov, aspectRatio, near, far);
+
+	const assignToGPUCamera = (
+		destination: Camera,
+		source: CameraParameters
+	): void => {
+		const cameraPos = [
+			source.translationX,
+			source.translationY,
+			source.translationZ,
+			1,
+		];
+		const rotationX = mat4.rotationX(source.eulerAnglesX);
+		const rotationY = mat4.rotationY(source.eulerAnglesY);
+		const rotationZ = mat4.rotationZ(source.eulerAnglesZ);
+
+		const transform = mat4.mul(
+			mat4.translation(vec4.create(...cameraPos)),
+			mat4.mul(rotationY, mat4.mul(rotationX, rotationZ))
+		);
+		const view = mat4.inverse(transform);
+
+		Object.assign<Camera, Camera>(destination, {
+			invProj: mat4.inverse(perspective),
+			invView: transform,
+			projView: mat4.mul(perspective, view),
+			position: vec4.create(...cameraPos),
+			forward: vec4.create(
+				...mat4.multiply(transform, vec4.create(0.0, 0.0, -1.0, 0.0))
+			),
+		});
+	};
+
+	assignToGPUCamera(globalUBO.data.ocean_camera, parameters.oceanCamera);
+	assignToGPUCamera(
+		globalUBO.data.camera,
+		parameters.renderFromOceanPOV
+			? parameters.oceanCamera
+			: parameters.debugCamera
+	);
+
+	globalUBO.writeToGPU(queue);
+}
+
+class SkySeaApp implements RendererApp {
+	private resources: WebGPUResources | undefined;
 	private unscaledResolution: Extent2D;
 
 	private renderOutputController: RenderOutputController;
 	private parameters: SkySeaAppParameters;
 	private performance: PerformanceTracker;
 
-	private globalUBO: GlobalUBO;
+	private performanceConfig: PerformanceConfig;
 
 	private device: GPUDevice;
 
 	quit = false;
 
 	private dummyFrameCounter: number;
-	private float32Filterable: boolean;
+	private benchmarkFrameCounter: number;
 
 	destroy(): void {
 		this.device.destroy();
@@ -324,7 +594,7 @@ class SkySeaApp implements RendererApp {
 	} {
 		return {
 			device: this.device,
-			format: this.fullscreenQuadPassResources.outputFormat,
+			format: this.resources!.fullscreenQuadPassResources.outputFormat,
 		};
 	}
 
@@ -337,10 +607,44 @@ class SkySeaApp implements RendererApp {
 		this.performance.setupUI(gui);
 	}
 
+	setPerformanceConfig(name: PerformanceConfigName) {
+		const newConfig =
+			PERFORMANCE_CONFIGS.get(name) ?? PERFORMANCE_CONFIGS.get("bad")!;
+		const updateNeeded =
+			newConfig.fftGridSizeLog2 !==
+				this.performanceConfig.fftGridSizeLog2 ||
+			newConfig.oceanSurfaceVertexSize !==
+				this.performanceConfig.oceanSurfaceVertexSize ||
+			newConfig.renderScale !== this.performanceConfig.renderScale;
+
+		if (!updateNeeded) {
+			return;
+		}
+
+		this.performanceConfig = newConfig;
+
+		this.resources = initializeResources(
+			this.device,
+			this.performanceConfig,
+			this.resources!.fullscreenQuadPassResources.outputFormat
+		);
+
+		this.parameters.renderScale = this.performanceConfig.renderScale;
+		this.updateResizableResources();
+
+		for (const props of this.resources.fullscreenQuadPassResources.getAllTextureProperties()) {
+			this.renderOutputController.setTextureProperties(props);
+		}
+
+		this.benchmarkFrameCounter = 20.0;
+		this.parameters.orbit.timeHours = 5.2;
+		this.parameters.time.timeSeconds = 0.0;
+	}
+
 	constructor(device: GPUDevice, presentFormat: GPUTextureFormat) {
 		this.device = device;
 
-		this.float32Filterable = device.features.has("float32-filterable");
+		this.performanceConfig = PERFORMANCE_CONFIGS.get("good")!;
 
 		this.renderOutputController = new RenderOutputController();
 		this.parameters = {
@@ -389,161 +693,22 @@ class SkySeaApp implements RendererApp {
 			renderScale: 1.0,
 		};
 
-		this.unscaledResolution = { width: 1.0, height: 1.0 };
+		this.resources = initializeResources(
+			this.device,
+			this.performanceConfig,
+			presentFormat
+		);
+
+		for (const props of this.resources.fullscreenQuadPassResources.getAllTextureProperties()) {
+			this.renderOutputController.setTextureProperties(props);
+		}
+
+		this.unscaledResolution = { width: 128.0, height: 128.0 };
 
 		this.performance = new PerformanceTracker(this.device);
 
 		this.dummyFrameCounter = 10.0;
-
-		this.globalUBO = new GlobalUBO(this.device);
-		this.globalUBO.writeToGPU(this.device.queue);
-
-		this.gbuffer = new GBuffer(device, { width: 1, height: 1 });
-
-		this.transmittanceLUTPassResources = new TransmittanceLUTPassResources(
-			this.device,
-			TRANSMITTANCE_LUT_EXTENT,
-			this.globalUBO
-		);
-
-		this.multiscatterLUTPassResources = new MultiscatterLUTPassResources(
-			this.device,
-			MULTISCATTER_LUT_EXTENT,
-			this.transmittanceLUTPassResources.view,
-			this.float32Filterable,
-			this.globalUBO
-		);
-
-		this.skyviewLUTPassResources = new SkyViewLUTPassResources(
-			this.device,
-			SKYVIEW_LUT_EXTENT,
-			this.transmittanceLUTPassResources.view,
-			this.multiscatterLUTPassResources.view,
-			this.float32Filterable,
-			this.globalUBO
-		);
-
-		this.aerialPerspectiveLUTPassResources =
-			new AerialPerspectiveLUTPassResources(
-				this.device,
-				AERIAL_PERSPECTIVE_LUT_EXTENT,
-				this.transmittanceLUTPassResources.view,
-				this.multiscatterLUTPassResources.view,
-				this.float32Filterable,
-				this.globalUBO
-			);
-
-		this.fftWaveSpectrumResources = new FFTWaveSpectrumResources(
-			this.device,
-			this.globalUBO
-		);
-		const fftWaveViews = this.fftWaveSpectrumResources.views();
-
-		this.waveSurfaceDisplacementPassResources =
-			new WaveSurfaceDisplacementPassResources(
-				this.device,
-				this.globalUBO,
-				this.gbuffer.formats,
-				this.fftWaveSpectrumResources.displacementMaps()
-			);
-
-		this.atmosphereCameraPassResources = new AtmosphereCameraPassResources(
-			this.device,
-			this.gbuffer.readGroupLayout,
-			this.transmittanceLUTPassResources.view,
-			this.multiscatterLUTPassResources.view,
-			this.skyviewLUTPassResources.view,
-			this.aerialPerspectiveLUTPassResources.view,
-			this.float32Filterable,
-			this.globalUBO
-		);
-
-		this.fullscreenQuadPassResources = new FullscreenQuadPassResources(
-			this.device,
-			presentFormat
-		);
-
-		const gbufferRenderables = this.gbuffer.colorRenderables();
-
-		(
-			[
-				[
-					"Scene",
-					new RenderOutputTexture(
-						this.atmosphereCameraPassResources.outputColor
-					),
-				],
-				[
-					"GBufferColor",
-					gbufferRenderables.colorWithSurfaceWorldDepthInAlpha,
-				],
-				[
-					"GBufferNormal",
-					gbufferRenderables.normalWithSurfaceFoamStrengthInAlpha,
-				],
-				[
-					"AtmosphereTransmittanceLUT",
-					new RenderOutputTexture(
-						this.transmittanceLUTPassResources.texture
-					),
-				],
-				[
-					"AtmosphereMultiscatterLUT",
-					new RenderOutputTexture(
-						this.multiscatterLUTPassResources.texture
-					),
-				],
-				[
-					"AtmosphereSkyviewLUT",
-					new RenderOutputTexture(
-						this.skyviewLUTPassResources.texture
-					),
-				],
-				[
-					"AtmosphereAerialPerspectiveLUT",
-					new RenderOutputTexture(
-						this.aerialPerspectiveLUTPassResources.texture
-					),
-				],
-				["FFTWaveSpectrumGaussianNoise", fftWaveViews.gaussianNoise],
-				["FFTWaveInitialAmplitude", fftWaveViews.initialAmplitude],
-				[
-					"FFTWaveDx_plus_iDy_Dz_iDxdz_Amplitude",
-					fftWaveViews.packed_Dx_plus_iDy_Dz_iDxdz_Amplitude,
-				],
-				[
-					"FFTWaveDydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude",
-					fftWaveViews.packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_Amplitude,
-				],
-				["FFTWaveTurbulenceJacobian", fftWaveViews.turbulenceJacobian],
-				[
-					"FFTWaveDx_Dy_Dz_Dxdz_Spatial",
-					fftWaveViews.Dx_Dy_Dz_Dxdz_Spatial,
-				],
-				[
-					"FFTWaveDydx_Dydz_Dxdx_Dzdz_Spatial",
-					fftWaveViews.Dydx_Dydz_Dxdx_Dzdz_Spatial,
-				],
-			] as [RenderOutputTag, RenderOutputTexture][]
-		).forEach(([tag, texture]) => {
-			this.fullscreenQuadPassResources.setOutput(
-				this.device,
-				tag,
-				texture
-			);
-		});
-
-		for (const props of this.fullscreenQuadPassResources.getAllTextureProperties()) {
-			this.renderOutputController.setTextureProperties(props);
-		}
-
-		const commandEncoder = device.createCommandEncoder({
-			label: "Atmosphere LUT Initialization",
-		});
-		this.transmittanceLUTPassResources.record(commandEncoder);
-		this.multiscatterLUTPassResources.record(commandEncoder);
-
-		device.queue.submit([commandEncoder.finish()]);
+		this.benchmarkFrameCounter = 20.0;
 	}
 
 	tickTime(deltaTimeMilliseconds: number): void {
@@ -580,89 +745,6 @@ class SkySeaApp implements RendererApp {
 		}
 	}
 
-	updateGlobalUBO(aspectRatio: number): void {
-		const parameters = this.parameters;
-
-		this.globalUBO.data.time.deltaTimeSeconds =
-			parameters.time.deltaTimeSeconds;
-		this.globalUBO.data.time.timeSeconds = parameters.time.timeSeconds;
-
-		// offset the time so that the app starts during the day
-		const SUN_ROTATION_RAD_PER_HOUR = (2.0 * Math.PI) / 24.0;
-		const SUN_ANOMALY =
-			(12.0 - parameters.orbit.timeHours) * SUN_ROTATION_RAD_PER_HOUR;
-
-		const sunsetDirection = vec3.create(
-			-Math.sin(parameters.orbit.sunsetAzimuthRadians),
-			0.0,
-			Math.cos(parameters.orbit.sunsetAzimuthRadians)
-		);
-		const noonDirection = vec3.create(
-			Math.cos(parameters.orbit.sunsetAzimuthRadians) *
-				Math.cos(parameters.orbit.inclinationRadians),
-			Math.sin(parameters.orbit.inclinationRadians),
-			Math.sin(parameters.orbit.sunsetAzimuthRadians) *
-				Math.cos(parameters.orbit.inclinationRadians)
-		);
-		const sunDirection = vec3.add(
-			vec3.scale(sunsetDirection, Math.sin(SUN_ANOMALY)),
-			vec3.scale(noonDirection, Math.cos(SUN_ANOMALY))
-		);
-		vec3.scale(sunDirection, -1.0, this.globalUBO.data.light.forward);
-
-		const fov = (60 * Math.PI) / 180;
-		const near = 0.1;
-		const far = 1000;
-		const perspective = mat4.perspective(fov, aspectRatio, near, far);
-
-		const assignToGPUCamera = (
-			destination: Camera,
-			source: CameraParameters
-		): void => {
-			const cameraPos = [
-				source.translationX,
-				source.translationY,
-				source.translationZ,
-				1,
-			];
-			const rotationX = mat4.rotationX(source.eulerAnglesX);
-			const rotationY = mat4.rotationY(source.eulerAnglesY);
-			const rotationZ = mat4.rotationZ(source.eulerAnglesZ);
-
-			const transform = mat4.mul(
-				mat4.translation(vec4.create(...cameraPos)),
-				mat4.mul(rotationY, mat4.mul(rotationX, rotationZ))
-			);
-			const view = mat4.inverse(transform);
-
-			Object.assign<Camera, Camera>(destination, {
-				invProj: mat4.inverse(perspective),
-				invView: transform,
-				projView: mat4.mul(perspective, view),
-				position: vec4.create(...cameraPos),
-				forward: vec4.create(
-					...mat4.multiply(
-						transform,
-						vec4.create(0.0, 0.0, -1.0, 0.0)
-					)
-				),
-			});
-		};
-
-		assignToGPUCamera(
-			this.globalUBO.data.ocean_camera,
-			parameters.oceanCamera
-		);
-		assignToGPUCamera(
-			this.globalUBO.data.camera,
-			parameters.renderFromOceanPOV
-				? parameters.oceanCamera
-				: parameters.debugCamera
-		);
-
-		this.globalUBO.writeToGPU(this.device.queue);
-	}
-
 	draw(
 		presentTexture: GPUTexture,
 		aspectRatio: number,
@@ -670,6 +752,10 @@ class SkySeaApp implements RendererApp {
 		deltaTimeMilliseconds: number
 	): void {
 		// Workaround for firefox stalling causing time issues
+
+		if (this.resources === undefined) {
+			return;
+		}
 
 		if (this.dummyFrameCounter > 0) {
 			this.dummyFrameCounter -= 1;
@@ -681,56 +767,75 @@ class SkySeaApp implements RendererApp {
 
 		this.tickTime(deltaTimeMilliseconds);
 
-		this.updateGlobalUBO(aspectRatio);
+		updateGlobalUBO(
+			this.device.queue,
+			this.resources.globalUBO,
+			this.parameters,
+			aspectRatio
+		);
 
 		const commandEncoder = this.device.createCommandEncoder({
 			label: "Main",
 		});
 
-		this.fftWaveSpectrumResources.record(
+		this.resources.fftWaveSpectrumResources.record(
 			this.device,
 			commandEncoder,
 			this.parameters.fourierWavesSettings,
 			this.performance.queueTimestampInterval("FFTWaves")
 		);
 
-		this.waveSurfaceDisplacementPassResources.record(
+		this.resources.waveSurfaceDisplacementPassResources.record(
 			this.device,
 			commandEncoder,
 			this.performance.queueTimestampInterval("OceanSurface"),
-			this.fftWaveSpectrumResources.turbulenceMapIndex,
+			this.resources.fftWaveSpectrumResources.turbulenceMapIndex,
 			{
 				gerstner: this.parameters.oceanSurfaceSettings.gerstner,
 				fft: this.parameters.oceanSurfaceSettings.fft,
 				foamBias: this.parameters.oceanSurfaceSettings.foamBias,
 				foamScale: this.parameters.oceanSurfaceSettings.foamScale,
 			},
-			this.gbuffer
+			this.resources.gbuffer
 		);
 
-		this.skyviewLUTPassResources.record(
+		this.resources.skyviewLUTPassResources.record(
 			commandEncoder,
 			this.performance.queueTimestampInterval("SkyviewLUT")
 		);
-		this.aerialPerspectiveLUTPassResources.record(
+		this.resources.aerialPerspectiveLUTPassResources.record(
 			commandEncoder,
 			this.performance.queueTimestampInterval("AerialPerspectiveLUT")
 		);
-		this.atmosphereCameraPassResources.record(
+		this.resources.atmosphereCameraPassResources.record(
 			commandEncoder,
 			this.performance.queueTimestampInterval("AtmosphereCamera"),
-			this.gbuffer
+			this.resources.gbuffer
 		);
 
-		const output = this.renderOutputController.current();
-		this.fullscreenQuadPassResources.record(
-			this.device,
-			commandEncoder,
-			presentView,
-			output.tag,
-			output.transform,
-			this.performance.queueTimestampInterval("FullscreenQuad")
-		);
+		if (this.benchmarkFrameCounter === 1) {
+			const passedBenchmark = this.performance.averageFPS > 30;
+			console.log(passedBenchmark);
+			if (!passedBenchmark) {
+				this.setPerformanceConfig("bad");
+			}
+		}
+
+		if (this.benchmarkFrameCounter > 0) {
+			this.benchmarkFrameCounter -= 1;
+		}
+
+		if (this.benchmarkFrameCounter === 0) {
+			const output = this.renderOutputController.current();
+			this.resources.fullscreenQuadPassResources.record(
+				this.device,
+				commandEncoder,
+				presentView,
+				output.tag,
+				output.transform,
+				this.performance.queueTimestampInterval("FullscreenQuad")
+			);
+		}
 
 		this.performance.preSubmitCommands(commandEncoder);
 
@@ -740,6 +845,10 @@ class SkySeaApp implements RendererApp {
 	}
 
 	updateResizableResources(): void {
+		if (this.resources === undefined) {
+			return;
+		}
+
 		const calcScaledSize = (
 			renderScale: number
 		): { width: number; height: number } => {
@@ -781,47 +890,60 @@ class SkySeaApp implements RendererApp {
 		}
 		this.parameters.renderScale = renderScale;
 
+		console.log(this.unscaledResolution);
+
 		const finalScaledSize = calcScaledSize(this.parameters.renderScale);
 		console.log(
 			`Resizing to (${finalScaledSize.width},${finalScaledSize.height})`
 		);
 
-		this.gbuffer = new GBuffer(this.device, finalScaledSize, this.gbuffer);
+		this.resources.gbuffer = new GBuffer(
+			this.device,
+			finalScaledSize,
+			this.resources.gbuffer
+		);
 
-		const gbufferRenderables = this.gbuffer.colorRenderables();
-		this.fullscreenQuadPassResources.setOutput(
+		const gbufferRenderables = this.resources.gbuffer.colorRenderables();
+		this.resources.fullscreenQuadPassResources.setOutput(
 			this.device,
 			"GBufferColor",
 			gbufferRenderables.colorWithSurfaceWorldDepthInAlpha
 		);
-		this.fullscreenQuadPassResources.setOutput(
+		this.resources.fullscreenQuadPassResources.setOutput(
 			this.device,
 			"GBufferNormal",
 			gbufferRenderables.normalWithSurfaceFoamStrengthInAlpha
 		);
 
-		this.atmosphereCameraPassResources.resize(
+		this.resources.atmosphereCameraPassResources.resize(
 			finalScaledSize,
 			this.device,
-			this.transmittanceLUTPassResources.view,
-			this.multiscatterLUTPassResources.view,
-			this.skyviewLUTPassResources.view,
-			this.aerialPerspectiveLUTPassResources.view
+			this.resources.transmittanceLUTPassResources.view,
+			this.resources.multiscatterLUTPassResources.view,
+			this.resources.skyviewLUTPassResources.view,
+			this.resources.aerialPerspectiveLUTPassResources.view
 		);
-		this.fullscreenQuadPassResources.setOutput(
+		this.resources.fullscreenQuadPassResources.setOutput(
 			this.device,
 			"Scene",
 			new RenderOutputTexture(
-				this.atmosphereCameraPassResources.outputColor
+				this.resources.atmosphereCameraPassResources.outputColor
 			)
 		);
 
-		for (const props of this.fullscreenQuadPassResources.getAllTextureProperties()) {
+		for (const props of this.resources.fullscreenQuadPassResources.getAllTextureProperties()) {
 			this.renderOutputController.setTextureProperties(props);
 		}
 	}
 
 	handleResize(newWidth: number, newHeight: number): void {
+		if (
+			this.unscaledResolution.width === newWidth &&
+			this.unscaledResolution.height === newHeight
+		) {
+			return;
+		}
+
 		this.unscaledResolution.width = newWidth;
 		this.unscaledResolution.height = newHeight;
 

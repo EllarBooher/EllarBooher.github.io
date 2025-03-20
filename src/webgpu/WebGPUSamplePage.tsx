@@ -139,6 +139,11 @@ const RenderingCanvas = function RenderingCanvas({
 
 		animateRequestRef.current = requestAnimationFrame(animate);
 
+		const canvas = canvasRef.current;
+		if (canvas) {
+			app.handleResize?.(canvas.width, canvas.height);
+		}
+
 		return (): void => {
 			if (animateRequestRef.current !== undefined) {
 				cancelAnimationFrame(animateRequestRef.current);

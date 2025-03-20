@@ -133,6 +133,10 @@ export class PerformanceTracker {
 		frametimeControllers: Map<FrametimeCategory, LilController>;
 	};
 
+	public get averageFPS() {
+		return this.uiDisplay.averageFPS;
+	}
+
 	/**
 	 * Bind the frametime values and averageFPS to the passed UI, under a single
 	 * top-level folder.

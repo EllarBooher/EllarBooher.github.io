@@ -13,8 +13,6 @@ import { TimestampQueryInterval } from "../PerformanceTracker.ts";
 import { Extent3D } from "../Common.ts";
 
 // The dimension of the fourier grid, i.e., the sqrt of the number of unique waves for our discrete fourier transform
-const GRID_SIZE = 512;
-const LOG_2_GRID_SIZE = 9;
 const GRAVITY = 9.8;
 const WAVE_PERIOD_SECONDS = 100.0;
 
@@ -75,7 +73,7 @@ class FourierWavesUBO extends UBO {
 
 		cascades: CascadeUBO[];
 	} = {
-		fourier_grid_size: GRID_SIZE,
+		fourier_grid_size: 1,
 		gravity: GRAVITY,
 		padding0: 0.0,
 		wave_period_seconds: WAVE_PERIOD_SECONDS,
@@ -377,6 +375,7 @@ export class FFTWaveSpectrumResources {
 	private createCascades(
 		device: GPUDevice,
 		globalUBO: GlobalUBO,
+		fourierGridSize: number,
 		cascadeParameters: {
 			patchExtentMeters: number;
 			waveNumberMinMax: [number, number];
@@ -418,6 +417,7 @@ export class FFTWaveSpectrumResources {
 		);
 
 		const waveSettings = new FourierWavesUBO(device);
+		waveSettings.data.fourier_grid_size = fourierGridSize;
 		cascadeParameters.forEach((value, index) => {
 			waveSettings.data.cascades[index] = {
 				wave_number_min_max: vec2.create(...value.waveNumberMinMax),
@@ -543,8 +543,8 @@ export class FFTWaveSpectrumResources {
 	 * 	pipelines.
 	 * @memberof FFTWaveSpectrumResources
 	 */
-	constructor(device: GPUDevice, globalUBO: GlobalUBO) {
-		this.gridSize = GRID_SIZE;
+	constructor(device: GPUDevice, globalUBO: GlobalUBO, log2GridSize: number) {
+		this.gridSize = Math.pow(2, log2GridSize);
 
 		const initialAmplitudeGroup0Layout = device.createBindGroupLayout({
 			label: "FFT Wave Initial Amplitude h_0(k) Group 0",
@@ -769,7 +769,7 @@ export class FFTWaveSpectrumResources {
 
 		this.dfftResources = new DFFTResources(
 			device,
-			LOG_2_GRID_SIZE,
+			log2GridSize,
 			this.cascadeCount
 		);
 
@@ -778,7 +778,7 @@ export class FFTWaveSpectrumResources {
 			format: DISPLACEMENT_FORMAT,
 			dimension: "2d",
 			size: this.textureGridSize,
-			mipLevelCount: LOG_2_GRID_SIZE,
+			mipLevelCount: log2GridSize,
 			usage:
 				GPUTextureUsage.STORAGE_BINDING |
 				GPUTextureUsage.TEXTURE_BINDING |
@@ -796,6 +796,7 @@ export class FFTWaveSpectrumResources {
 		this.cascades = this.createCascades(
 			device,
 			globalUBO,
+			this.gridSize,
 			CASCADE_PARAMETERS
 		);
 
@@ -816,7 +817,7 @@ export class FFTWaveSpectrumResources {
 					label: `FFT Wave (Turbulence,Jacobian) Array ${index}`,
 					format: TURBULENCE_JACOBIAN_FORMAT,
 					size: this.textureGridSize,
-					mipLevelCount: LOG_2_GRID_SIZE,
+					mipLevelCount: log2GridSize,
 					usage:
 						GPUTextureUsage.STORAGE_BINDING | // write to
 						GPUTextureUsage.TEXTURE_BINDING | // read from to accumulate turbulence

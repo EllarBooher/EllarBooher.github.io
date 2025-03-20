@@ -48,9 +48,7 @@ const RenderingCanvas = function RenderingCanvas({
 			canvas.width = Math.max(canvas.offsetWidth * devicePixelRatio, 1);
 			canvas.height = Math.max(canvas.offsetHeight * devicePixelRatio, 1);
 
-			if (resizeTimeout.current !== undefined) {
-				clearTimeout(resizeTimeout.current);
-			}
+			clearTimeout(resizeTimeout.current);
 
 			resizeTimeout.current = setTimeout(() => {
 				// TODO: can we miss this event? can canvas dimensions and context.getCurrentTexture() be out of sync?
@@ -66,6 +64,10 @@ const RenderingCanvas = function RenderingCanvas({
 					onError(err);
 				}
 			}, 500);
+
+			return () => {
+				clearTimeout(resizeTimeout.current);
+			};
 		}
 	}, [app, onError]);
 

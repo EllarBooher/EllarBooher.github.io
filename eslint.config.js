@@ -2,6 +2,7 @@ import js from "@eslint/js";
 import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
+import tsdoc from "eslint-plugin-tsdoc";
 import tseslint from "typescript-eslint";
 import react from "eslint-plugin-react";
 import jsxA11y from "eslint-plugin-jsx-a11y";
@@ -50,6 +51,7 @@ export default tseslint.config(
 			react,
 			"react-hooks": reactHooks,
 			"react-refresh": reactRefresh,
+			tsdoc: tsdoc,
 		},
 		rules: {
 			...reactHooks.configs.recommended.rules,
@@ -70,6 +72,7 @@ export default tseslint.config(
 				},
 			],
 			"@typescript-eslint/explicit-function-return-type": "error",
+			"tsdoc/syntax": "warn",
 		},
 	}
 );

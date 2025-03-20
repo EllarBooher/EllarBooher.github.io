@@ -814,8 +814,8 @@ class SkySeaApp implements RendererApp {
 
 		if (this.benchmarkFrameCounter === 1) {
 			const passedBenchmark = this.performance.averageFPS > 30;
-			console.log(passedBenchmark);
 			if (!passedBenchmark) {
+				console.log(`Setting performance config to low`);
 				this.setPerformanceConfig("bad");
 			}
 		}
@@ -888,8 +888,6 @@ class SkySeaApp implements RendererApp {
 			);
 		}
 		this.parameters.renderScale = renderScale;
-
-		console.log(this.unscaledResolution);
 
 		const finalScaledSize = calcScaledSize(this.parameters.renderScale);
 		console.log(

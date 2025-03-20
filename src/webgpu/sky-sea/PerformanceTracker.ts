@@ -252,6 +252,10 @@ export class PerformanceTracker {
 	 * @memberof PerformanceTracker
 	 */
 	postSubmitCommands(): void {
+		this.uiDisplay.averageFPS =
+			1000.0 /
+			(this.frametimeAverages.get("DrawToDraw")?.average ?? 1000.0);
+
 		if (
 			this.queryBuffers == undefined ||
 			this.queryBuffers.readBuffer.mapState !== "unmapped"
@@ -281,11 +285,6 @@ export class PerformanceTracker {
 						) / MS_PER_NS;
 					this.frametimeAverages.get(key)?.push(timeMilliseconds);
 				});
-
-				this.uiDisplay.averageFPS =
-					1000.0 /
-					(this.frametimeAverages.get("DrawToDraw")?.average ??
-						1000.0);
 
 				FrametimeCategories.forEach((category) => {
 					const averageMilliseconds =

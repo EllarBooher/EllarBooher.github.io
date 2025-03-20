@@ -37,6 +37,7 @@ const RenderingCanvas = function RenderingCanvas({
 	const hibernateRef = useRef(false);
 	const guiRef = useRef<GUI>();
 	const [guiDocked, setGUIDocked] = useState<boolean>(false);
+	const resizeTimeout = useRef<ReturnType<typeof setTimeout>>();
 	const lastTimeRef = useRef<number>();
 
 	const resizeCanvas = useCallback(() => {
@@ -47,18 +48,26 @@ const RenderingCanvas = function RenderingCanvas({
 			canvas.width = Math.max(canvas.offsetWidth * devicePixelRatio, 1);
 			canvas.height = Math.max(canvas.offsetHeight * devicePixelRatio, 1);
 
-			// TODO: can we miss this event? can canvas dimensions and context.getCurrentTexture() be out of sync?
-			try {
-				if (canvas.width <= 1 || canvas.height <= 1) {
-					hibernateRef.current = true;
-					console.log("Hibernate");
-					return;
-				}
-				hibernateRef.current = false;
-				app.handleResize?.(canvas.width, canvas.height);
-			} catch (err) {
-				onError(err);
+			console.log(resizeTimeout.current);
+
+			if (resizeTimeout.current !== undefined) {
+				clearTimeout(resizeTimeout.current);
 			}
+
+			resizeTimeout.current = setTimeout(() => {
+				// TODO: can we miss this event? can canvas dimensions and context.getCurrentTexture() be out of sync?
+				try {
+					if (canvas.width <= 1 || canvas.height <= 1) {
+						hibernateRef.current = true;
+						console.log("Hibernate");
+						return;
+					}
+					hibernateRef.current = false;
+					app.handleResize?.(canvas.width, canvas.height);
+				} catch (err) {
+					onError(err);
+				}
+			}, 500);
 		}
 	}, [app, onError]);
 

@@ -48,8 +48,6 @@ const RenderingCanvas = function RenderingCanvas({
 			canvas.width = Math.max(canvas.offsetWidth * devicePixelRatio, 1);
 			canvas.height = Math.max(canvas.offsetHeight * devicePixelRatio, 1);
 
-			console.log(resizeTimeout.current);
-
 			if (resizeTimeout.current !== undefined) {
 				clearTimeout(resizeTimeout.current);
 			}

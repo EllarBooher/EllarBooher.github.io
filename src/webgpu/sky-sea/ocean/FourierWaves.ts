@@ -41,7 +41,6 @@ const FFT_IO_TEXTURE_FORMAT: GPUTextureFormat = "rgba32float";
  *  describes the wide, parallel waves of a resonant frequency that dominate the
  *  ocean across a long fetch. Higher values increase the height of these
  *  dominating waves.
- * @export
  * @interface FFTWavesSettings
  */
 export interface FFTWavesSettings {
@@ -146,7 +145,6 @@ function randGaussian2DBoxMuller(): [number, number] {
  * Internal textures that can be exposed for rendering to the screen for
  * purposes of exploration, demonstration, or debug. See {@link TODO} for
  * explanations on what each texture represents.
- * @export
  * @interface FFTWaveSpectrumRenderables
  */
 export interface FFTWaveSpectrumRenderables {
@@ -162,7 +160,6 @@ export interface FFTWaveSpectrumRenderables {
 /**
  * The final spatial displacement/displacement derivative maps that can be
  * consumed to generate ocean surface vertices and normal maps.
- * @export
  * @class FFTWaveDisplacementMaps
  */
 export class FFTWaveDisplacementMaps {
@@ -297,7 +294,6 @@ interface TurbulenceJacobianEntry {
  * Produce a spectrum of ocean waves on a square grid, using the fourier
  * transform to transform from frequency to space, to produce displacement and
  * gradient maps that can be applied to an ocean surface mesh.
- * @export
  * @class FFTWaveSpectrumResources
  */
 export class FFTWaveSpectrumResources {

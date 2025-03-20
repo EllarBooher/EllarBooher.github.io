@@ -22,7 +22,6 @@ export interface GBufferFormats {
  * - `rgba16float`  binding 1 (read/write groups) - World-space normals with
  *   ocean-surface foam strength packed into the alpha channel.
  * - `depth32float` binding 2 (read group only)   - Framebuffer depth.
- * @export
  * @class GBuffer
  */
 export class GBuffer {

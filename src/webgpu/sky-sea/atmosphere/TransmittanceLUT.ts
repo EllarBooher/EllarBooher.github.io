@@ -9,7 +9,6 @@ const TRANSMITTANCE_LUT_FORMAT: GPUTextureFormat = "rgba32float";
  * transmittance from point to upper edge of atmosphere, parameterized by
  * altitude and zenith angle of the querying ray. This LUT only needs to be
  * updated when the atmosphere parameters change.
- * @export
  * @class TransmittanceLUTPassResources
  */
 export class TransmittanceLUTPassResources {

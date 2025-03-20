@@ -104,8 +104,6 @@ class ArithmeticSumArray {
  * an average. `PerformanceTracker` is unsuitable if frametimes are
  * unpredictable and the timing of mapping the backing buffer coincidentally
  * leads to aliasing of the true frametime history.
- *
- * @export
  * @class PerformanceTracker
  */
 export class PerformanceTracker {

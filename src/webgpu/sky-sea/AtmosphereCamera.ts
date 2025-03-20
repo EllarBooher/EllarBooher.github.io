@@ -10,7 +10,6 @@ const ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT: GPUTextureFormat = "rgba16float";
  * Contains the resources for the composition of the atmosphere with an input
  * GBuffer. The GBuffer is interpreted as the ocean surface and shaded as such.
  * This includes reflections of the sky.
- * @export
  * @class AtmosphereCameraPassResources
  */
 export class AtmosphereCameraPassResources {

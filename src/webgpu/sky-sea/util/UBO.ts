@@ -4,7 +4,6 @@ const BYTES_PER_FLOAT32 = 4;
  * A wrapper around a device buffer that handles packing and uploading the
  * proper byte representation for a host-shareable and constructible GPU
  * type.
- * @export
  * @abstract
  * @class UBO
  */

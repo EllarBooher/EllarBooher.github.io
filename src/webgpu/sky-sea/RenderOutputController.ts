@@ -92,7 +92,6 @@ export class RenderOutputTexture {
 /**
  * The parameters for transforming an instance of `{@link RenderOutputTexture}`
  * while sampling it for presentation.
- * @export
  * @class RenderOutputTransform
  */
 export class RenderOutputTransform {
@@ -156,7 +155,6 @@ const RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES: ({
  * {@link RenderOutputTags} for the possible outputs, and
  * {@link RenderOutputTransform} for the properties that are transformed during
  * rendering.
- * @export
  * @class RenderOutputController
  */
 export class RenderOutputController {

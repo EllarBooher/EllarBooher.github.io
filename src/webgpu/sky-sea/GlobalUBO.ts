@@ -14,7 +14,6 @@ import { UBO } from "./util/UBO";
  * @prop {Vec3} absorption - Optical depth of absorbed light per unit length
  * @prop {number} densityScale - The inner coefficient for the exponential-decay
  *  density function, with units of length.
- * @export
  * @interface RayleighProfile
  */
 export interface RayleighProfile {
@@ -35,7 +34,6 @@ export type MieProfile = RayleighProfile;
  * altitude-dependent density is modelled with a hardcoded tent function.
  * @prop {Vec3} scattering - Optical depth of scattered light per unit length
  * @prop {Vec3} absorption - Optical depth of absorbed light per unit length
- * @export
  * @interface OzoneProfile
  */
 export interface OzoneProfile {
@@ -55,7 +53,6 @@ export interface OzoneProfile {
  *  outer boundary of the atmosphere. It is the sum of the planet's radius and
  *  the thickness of the atmosphere.
  * @prop {Vec3} groundAlbedo - The albedo for the planet's surface. Unused.
- * @export
  * @interface Atmosphere
  */
 export interface Atmosphere {
@@ -111,7 +108,6 @@ function atmosphereEarth(): Atmosphere {
  * @prop {number} angularRadius - The angle subtended by the light modelled as a
  *  disk (or distant sphere). Due to the parallel light rays this angle is the
  *  same anywhere in the scene.
- * @export
  * @interface CelestialLight
  */
 export interface CelestialLight {
@@ -138,7 +134,6 @@ function lightSun(): CelestialLight {
  * 	view matrix.
  * @prop {Vec4} position - The world-space position of the camera in the scene.
  * @prop {Vec4} forward - The world-space direction of the camera in the scene.
- * @export
  * @interface Camera
  */
 export interface Camera {
@@ -154,7 +149,6 @@ export interface Camera {
  * @prop {number} timeSeconds - The time in seconds
  * @prop {number} deltaTimeSeconds - The time in seconds that has elapsed since
  *  the last frame.
- * @export
  * @interface Time
  */
 export interface Time {
@@ -208,7 +202,6 @@ const SIZEOF_GPU_GLOBAL_UBO = wgpuRoundUp(
  *  scene, coming from space.
  * @prop {Time} time - The timing information for the scene, for a specific
  *  frame.
- * @export
  * @interface GlobalUBOData
  */
 export interface GlobalUBOData {
@@ -222,7 +215,6 @@ export interface GlobalUBOData {
 /**
  * A UBO containing various parameters integral to rendering. It is intended for
  * a single instance to be shared, with the same buffer bound to many pipelines.
- * @export
  * @class GlobalUBO
  * @extends {UBO}
  */

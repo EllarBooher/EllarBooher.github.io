@@ -18,7 +18,6 @@ export interface MipMapGenerationTextureBindings {
 /**
  * This contains the resources for generating mipmaps for 2D textures, including
  * texture arrays.
- * @export
  * @class MipMapGenerationPassResources
  */
 export class MipMapGenerationPassResources {

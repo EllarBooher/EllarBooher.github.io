@@ -37,7 +37,6 @@ const REQUIRED_OUTPUT_FORMAT: GPUTextureFormat = "rgba16float";
  * This contains the resources for performing a 2D discrete fast fourier
  * transform on a square grid. It supports 2 parallel executions at the same
  * time, if you pack two complex pairs into the four channel RGBA input data.
- * @export
  * @class DFFTResources
  */
 export class DFFTResources {

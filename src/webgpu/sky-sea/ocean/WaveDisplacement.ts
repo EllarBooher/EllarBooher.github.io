@@ -95,7 +95,6 @@ class WaveSurfaceDisplacementUBO extends UBO {
  *   procedurally from sine or cosine waves. This is decided per-frame at draw
  *   time.
  * - Also produces foam, when texture maps are used for the displacement.
- * @export
  * @class WaveSurfaceDisplacementPassResources
  */
 export class WaveSurfaceDisplacementPassResources {

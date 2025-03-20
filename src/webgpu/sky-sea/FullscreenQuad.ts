@@ -45,7 +45,6 @@ class FullscreenQuadUBO extends UBO {
  * draw time.
  * @see {@link RenderOutputTransform} for transformations that can be applied to
  * 	the sampled texture values.
- * @export
  * @class FullscreenQuadPassResources
  */
 export class FullscreenQuadPassResources {

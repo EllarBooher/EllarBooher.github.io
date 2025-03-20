@@ -9,7 +9,6 @@ const MULTISCATTER_LUT_FORMAT: GPUTextureFormat = "rgba32float";
  * spectral RGB inscattering luminance arriving at any given point in the
  * atmosphere. Multi-scattered means that the values in the table are the sum of
  * secondary inscattering, plus tertiary inscattering, and so on.
- * @export
  * @class MultiscatterLUTPassResources
  */
 export class MultiscatterLUTPassResources {

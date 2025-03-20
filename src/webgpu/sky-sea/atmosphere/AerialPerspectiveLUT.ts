@@ -11,7 +11,6 @@ const AERIAL_PERSPECTIVE_LUT_FORMAT: GPUTextureFormat = "rgba16float";
  * - The LUT is an array, where each layer represents an incremental increase in
  *   the distance that scattering is calculated over.
  * - The LUT is parameterized by azimuth and zenith of the outgoing view ray.
- * @export
  * @class AerialPerspectiveLUTPassResources
  */
 export class AerialPerspectiveLUTPassResources {

@@ -355,6 +355,7 @@ export class FFTWaveSpectrumResources {
 	 */
 
 	private turbulenceJacobianArrays: TurbulenceJacobianEntry[];
+	private turbulenceJacobianGroup1: GPUBindGroup;
 	private turbulenceJacobianIndex = 0;
 
 	/**
@@ -489,17 +490,17 @@ export class FFTWaveSpectrumResources {
 			layout: this.realizedAmplitudeKernel.getBindGroupLayout(0),
 			entries: [
 				{
-					binding: 0,
+					binding: 2,
 					resource:
 						packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray.createView(),
 				},
 				{
-					binding: 1,
+					binding: 3,
 					resource:
 						packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_AmplitudeArray.createView(),
 				},
 				{
-					binding: 2,
+					binding: 4,
 					resource: initialAmplitudeArray.createView(),
 				},
 			],
@@ -614,25 +615,25 @@ export class FFTWaveSpectrumResources {
 			label: "FFT Wave Realized Fourier Amplitude h(k,t) Group 0",
 			entries: [
 				{
-					binding: 0,
-					visibility: GPUShaderStage.COMPUTE,
-					storageTexture: {
-						format: FFT_IO_TEXTURE_FORMAT,
-						viewDimension: "2d-array",
-						access: "write-only",
-					},
-				},
-				{
-					binding: 1,
-					visibility: GPUShaderStage.COMPUTE,
-					storageTexture: {
-						format: FFT_IO_TEXTURE_FORMAT,
-						viewDimension: "2d-array",
-						access: "write-only",
-					},
-				},
-				{
 					binding: 2,
+					visibility: GPUShaderStage.COMPUTE,
+					storageTexture: {
+						format: FFT_IO_TEXTURE_FORMAT,
+						viewDimension: "2d-array",
+						access: "write-only",
+					},
+				},
+				{
+					binding: 3,
+					visibility: GPUShaderStage.COMPUTE,
+					storageTexture: {
+						format: FFT_IO_TEXTURE_FORMAT,
+						viewDimension: "2d-array",
+						access: "write-only",
+					},
+				},
+				{
+					binding: 4,
 					visibility: GPUShaderStage.COMPUTE,
 					texture: {
 						sampleType: "unfilterable-float",
@@ -677,7 +678,7 @@ export class FFTWaveSpectrumResources {
 			label: "FFT Wave Accumulate Turbulence Group 0",
 			entries: [
 				{
-					binding: 0,
+					binding: 5,
 					visibility: GPUShaderStage.COMPUTE,
 					storageTexture: {
 						viewDimension: "2d-array",
@@ -685,7 +686,7 @@ export class FFTWaveSpectrumResources {
 					},
 				},
 				{
-					binding: 1,
+					binding: 6,
 					visibility: GPUShaderStage.COMPUTE,
 					texture: {
 						viewDimension: "2d-array",
@@ -693,7 +694,7 @@ export class FFTWaveSpectrumResources {
 					},
 				},
 				{
-					binding: 2,
+					binding: 7,
 					visibility: GPUShaderStage.COMPUTE,
 					texture: {
 						viewDimension: "2d-array",
@@ -701,15 +702,21 @@ export class FFTWaveSpectrumResources {
 					},
 				},
 				{
-					binding: 3,
+					binding: 8,
 					visibility: GPUShaderStage.COMPUTE,
 					texture: {
 						viewDimension: "2d-array",
 						sampleType: "unfilterable-float",
 					},
 				},
+			],
+		});
+
+		const accumulateTurbulenceGroup1Layout = device.createBindGroupLayout({
+			label: "FFT Wave Accumulate Turbulence Group 1",
+			entries: [
 				{
-					binding: 4,
+					binding: 0,
 					visibility: GPUShaderStage.COMPUTE,
 					buffer: { type: "uniform" },
 				},
@@ -720,7 +727,10 @@ export class FFTWaveSpectrumResources {
 			label: "FFT Wave Accumulate Turbulence",
 			layout: device.createPipelineLayout({
 				label: "FFT Wave Accumulate Turbulence",
-				bindGroupLayouts: [accumulateTurbulenceGroup0Layout],
+				bindGroupLayouts: [
+					accumulateTurbulenceGroup0Layout,
+					accumulateTurbulenceGroup1Layout,
+				],
 			}),
 			compute: {
 				module: shaderModule,
@@ -834,34 +844,30 @@ export class FFTWaveSpectrumResources {
 						),
 						entries: [
 							{
-								binding: 0,
+								binding: 5,
 								resource: texture.createView({
 									mipLevelCount: 1,
 								}),
 							},
 							{
-								binding: 1,
+								binding: 6,
 								resource: textures[
 									(index + 1) % textures.length
 								].createView({}),
 							},
 							{
-								binding: 2,
+								binding: 7,
 								resource:
 									this.Dx_Dy_Dz_Dxdz_SpatialArray.createView(
 										{}
 									),
 							},
 							{
-								binding: 3,
+								binding: 8,
 								resource:
 									this.Dydx_Dydz_Dxdx_Dzdz_SpatialArray.createView(
 										{}
 									),
-							},
-							{
-								binding: 4,
-								resource: { buffer: globalUBO.buffer },
 							},
 						],
 					});
@@ -877,6 +883,16 @@ export class FFTWaveSpectrumResources {
 				},
 				[]
 			);
+		this.turbulenceJacobianGroup1 = device.createBindGroup({
+			label: "FFT Wave Accumulate Turbulence Group 1",
+			layout: this.accumulateTurbulenceKernel.getBindGroupLayout(1),
+			entries: [
+				{
+					binding: 0,
+					resource: { buffer: globalUBO.buffer },
+				},
+			],
+		});
 
 		this.Dx_Dy_Dz_Dxdz_SpatialArray_MipMapBindings =
 			this.mipMapGenerator.createBindGroups(
@@ -1063,6 +1079,7 @@ export class FFTWaveSpectrumResources {
 			this.turbulenceJacobianArrays[this.turbulenceJacobianIndex]
 				.bindGroup
 		);
+		accumulateTurbulencePass.setBindGroup(1, this.turbulenceJacobianGroup1);
 
 		accumulateTurbulencePass.dispatchWorkgroups(
 			this.gridSize / 16,

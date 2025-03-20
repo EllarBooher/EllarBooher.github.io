@@ -243,9 +243,9 @@ fn computeInitialAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
  *
  * Thus, we can pack two sets of inputs for the FFT into the same two input channels, and avoid a wasted output channel.
  */
-@group(0) @binding(0) var out_packed_Dx_plus_iDy_Dz_iDxdz_amplitudeArray: texture_storage_2d_array<rgba32float, write>;
-@group(0) @binding(1) var out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitudeArray: texture_storage_2d_array<rgba32float, write>;
-@group(0) @binding(2) var in_initial_amplitude: texture_2d_array<f32>;
+@group(0) @binding(2) var out_packed_Dx_plus_iDy_Dz_iDxdz_amplitudeArray: texture_storage_2d_array<rgba32float, write>;
+@group(0) @binding(3) var out_packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_amplitudeArray: texture_storage_2d_array<rgba32float, write>;
+@group(0) @binding(4) var in_initial_amplitude: texture_2d_array<f32>;
 
 /* Commented to avoid re-declaration
 @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
@@ -361,11 +361,14 @@ fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
 	);
 }
 
-@group(0) @binding(0) var out_turbulence_jacobian_array: texture_storage_2d_array<rgba16float, write>;
-@group(0) @binding(1) var in_turbulence_jacobian_array: texture_2d_array<f32>;
-@group(0) @binding(2) var in_Dx_Dy_Dz_Dxdz_spatial_array: texture_2d_array<f32>;
-@group(0) @binding(3) var in_Dydx_Dydz_Dxdx_Dzdz_spatial_array: texture_2d_array<f32>;
-@group(0) @binding(4) var<uniform> u_global_0: GlobalUBO;
+@group(0) @binding(5) var out_turbulence_jacobian_array: texture_storage_2d_array<rgba16float, write>;
+@group(0) @binding(6) var in_turbulence_jacobian_array: texture_2d_array<f32>;
+@group(0) @binding(7) var in_Dx_Dy_Dz_Dxdz_spatial_array: texture_2d_array<f32>;
+@group(0) @binding(8) var in_Dydx_Dydz_Dxdx_Dzdz_spatial_array: texture_2d_array<f32>;
+
+/* Commented to avoid re-declaration
+@group(1) @binding(0) var<uniform> u_global: GlobalUBO;
+*/
 
 @compute @workgroup_size(16, 16, 1)
 fn accumulateTurbulence(@builtin(global_invocation_id) global_id: vec3<u32>)
@@ -421,7 +424,7 @@ fn accumulateTurbulence(@builtin(global_invocation_id) global_id: vec3<u32>)
 	 * works well.
 	 */
 	let turbulence = min(
-		turbulence_previous + u_global_0.time.delta_time_seconds * 0.5 / max(jacobian, 0.5),
+		turbulence_previous + u_global.time.delta_time_seconds * 0.5 / max(jacobian, 0.5),
 		jacobian
 	);
 

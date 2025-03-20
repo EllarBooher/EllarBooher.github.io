@@ -94,11 +94,11 @@ fn precomputeDFFTInstructions(@builtin(global_invocation_id) global_id: vec3<u32
 
 // Avoid redeclare
 // @group(0) @binding(0) var<uniform> u_parameters: DFFTParameters;
-@group(0) @binding(1) var<storage, read> butterflies_log2n_by_n: array<TwoPointButterfly>;
-@group(0) @binding(2) var<storage, read_write> buffer_0: array<vec4<f32>>;
-@group(0) @binding(3) var<storage, read_write> buffer_1: array<vec4<f32>>;
-@group(0) @binding(4) var<uniform> step_counter: u32;
-@group(0) @binding(5) var out_texture: texture_storage_2d_array<rgba16float, write>;
+@group(0) @binding(2) var<storage, read> butterflies_log2n_by_n: array<TwoPointButterfly>;
+@group(0) @binding(3) var<storage, read_write> buffer_0: array<vec4<f32>>;
+@group(0) @binding(4) var<storage, read_write> buffer_1: array<vec4<f32>>;
+@group(0) @binding(5) var<uniform> step_counter: u32;
+@group(0) @binding(6) var out_texture: texture_storage_2d_array<rgba16float, write>;
 
 fn complexMult(a: vec2<f32>, b: vec2<f32>) -> vec2<f32>
 {
@@ -231,7 +231,7 @@ fn performSwapEvenSignsAndCopyToHalfPrecisionOutput(@builtin(global_invocation_i
 	}
 }
 
-@group(0) @binding(0) var<storage, read_write> out_step_counter: u32;
+@group(0) @binding(7) var<storage, read_write> out_step_counter: u32;
 
 @compute @workgroup_size(1)
 fn incrementStepCounter(@builtin(global_invocation_id) global_id: vec3<u32>)

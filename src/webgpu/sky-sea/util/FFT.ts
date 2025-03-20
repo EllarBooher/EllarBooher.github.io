@@ -191,14 +191,9 @@ export class DFFTResources {
 					buffer: { type: "uniform" },
 				},
 				{
-					binding: 1,
-					visibility: GPUShaderStage.COMPUTE,
-					buffer: { type: "read-only-storage" },
-				},
-				{
 					binding: 2,
 					visibility: GPUShaderStage.COMPUTE,
-					buffer: { type: "storage" },
+					buffer: { type: "read-only-storage" },
 				},
 				{
 					binding: 3,
@@ -208,10 +203,15 @@ export class DFFTResources {
 				{
 					binding: 4,
 					visibility: GPUShaderStage.COMPUTE,
-					buffer: { type: "uniform" },
+					buffer: { type: "storage" },
 				},
 				{
 					binding: 5,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: { type: "uniform" },
+				},
+				{
+					binding: 6,
 					visibility: GPUShaderStage.COMPUTE,
 					storageTexture: {
 						format: REQUIRED_OUTPUT_FORMAT,
@@ -268,23 +268,23 @@ export class DFFTResources {
 					},
 				},
 				{
-					binding: 1,
+					binding: 2,
 					resource: { buffer: this.butterfliesBuffer },
 				},
 				{
-					binding: 2,
+					binding: 3,
 					resource: { buffer: this.complexBuffer0 },
 				},
 				{
-					binding: 3,
+					binding: 4,
 					resource: { buffer: this.complexBuffer1 },
 				},
 				{
-					binding: 4,
+					binding: 5,
 					resource: { buffer: this.stepCounterBuffer },
 				},
 				{
-					binding: 5,
+					binding: 6,
 					resource: this.outputTexture.createView(),
 				},
 			],
@@ -318,7 +318,7 @@ export class DFFTResources {
 			label: "DFFT Step Counter Bind Group 0",
 			entries: [
 				{
-					binding: 0,
+					binding: 7,
 					visibility: GPUShaderStage.COMPUTE,
 					buffer: { type: "storage" },
 				},
@@ -330,7 +330,7 @@ export class DFFTResources {
 			layout: stepCounterBindGroupLayout,
 			entries: [
 				{
-					binding: 0,
+					binding: 7,
 					resource: { buffer: this.stepCounterBuffer },
 				},
 			],

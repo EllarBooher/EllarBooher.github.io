@@ -9,26 +9,43 @@ import { RendererAppConstructor } from "./RendererApp";
 
 /**
  * The display and initialization properties of a single WebGPU sample.
- * @prop {string} name - A pretty-formatted name labelling the sample.
- * @prop {string} description - A short description for the sample.
- * @prop {string} projectFolder - The name for the folder that contains the
- *  README.md and source for the sample, at the same level as this module.
- * @prop {ReadonlyMap<keyof GPUSupportedLimits, number>} requiredLimits   - A
- *  set of WebGPU limits that running the sample requires.
- * @prop {ReadonlySet<GPUFeatureName>} requiredFeatures - A set of WebGPU
- *  features that running the sample requires.
- * @prop {ReadonlySet<GPUFeatureName>} optionalFeatures - A set of WebGPU
- *  features that improve the sample, but are individually not required.
- * @prop {(() => Promise<RendererAppConstructor>)} import - A function that
- *  asynchronously loads the sample's renderer.
  */
 export interface SampleEntry {
+	/**
+	 * A pretty-formatted name labelling the sample.
+	 */
 	name: string;
+
+	/**
+	 * A short description for the sample.
+	 */
 	description: string;
+
+	/**
+	 * The name for the folder that contains the README.md and source for the
+	 * sample, at the same level as this module.
+	 */
 	projectFolder: string;
+
+	/**
+	 * A set of WebGPU limits that running the sample requires.
+	 */
 	requiredLimits: ReadonlyMap<keyof GPUSupportedLimits, number>;
+
+	/**
+	 * A set of WebGPU features that running the sample requires.
+	 */
 	requiredFeatures: ReadonlySet<GPUFeatureName>;
+
+	/**
+	 * A set of WebGPU features that improve the sample, but are individually
+	 * not required. They should be enabled if possible.
+	 */
 	optionalFeatures: ReadonlySet<GPUFeatureName>;
+
+	/**
+	 * A function that asynchronously loads the sample's renderer.
+	 */
 	import: () => Promise<RendererAppConstructor>;
 }
 

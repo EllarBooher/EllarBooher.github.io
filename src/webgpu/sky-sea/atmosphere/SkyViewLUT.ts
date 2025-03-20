@@ -12,7 +12,6 @@ const SKYVIEW_LUT_FORMAT: GPUTextureFormat = "rgba32float";
  * - This is called the Sky View LUT since this gives the view of the
  *   unobstructed sky from a fixed position.
  * - The LUT is parameterized by azimuth and zenith of the outgoing view ray.
- * @class SkyViewLUTPassResources
  */
 export class SkyViewLUTPassResources {
 	texture: GPUTexture;
@@ -33,19 +32,18 @@ export class SkyViewLUTPassResources {
 
 	/**
 	 * Initializes all resources related to the sky view lookup table.
-	 * @param {GPUDevice} device
-	 * @param {Extent2D} dimensions - The dimensions to use for the LUT texture.
-	 * @param {GPUTextureView} transmittanceLUT - A view into the transmittance
+	 * @param device - The WebGPU device to use.
+	 * @param dimensions - The dimensions to use for the LUT texture.
+	 * @param transmittanceLUT - A view into the transmittance
 	 * 	LUT that will be used.
-	 * @param {GPUTextureView} multiscatterLUT - A view into the multiscatter
+	 * @param multiscatterLUT - A view into the multiscatter
 	 * 	LUT that will be used.
-	 * @param {boolean} filterableLUT - Whether or not the passed LUTs are
+	 * @param filterableLUT - Whether or not the passed LUTs are
 	 *  filterable by samples. This is a consideration since the LUTs are 32-bit
 	 *  floats per channel, and filtering such textures is not supported on all
 	 *  WebGPU instances.
-	 * @param {GlobalUBO} globalUBO - The global UBO to bind and use when
+	 * @param globalUBO - The global UBO to bind and use when
 	 *  rendering the LUT.
-	 * @memberof SkyViewLUTPassResources
 	 */
 	constructor(
 		device: GPUDevice,
@@ -171,11 +169,10 @@ export class SkyViewLUTPassResources {
 
 	/**
 	 * Records the population of the lookup table.
-	 * @param {GPUCommandEncoder} commandEncoder - The command encoder to record
+	 * @param commandEncoder - The command encoder to record
 	 * 	into.
-	 * @param {(TimestampQueryInterval | undefined)} timestampInterval - The
+	 * @param timestampInterval - The
 	 *  interval to record timing information into.
-	 * @memberof SkyViewLUTPassResources
 	 */
 	record(
 		commandEncoder: GPUCommandEncoder,

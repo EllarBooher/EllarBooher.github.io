@@ -37,7 +37,6 @@ const REQUIRED_OUTPUT_FORMAT: GPUTextureFormat = "rgba16float";
  * This contains the resources for performing a 2D discrete fast fourier
  * transform on a square grid. It supports 2 parallel executions at the same
  * time, if you pack two complex pairs into the four channel RGBA input data.
- * @class DFFTResources
  */
 export class DFFTResources {
 	private parametersUBO: DFFTParametersUBO;
@@ -91,10 +90,9 @@ export class DFFTResources {
 	 * Initializes all the pipelines and intermediate buffers for the
 	 * performance of the DFFT on a square grid of size 2^N, where N is
 	 * {@link log2GridSize}.
-	 * @param {GPUDevice} device
-	 * @param {number} log2GridSize - The exponent used to calculate the grid
+	 * @param device - The WebGPU device to use.
+	 * @param log2GridSize - The exponent used to calculate the grid
 	 *  size. Must be greater than 4.
-	 * @memberof DFFTResources
 	 */
 	constructor(device: GPUDevice, log2GridSize: number, layerCount: number) {
 		if (log2GridSize < 5) {
@@ -429,18 +427,17 @@ export class DFFTResources {
 	 *   where N is the size of the input data (N^2 in the case of our 2D
 	 *   transform). We skip this, and it is up to the consumer of the output to
 	 *   scale or interpret the data as needed.
-	 * @param {GPUDevice} device
-	 * @param {GPUCommandEncoder} commandEncoder - The command encoder to record
+	 * @param device - The WebGPU device to use.
+	 * @param commandEncoder - The command encoder to record
 	 *  into.
-	 * @param {GPUTexture} sourceTextureArray - The texture to copy the input
+	 * @param sourceTextureArray - The texture to copy the input
 	 *  from.
-	 * @param {GPUTexture} destinationTextureArray - The texture to copy the
+	 * @param destinationTextureArray - The texture to copy the
 	 *  output into.
-	 * @param {boolean} inverse - Whether to perform the inverse Fourier
+	 * @param inverse - Whether to perform the inverse Fourier
 	 *  transform instead.
-	 * @param {(GPUComputePassTimestampWrites | undefined)} endTimestampWrites -
+	 * @param endTimestampWrites -
 	 * deprecated
-	 * @memberof DFFTResources
 	 */
 	recordPerform(
 		device: GPUDevice,

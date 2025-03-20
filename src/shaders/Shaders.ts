@@ -201,9 +201,9 @@ function replaceConditionalBlocks(
 
 /**
  * Preprocesses the given WebGPU shader language source file in plaintext.
- * @param {string} filePath - The path to the shader source file.
- * @param {string} source - The plaintext of the shader source file.
- * @return {{ source: string; includes: string[] }} The processed the source and
+ * @param filePath - The path to the shader source file.
+ * @param source - The plaintext of the shader source file.
+ * @returns The processed the source and
  * 	the referenced includes that were discovered during the process.
  */
 export function packShaders(

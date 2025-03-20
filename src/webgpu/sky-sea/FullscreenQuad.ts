@@ -45,7 +45,6 @@ class FullscreenQuadUBO extends UBO {
  * draw time.
  * @see {@link RenderOutputTransform} for transformations that can be applied to
  * 	the sampled texture values.
- * @class FullscreenQuadPassResources
  */
 export class FullscreenQuadPassResources {
 	// keep layout for resetting textures when resizing them
@@ -76,12 +75,11 @@ export class FullscreenQuadPassResources {
 	/**
 	 * Generate and save bind groups for a given tag, so it can be read at
 	 * draw time.
-	 * @param {GPUDevice} device
-	 * @param {RenderOutputTag} tag - The tag that can be passed
+	 * @param device - The WebGPU device to use.
+	 * @param tag - The tag that can be passed
 	 * 	at draw time to use this texture for sampling.
-	 * @param {RenderOutputTexture} texture - The texture to generate bindings
+	 * @param texture - The texture to generate bindings
 	 * 	for.
-	 * @memberof FullscreenQuadPassResources
 	 */
 	setOutput(
 		device: GPUDevice,
@@ -129,13 +127,10 @@ export class FullscreenQuadPassResources {
 	}
 
 	/**
-	 * Enumerates properties of bound textures by tag. Useful for
-	 * reflecting in UI without references to the underlying textures.
-	 * @return { Iterable<{ tag: RenderOutputTag; mipLevelCount:
-	 *  number; depthOrArrayLayerCount: number; }>} Returns the properties and
-	 *  tag of each texture that is bound. Only one texture will exist for
-	 *  each tag.
-	 * @memberof FullscreenQuadPassResources
+	 * Enumerates properties of bound textures by tag. Useful for reflecting in
+	 * UI without references to the underlying textures.
+	 * @returns Returns an iterable of all the properties and tag of each
+	 *  texture that is bound. Tag will be unique across all elements.
 	 */
 	getAllTextureProperties(): Iterable<{
 		tag: RenderOutputTag;
@@ -155,11 +150,10 @@ export class FullscreenQuadPassResources {
 
 	/**
 	 * Instantiates all resources.
-	 * @param {GPUDevice} device
-	 * @param {GPUTextureFormat} outputFormat - The texture format that will be
-	 *  used for the render pipelines attachments. This must match the format of
-	 *  the texture view used as the attachment at draw time.
-	 * @memberof FullscreenQuadPassResources
+	 * @param device - The WebGPU device to use.
+	 * @param outputFormat - The texture format that will be used for the render
+	 *  pipelines attachments. This must match the format of the texture view
+	 *  used as the attachment at draw time.
 	 */
 	constructor(device: GPUDevice, outputFormat: GPUTextureFormat) {
 		this.outputFormat = outputFormat;
@@ -340,18 +334,17 @@ export class FullscreenQuadPassResources {
 	 * Record the rendering of a fullscreen quad, sampling the texture that
 	 * has been bound to the requested tag.
 	 * @see {@link setOutput} for how to bind the texture that will used here.
-	 * @param {GPUDevice} device
-	 * @param {GPUCommandEncoder} commandEncoder - The command encoder to record
+	 * @param device - The WebGPU device to use.
+	 * @param commandEncoder - The command encoder to record
 	 * 	into.
-	 * @param {GPUTextureView} presentView - The texture view to use as the
+	 * @param presentView - The texture view to use as the
 	 * 	output attachment.
-	 * @param {RenderOutputTag} tag - The tag selecting the bound
+	 * @param tag - The tag selecting the bound
 	 * 	texture to use.
-	 * @param {RenderOutputTransform} transform - The transformation to apply to
+	 * @param transform - The transformation to apply to
 	 * 	the sampled texture values in the fragment stage.
-	 * @param {TimestampQueryInterval} [timestamps] - The interval to record
+	 * @param timestamps - The interval to record
 	 * 	timing information into.
-	 * @memberof FullscreenQuadPassResources
 	 */
 	record(
 		device: GPUDevice,

@@ -9,20 +9,15 @@ const MULTISCATTER_LUT_FORMAT: GPUTextureFormat = "rgba32float";
  * spectral RGB inscattering luminance arriving at any given point in the
  * atmosphere. Multi-scattered means that the values in the table are the sum of
  * secondary inscattering, plus tertiary inscattering, and so on.
- * @class MultiscatterLUTPassResources
  */
 export class MultiscatterLUTPassResources {
 	/**
 	 * The multiscatter lookup table texture.
-	 * @type {GPUTexture}
-	 * @memberof MultiscatterLUTPassResources
 	 */
 	public readonly texture: GPUTexture;
 
 	/**
 	 * The view into {@link texture}.
-	 * @type {GPUTextureView}
-	 * @memberof MultiscatterLUTPassResources
 	 */
 	public readonly view: GPUTextureView;
 
@@ -40,12 +35,11 @@ export class MultiscatterLUTPassResources {
 
 	/**
 	 * Initializes all resources related to the multiscatter lookup table.
-	 * @param {GPUDevice} device
-	 * @param {Extent2D} dimensions
-	 * @param {GPUTextureView} transmittanceLUT
-	 * @param {boolean} filterableLUT
-	 * @param {GlobalUBO} globalUBO
-	 * @memberof MultiscatterLUTPassResources
+	 * @param device - The WebGPU device to use.
+	 * @param dimensions - The dimensions of the LUT texture.
+	 * @param transmittanceLUT - The transmittance LUT to bind and read from.
+	 * @param filterableLUT - Whether or not the LUTs are filterable.
+	 * @param globalUBO - The global UBO to bind and read from.
 	 */
 	constructor(
 		device: GPUDevice,

@@ -26,9 +26,9 @@ export interface RendererApp {
 /**
  * A function signature for the constructor that fully initializes a WebGPU
  * sample renderer apps.
- * @param {GPUDevice} device - The device that is used for the allocation of all
+ * @param device - The device that is used for the allocation of all
  *  resources and dispatch of rendering commands.
- * @param {GPUTextureFormat} presentFormat - The format of the presentation
+ * @param presentFormat - The format of the presentation
  *  texture that will be passed in {@link RendererApp.draw}. Rendering is not
  *  guaranteed to work if the format does not match at draw time.
  * @returns The instantiated renderer, ready for binding UI and recording frame
@@ -158,23 +158,20 @@ async function getDevice(props: {
 /**
  * Initializes a WebGPU sample renderer app with the given limits.
  *
- * @param {GPU} props.gpu - The GPU to request the adapter and device from.
- * @param {ReadonlyMap<keyof GPUSupportedLimits, number>} props.requiredFeatures
- *  - Each feature is guaranteed to be enabled, and the promise rejects if any
- *    of these features are unsupported.
- * @param {ReadonlySet<GPUFeatureName>} props.optionalFeatures - Each feature
- *  will be enabled if supported. Any unsupported features will be omitted, and
- *  it is the duty of the renderer to check which features ended up enabled.
- * @param {ReadonlySet<GPUFeatureName>} props.requiredLimits - The exact limits
- *  and no better provided will be enabled. The promise rejects if any of these
- *  limits cannot be supported.
- * @param {(() => Promise<RendererAppConstructor>)} props.import - The
- *  (asynchronous importer of the constructor for the) app to be initialized
- * @param {((e: GPUUncapturedErrorEvent) => void)} props.onUncapturedError
- *  - A handler to be attached to {@link GPUDevice.onuncapturederror} of the
- *    created device, which produces error events.
- * @returns {Promise<RendererApp>} A promise resolving to the fully initialized
- *  app. Can reject.
+ * @param gpu - The GPU to request the adapter and device from.
+ * @param requiredFeatures - Each feature is guaranteed to be enabled, and the
+ *  promise rejects if any of these features are unsupported.
+ * @param optionalFeatures - Each feature will be enabled if supported. Any
+ *  unsupported features will be omitted, and it is the duty of the renderer to
+ *  check which features ended up enabled.
+ * @param requiredLimits - The exact limits and no better provided will be
+ *  enabled. The promise rejects if any of these limits cannot be supported.
+ * @param import - The (asynchronous importer of the constructor for the) app to
+ *  be initialized
+ * @param onUncapturedError - A handler to be attached to
+ *  {@link GPUDevice.onuncapturederror} of the created device, which produces
+ *  error events.
+ * @returns A promise resolving to the fully initialized app. Can reject.
  */
 export async function initializeApp(props: {
 	gpu: GPU;

@@ -1,7 +1,6 @@
 /**
  * Defines the width and height of a 2D texture, typically interpreted as
  * pixels.
- * @interface Extent2D
  */
 export interface Extent2D {
 	width: number;

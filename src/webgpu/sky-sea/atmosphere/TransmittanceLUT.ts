@@ -9,20 +9,15 @@ const TRANSMITTANCE_LUT_FORMAT: GPUTextureFormat = "rgba32float";
  * transmittance from point to upper edge of atmosphere, parameterized by
  * altitude and zenith angle of the querying ray. This LUT only needs to be
  * updated when the atmosphere parameters change.
- * @class TransmittanceLUTPassResources
  */
 export class TransmittanceLUTPassResources {
 	/**
 	 * The transmittance lookup table texture.
-	 * @type {GPUTexture}
-	 * @memberof TransmittanceLUTPassResources
 	 */
 	public readonly texture: GPUTexture;
 
 	/**
 	 * The view into {@link texture}.
-	 * @type {GPUTextureView}
-	 * @memberof TransmittanceLUTPassResources
 	 */
 	public readonly view: GPUTextureView;
 
@@ -38,11 +33,10 @@ export class TransmittanceLUTPassResources {
 
 	/**
 	 * Initializes all resources related to the transmittance lookup table.
-	 * @param {GPUDevice} device
-	 * @param {Extent2D} dimensions - The dimensions to use for the LUT texture.
-	 * @param {GlobalUBO} globalUBO - The global UBO to bind and use when
+	 * @param device - The WebGPU device to use.
+	 * @param dimensions - The dimensions to use for the LUT texture.
+	 * @param globalUBO - The global UBO to bind and use when
 	 * 	rendering the LUT.
-	 * @memberof TransmittanceLUTPassResources
 	 */
 	constructor(device: GPUDevice, dimensions: Extent2D, globalUBO: GlobalUBO) {
 		this.texture = device.createTexture({
@@ -119,9 +113,8 @@ export class TransmittanceLUTPassResources {
 
 	/**
 	 * Records the population of the lookup table.
-	 * @param {GPUCommandEncoder} commandEncoder - The command encoder to record
+	 * @param commandEncoder - The command encoder to record
 	 *  into.
-	 * @memberof TransmittanceLUTPassResources
 	 */
 	record(commandEncoder: GPUCommandEncoder): void {
 		const passEncoder = commandEncoder.beginComputePass({

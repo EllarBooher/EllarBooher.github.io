@@ -40,8 +40,7 @@ interface PerformanceConfig {
 	fftGridSizeLog2: number;
 	oceanSurfaceVertexSize: number;
 }
-const PERFORMANCE_CONFIG_NAMES = ["bad", "good"] as const;
-type PerformanceConfigName = (typeof PERFORMANCE_CONFIG_NAMES)[number];
+type PerformanceConfigName = "bad" | "good";
 const PERFORMANCE_CONFIGS = new Map<PerformanceConfigName, PerformanceConfig>([
 	[
 		"bad",
@@ -607,7 +606,7 @@ class SkySeaApp implements RendererApp {
 		this.performance.setupUI(gui);
 	}
 
-	setPerformanceConfig(name: PerformanceConfigName) {
+	setPerformanceConfig(name: PerformanceConfigName): void {
 		const newConfig =
 			PERFORMANCE_CONFIGS.get(name) ?? PERFORMANCE_CONFIGS.get("bad")!;
 		const updateNeeded =

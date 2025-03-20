@@ -10,18 +10,22 @@ import { UBO } from "./util/UBO";
  * The profile of light scattering and absorption for Rayleigh particles in a
  * medium. Its altitude-dependent density is modelled with a exponential
  * function `exp(-densityScale * altitude)`.
- * @prop {Vec3} scattering - Optical depth of scattered light per unit length
- * @prop {Vec3} absorption - Optical depth of absorbed light per unit length
- * @prop {number} densityScale - The inner coefficient for the exponential-decay
- *  density function, with units of length.
- * @interface RayleighProfile
  */
 export interface RayleighProfile {
-	// Units of inverse length
+	/**
+	 * Optical depth of scattered light per unit length.
+	 */
 	scattering: Vec3;
+
+	/**
+	 * Optical depth of absorbed light per unit length
+	 */
 	absorption: Vec3;
 
-	// Units of length
+	/**
+	 * The inner coefficient for the exponential-decay density function, with
+	 * units of length.
+	 */
 	densityScale: number;
 }
 /**
@@ -32,37 +36,53 @@ export type MieProfile = RayleighProfile;
 /**
  * The profile of light scattering and absorption for Ozone in a medium. Its
  * altitude-dependent density is modelled with a hardcoded tent function.
- * @prop {Vec3} scattering - Optical depth of scattered light per unit length
- * @prop {Vec3} absorption - Optical depth of absorbed light per unit length
- * @interface OzoneProfile
  */
 export interface OzoneProfile {
+	/**
+	 * Optical depth of scattered light per unit length
+	 */
 	scattering: Vec3;
+	/**
+	 * Optical depth of absorbed light per unit length
+	 */
 	absorption: Vec3;
 }
 
 /**
  * The parameters for the atmosphere and planet the scene is surrounded by.
  * Units are in megameters, since that is what the GPU atmosphere code uses.
- * @prop {RayleighProfile} rayleighMm - The profile for Rayleigh particles.
- * @prop {MieProfile} mieMm - The profile for Mie particles.
- * @prop {OzoneProfile} ozoneMm - The profile for Ozone particles.
- * @prop {number} planetRadiusMm - The uniform radius of the spherical planet,
- *  where the atmosphere begins.
- * @prop {number} atmosphereRadiusMm - The uniform radius of the atmosphere, the
- *  outer boundary of the atmosphere. It is the sum of the planet's radius and
- *  the thickness of the atmosphere.
- * @prop {Vec3} groundAlbedo - The albedo for the planet's surface. Unused.
- * @interface Atmosphere
  */
 export interface Atmosphere {
+	/**
+	 * The profile for Rayleigh particles.
+	 */
 	rayleighMm: RayleighProfile;
+
+	/**
+	 * The profile for Mie particles.
+	 */
 	mieMm: MieProfile;
+
+	/**
+	 * The profile for Ozone particles.
+	 */
 	ozoneMm: OzoneProfile;
 
+	/**
+	 * The uniform radius of the spherical planet, where the atmosphere begins.
+	 */
 	planetRadiusMm: number;
+
+	/**
+	 * The uniform radius of the atmosphere, the outer boundary of the
+	 * atmosphere. It is the sum of the planet's radius and the thickness of the
+	 * atmosphere.
+	 */
 	atmosphereRadiusMm: number;
 
+	/**
+	 * The albedo for the planet's surface. Unused.
+	 */
 	groundAlbedo: Vec3;
 }
 
@@ -99,21 +119,29 @@ function atmosphereEarth(): Atmosphere {
  * Parameters for a directional light illuminating the scene. Multiply `color`
  * and `strength` to get the RGB spectral luminance of light incident to the
  * scene.
- * @prop {Vec3} color - The relative strengths of red, green, and blue light
- *  respectively.
- * @prop {number} strength - The wavelength-independent magnitude of
- *  luminance/radiance for this light.
- * @prop {Vec3} forward - The normalized direction of all rays emanating from
- *  this light source.
- * @prop {number} angularRadius - The angle subtended by the light modelled as a
- *  disk (or distant sphere). Due to the parallel light rays this angle is the
- *  same anywhere in the scene.
- * @interface CelestialLight
  */
 export interface CelestialLight {
+	/**
+	 * The relative strengths of red, green, and blue light respectively.
+	 */
 	color: Vec3;
+
+	/**
+	 * The wavelength-independent magnitude of luminance/radiance for this
+	 * light.
+	 */
 	strength: number;
+
+	/**
+	 * The normalized direction of all rays emanating from this light source.
+	 */
 	forward: Vec3;
+
+	/**
+	 * The angle subtended by the light modelled as a disk (or distant sphere).
+	 * Due to the parallel light rays this angle is the same anywhere in the
+	 * scene.
+	 */
 	angularRadius: number;
 }
 
@@ -128,31 +156,45 @@ function lightSun(): CelestialLight {
 
 /**
  * The matrices and vectors for a perspective camera in the scene.
- * @prop {Mat4} invProj - Inverse of the perspective projection matrix
- * @prop {Mat4} invView - Inverse of the view matrix
- * @prop {Mat4} projView - Precomputed product of the perspective projection and
- * 	view matrix.
- * @prop {Vec4} position - The world-space position of the camera in the scene.
- * @prop {Vec4} forward - The world-space direction of the camera in the scene.
- * @interface Camera
  */
 export interface Camera {
+	/**
+	 * Inverse of the perspective projection matrix.
+	 */
 	invProj: Mat4;
+
+	/**
+	 * Inverse of the view matrix.
+	 */
 	invView: Mat4;
+
+	/**
+	 * Precomputed product of the perspective projection and view matrix.
+	 */
 	projView: Mat4;
+
+	/**
+	 * The world-space position of the camera in the scene.
+	 */
 	position: Vec4;
+
+	/**
+	 * The world-space direction of the camera in the scene.
+	 */
 	forward: Vec4;
 }
 
 /**
  * The timing information for a scene.
- * @prop {number} timeSeconds - The time in seconds
- * @prop {number} deltaTimeSeconds - The time in seconds that has elapsed since
- *  the last frame.
- * @interface Time
  */
 export interface Time {
+	/**
+	 * The total time that has elapsed, in seconds.
+	 */
 	timeSeconds: number;
+	/**
+	 * The time in seconds that has elapsed since the last frame.
+	 */
 	deltaTimeSeconds: number;
 }
 
@@ -191,39 +233,46 @@ const SIZEOF_GPU_GLOBAL_UBO = wgpuRoundUp(
 /**
  * The backing data for {@link GlobalUBO}, closely matching its gpu
  * representation.
- * @prop {Camera} ocean_camera - A camera that is used as the perspective for
- *  the generation of the screen-space warped ocean surface.
- * @prop {Camera} camera - A second camera that is used for rendering the scene.
- *  Usually should match `ocean_camera`, but can be different for debug or
- *  demonstration purposes.
- * @prop {Atmosphere} atmosphere - The parameters to define the participating
- *  medium of the sky in the scene.
- * @prop {CelestialLight} light - The primary directional light used in the
- *  scene, coming from space.
- * @prop {Time} time - The timing information for the scene, for a specific
- *  frame.
- * @interface GlobalUBOData
  */
 export interface GlobalUBOData {
+	/**
+	 * A camera that is used as the perspective for the generation of the
+	 *  screen-space warped ocean surface.
+	 */
 	ocean_camera: Camera;
+
+	/**
+	 * A second camera that is used for rendering the scene. Usually should
+	 *  match `ocean_camera`, but can be different for debug or demonstration
+	 *  purposes.
+	 */
 	camera: Camera;
+
+	/**
+	 * The parameters to define the participating medium of the sky in the
+	 *  scene.
+	 */
 	atmosphere: Atmosphere;
+
+	/**
+	 * The primary directional light used in the scene, coming from space.
+	 */
 	light: CelestialLight;
+
+	/**
+	 * The timing information for the scene, for a specific frame.
+	 */
 	time: Time;
 }
 
 /**
  * A UBO containing various parameters integral to rendering. It is intended for
  * a single instance to be shared, with the same buffer bound to many pipelines.
- * @class GlobalUBO
- * @extends {UBO}
  */
 export class GlobalUBO extends UBO {
 	/**
 	 * The data that will be packed and laid out in proper byte order in
 	 * {@link packed}, to be written to the GPU.
-	 * @type {GlobalUBOData}
-	 * @memberof GlobalUBO
 	 */
 	public readonly data: GlobalUBOData = {
 		atmosphere: atmosphereEarth(),

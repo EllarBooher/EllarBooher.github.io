@@ -11,20 +11,15 @@ const AERIAL_PERSPECTIVE_LUT_FORMAT: GPUTextureFormat = "rgba16float";
  * - The LUT is an array, where each layer represents an incremental increase in
  *   the distance that scattering is calculated over.
  * - The LUT is parameterized by azimuth and zenith of the outgoing view ray.
- * @class AerialPerspectiveLUTPassResources
  */
 export class AerialPerspectiveLUTPassResources {
 	/**
 	 * The aerial perspective lookup table texture.
-	 * @type {GPUTexture}
-	 * @memberof AerialPerspectiveLUTPassResources
 	 */
 	public readonly texture: GPUTexture;
 
 	/**
 	 * The view into {@link texture}.
-	 * @type {GPUTextureView}
-	 * @memberof AerialPerspectiveLUTPassResources
 	 */
 	public readonly view: GPUTextureView;
 
@@ -43,21 +38,19 @@ export class AerialPerspectiveLUTPassResources {
 
 	/**
 	 * Initializes all resources related to the aerial perspective lookup table.
-	 * @param {GPUDevice} device
-	 * @param {GPUExtent3DDictStrict} dimensions - The dimensions to use for the
-	 *  LUT. This increases the fidelity and detail captured. Generally, a low
-	 *  value like 32 x 32 x 32 is good enough.
-	 * @param {GPUTextureView} transmittanceLUT - A view into the transmittance
-	 *  LUT that will be used.
-	 * @param {GPUTextureView} multiscatterLUT - A view into the multiscatter
-	 *  LUT that will be used.
-	 * @param {boolean} filterableLUT - Whether or not the passed LUTs are
-	 *  filterable by samples. This is a consideration since the LUTs are 32-bit
-	 *  floats per channel, and filtering such textures is not supported on all
-	 *  WebGPU instances.
-	 * @param {GlobalUBO} globalUBO - The global UBO to bind and use when
-	 *  rendering the LUT.
-	 * @memberof AerialPerspectiveLUTPassResources
+	 * @param device - The WebGPU device to use.
+	 * @param dimensions - The dimensions to use for the LUT. This increases the
+	 *  fidelity and detail captured. Generally, a low value like 32 x 32 x 32
+	 *  is good enough.
+	 * @param transmittanceLUT - A view into the transmittance LUT that will be
+	 *  used.
+	 * @param multiscatterLUT - A view into the multiscatter LUT that will be
+	 *  used.
+	 * @param filterableLUT - Whether or not the passed LUTs are filterable by
+	 *  samples. This is a consideration since the LUTs are 32-bit floats per
+	 *  channel, and filtering such textures is not supported on all WebGPU
+	 *  instances.
+	 * @param globalUBO - The global UBO to bind and use when rendering the LUT.
 	 */
 	constructor(
 		device: GPUDevice,
@@ -187,11 +180,10 @@ export class AerialPerspectiveLUTPassResources {
 
 	/**
 	 * Records the population of the lookup table.
-	 * @param {GPUCommandEncoder} commandEncoder - The command encoder to record
+	 * @param commandEncoder - The command encoder to record
 	 * 	into.
-	 * @param {(TimestampQueryInterval | undefined)} timestampInterval - The
+	 * @param timestampInterval - The
 	 *  interval to record timing information into.
-	 * @memberof AerialPerspectiveLUTPassResources
 	 */
 	record(
 		commandEncoder: GPUCommandEncoder,

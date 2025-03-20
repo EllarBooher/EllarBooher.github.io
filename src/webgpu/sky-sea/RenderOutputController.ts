@@ -37,8 +37,6 @@ export class RenderOutputTexture {
 	/**
 	 * The number of mip levels in the texture.
 	 * @readonly
-	 * @type {number}
-	 * @memberof RenderOutputTexture
 	 */
 	get mipLevelCount(): number {
 		return this.texture.mipLevelCount;
@@ -47,8 +45,6 @@ export class RenderOutputTexture {
 	/**
 	 * The extent of the texture.
 	 * @readonly
-	 * @type {Extent3D}
-	 * @memberof RenderOutputTexture
 	 */
 	get extent(): Extent3D {
 		return {
@@ -92,7 +88,6 @@ export class RenderOutputTexture {
 /**
  * The parameters for transforming an instance of `{@link RenderOutputTexture}`
  * while sampling it for presentation.
- * @class RenderOutputTransform
  */
 export class RenderOutputTransform {
 	flip = false;
@@ -155,7 +150,6 @@ const RENDER_OUTPUT_TRANSFORM_DEFAULT_OVERRIDES: ({
  * {@link RenderOutputTags} for the possible outputs, and
  * {@link RenderOutputTransform} for the properties that are transformed during
  * rendering.
- * @class RenderOutputController
  */
 export class RenderOutputController {
 	private options: {
@@ -173,7 +167,6 @@ export class RenderOutputController {
 	/**
 	 * @returns The target and transform of the currently selected render
 	 * output.
-	 * @memberof RenderOutputController
 	 */
 	current(): {
 		tag: RenderOutputTag;
@@ -218,13 +211,11 @@ export class RenderOutputController {
 	 * Set the per-texture data for a given render output, restricting what
 	 * values can be set in the UI, such as not accessing out-of-bounds mipmap
 	 * levels.
-	 * @param {RenderOutputTag} props.tag - The render output to tweak the
-	 *  parameters for.
-	 * @param {number} prop.mipLevelCount - The upper bound of what mip level
-	 *  can be set in the UI.
-	 * @param {number} prop.depthOrArrayLayerCount - The upper bound of what
-	 *  array layer (or depth) can be set in the UI.
-	 * @memberof RenderOutputController
+	 * @param tag - The render output to tweak the parameters for.
+	 * @param mipLevelCount - The upper bound of what mip level can be set in
+	 *  the UI.
+	 * @param depthOrArrayLayerCount - The upper bound of what array layer (or
+	 *  depth) can be set in the UI.
 	 */
 	setTextureProperties(props: {
 		tag: RenderOutputTag;
@@ -290,8 +281,7 @@ export class RenderOutputController {
 
 	/**
 	 * Adds this controller to the UI.
-	 * @param {LilGUI} gui - The root level GUI to attach to.
-	 * @memberof RenderOutputController
+	 * @param gui - The root level GUI to attach to.
 	 */
 	setupUI(gui: LilGUI): void {
 		const outputTextureFolder = gui.addFolder("Render Output").close();

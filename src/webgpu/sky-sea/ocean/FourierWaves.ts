@@ -26,27 +26,36 @@ const FFT_IO_TEXTURE_FORMAT: GPUTextureFormat = "rgba32float";
 
 /**
  * Parameters for the generation of ocean surface waves.
- * @prop {number} gravity - The value of acceleration by gravity in units of
- *  meters per second squared. This is used since gravity is the dominating
- *  restorative force for so-called gravity waves, which tend to be all ocean
- *  waves larger than a couple centimeters.
- * @prop {number} windSpeedMetersPerSeconds - The wind speed in meters per
- *  second. This increases the energy of the waves, which increases wave height.
- * @prop {number} windFetchMeters - The distance in meters along which the wind
- *  has been blowing without significantly changing direction. This represents
- *  an accumulation of energy from wind, and higher values of fetch lead to a
- *  more "developed" ocean surface. With high fetch, even low wind speeds can
- *  create visible waves.
- * @prop {number} waveSwell - A unit-less parameter on the interval [0,1]. Swell
- *  describes the wide, parallel waves of a resonant frequency that dominate the
- *  ocean across a long fetch. Higher values increase the height of these
- *  dominating waves.
- * @interface FFTWavesSettings
  */
 export interface FFTWavesSettings {
+	/**
+	 * The value of acceleration by gravity in units of meters per second
+	 * squared. This is used since gravity is the dominating restorative force
+	 * for so-called gravity waves, which tend to be all ocean waves larger than
+	 * a couple centimeters.
+	 */
 	gravity: number;
+
+	/**
+	 * The wind speed in meters per second. This increases the energy of the
+	 * waves, which increases wave height.
+	 */
 	windSpeedMetersPerSeconds: number;
+
+	/**
+	 * The distance in meters along which the wind has been blowing without
+	 * significantly changing direction. This represents an accumulation of
+	 * energy from wind, and higher values of fetch lead to a more "developed"
+	 * ocean surface. With high fetch, even low wind speeds can create visible
+	 * waves.
+	 */
 	windFetchMeters: number;
+
+	/**
+	 * A unit-less parameter on the interval [0,1]. Swell describes the wide,
+	 * parallel waves of a resonant frequency that dominate the ocean across a
+	 * long fetch. Higher values increase the height of these dominating waves.
+	 */
 	waveSwell: number;
 }
 
@@ -145,7 +154,6 @@ function randGaussian2DBoxMuller(): [number, number] {
  * Internal textures that can be exposed for rendering to the screen for
  * purposes of exploration, demonstration, or debug. See {@link TODO} for
  * explanations on what each texture represents.
- * @interface FFTWaveSpectrumRenderables
  */
 export interface FFTWaveSpectrumRenderables {
 	gaussianNoise: RenderOutputTexture;
@@ -160,7 +168,6 @@ export interface FFTWaveSpectrumRenderables {
 /**
  * The final spatial displacement/displacement derivative maps that can be
  * consumed to generate ocean surface vertices and normal maps.
- * @class FFTWaveDisplacementMaps
  */
 export class FFTWaveDisplacementMaps {
 	private Dx_Dy_Dz_Dxdz_Spatial: GPUTexture;
@@ -170,8 +177,6 @@ export class FFTWaveDisplacementMaps {
 	/**
 	 * The number of mip levels for every map in this collection.
 	 * @readonly
-	 * @type {number}
-	 * @memberof FFTWaveDisplacementMaps
 	 */
 	get mipLevelCount(): number {
 		return this.Dx_Dy_Dz_Dxdz_Spatial.mipLevelCount;
@@ -182,9 +187,7 @@ export class FFTWaveDisplacementMaps {
 	 * displacement of the ocean surface at the sampled point and `d/di` is the
 	 * partial derivative with respect to coordinate `i`. The dimension is
 	 * `2d-array`, and each array layer represents one cascade.
-	 * @type {GPUTextureView}
 	 * @readonly
-	 * @memberof FFTWaveDisplacementMaps
 	 */
 	readonly Dx_Dy_Dz_Dxdz_SpatialAllMips: GPUTextureView;
 	/**
@@ -193,8 +196,6 @@ export class FFTWaveDisplacementMaps {
 	 * point and `d/di` is the partial derivative with respect to coordinate
 	 * `i`. The dimension is `2d-array`, and each array layer represents one
 	 * cascade.
-	 * @type {GPUTextureView}
-	 * @memberof FFTWaveDisplacementMaps
 	 */
 	readonly Dydx_Dydz_Dxdx_Dzdz_SpatialAllMips: GPUTextureView;
 	/**
@@ -207,8 +208,6 @@ export class FFTWaveDisplacementMaps {
 	 * each frame.
 	 * @see {@link FFTWaveSpectrumResources.turbulenceMapIndex} for
 	 * which index is active.
-	 * @type {GPUTextureView[]}
-	 * @memberof FFTWaveDisplacementMaps
 	 */
 	readonly turbulenceJacobianOneMip: GPUTextureView[];
 
@@ -294,7 +293,6 @@ interface TurbulenceJacobianEntry {
  * Produce a spectrum of ocean waves on a square grid, using the fourier
  * transform to transform from frequency to space, to produce displacement and
  * gradient maps that can be applied to an ocean surface mesh.
- * @class FFTWaveSpectrumResources
  */
 export class FFTWaveSpectrumResources {
 	/*
@@ -310,10 +308,6 @@ export class FFTWaveSpectrumResources {
 
 	/**
 	 * The extent used by every texture parameterized by the fourier grid.
-	 * @readonly
-	 * @private
-	 * @type {Extent3D}
-	 * @memberof FFTWaveSpectrumResources
 	 */
 	private get textureGridSize(): Extent3D {
 		return {
@@ -356,8 +350,6 @@ export class FFTWaveSpectrumResources {
 	 * Gets the index of the turbulence-jacobian map that will be (or was)
 	 * written into this frame.
 	 * @readonly
-	 * @type {number}
-	 * @memberof FFTWaveSpectrumResources
 	 */
 	public get turbulenceMapIndex(): number {
 		return this.turbulenceJacobianIndex;
@@ -534,10 +526,9 @@ export class FFTWaveSpectrumResources {
 
 	/**
 	 * Instantiates all the cascades and resources.
-	 * @param {GPUDevice} device
-	 * @param {GlobalUBO} globalUBO - The global UBO that will be bound into
+	 * @param device - The WebGPU device to use.
+	 * @param globalUBO - The global UBO that will be bound into
 	 * 	pipelines.
-	 * @memberof FFTWaveSpectrumResources
 	 */
 	constructor(device: GPUDevice, globalUBO: GlobalUBO, log2GridSize: number) {
 		this.gridSize = Math.pow(2, log2GridSize);
@@ -911,10 +902,8 @@ export class FFTWaveSpectrumResources {
 	}
 
 	/**
-	 * Returns the views into all the FFT Wave textures, for read-only display
-	 * purposes.
-	 * @return {FFTWaveSpectrumRenderables}
-	 * @memberof FFTWaveSpectrumResources
+	 * @returns The views into all the FFT Wave textures, for read-only display
+	 *  purposes.
 	 */
 	views(): FFTWaveSpectrumRenderables {
 		return {
@@ -944,11 +933,8 @@ export class FFTWaveSpectrumResources {
 	}
 
 	/**
-	 * Returns views into the displacement maps that are the output of the ocean
-	 * spectrum.
-	 * @return {FFTWaveDisplacementMaps} The maps of ocean surface displacement
-	 * and derivatives.
-	 * @memberof FFTWaveSpectrumResources
+	 * @returns The views into the displacement maps that are the output of the
+	 *  ocean spectrum.
 	 */
 	displacementMaps(): FFTWaveDisplacementMaps {
 		return new FFTWaveDisplacementMaps(
@@ -961,14 +947,12 @@ export class FFTWaveSpectrumResources {
 	/**
 	 * Records the commands that fill the persistent displacement maps returned
 	 * by {@link displacementMaps}.
-	 * @param {GPUDevice} device
-	 * @param {GPUCommandEncoder} commandEncoder - The command encoder to record
+	 * @param device - The WebGPU device to use.
+	 * @param commandEncoder - The command encoder to record into.
+	 * @param settings - The parameters for the wave spectrum, determine the
+	 *  shape and amplitude of the waves.
+	 * @param timestampInterval - The interval to record timing information
 	 *  into.
-	 * @param {FFTWavesSettings} settings - The parameters for the wave
-	 *  spectrum, determine the shape and amplitude of the waves.
-	 * @param {(TimestampQueryInterval | undefined)} timestampInterval - The
-	 *  interval to record timing information into.
-	 * @memberof FFTWaveSpectrumResources
 	 */
 	record(
 		device: GPUDevice,

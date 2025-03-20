@@ -22,7 +22,6 @@ export interface GBufferFormats {
  * - `rgba16float`  binding 1 (read/write groups) - World-space normals with
  *   ocean-surface foam strength packed into the alpha channel.
  * - `depth32float` binding 2 (read group only)   - Framebuffer depth.
- * @class GBuffer
  */
 export class GBuffer {
 	private colorWithSurfaceWorldDepthInAlpha: GPUTexture;
@@ -69,14 +68,10 @@ export class GBuffer {
 	/**
 	 * Contains all bindings for reading the GBuffer in a shader.
 	 * @see {@link GBuffer} for descriptions of the targets including formats.
-	 * @type {GPUBindGroupLayout}
-	 * @memberof GBuffer
 	 */
 	public readonly readGroupLayout: GPUBindGroupLayout;
 	/**
 	 * @see {@link readGroupLayout}
-	 * @type {GPUBindGroupLayout}
-	 * @memberof GBuffer
 	 */
 	public readonly readGroup: GPUBindGroup;
 
@@ -85,20 +80,17 @@ export class GBuffer {
 	/**
 	 * Contains all bindings for writing to the GBuffer in a shader.
 	 * @see {@link GBuffer} for descriptions of the targets including formats.
-	 * @type {GPUBindGroupLayout}
-	 * @memberof GBuffer
 	 */
 	public readonly writeGroup: GPUBindGroup;
 
 	/**
 	 * Instantiates all textures and bind groups for the GBuffer.
-	 * @param {GPUDevice} device
-	 * @param {Extent2D} dimensions - The dimensions in pixels to instantiate
-	 * 	all the textures with.
-	 * @param {GBuffer} [old] - A previous instance of `GBuffer` to potentially
-	 *  reuse resources or parameters from. This is useful to pass when the
-	 *  GBuffer is resized to match the presentation viewport's dimensions.
-	 * @memberof GBuffer
+	 * @param device - The WebGPU device to use.
+	 * @param dimensions - The dimensions in pixels to instantiate all the
+	 *  textures with.
+	 * @param old - A previous instance of `GBuffer` to potentially reuse
+	 *  resources or parameters from. This is useful to pass when the GBuffer is
+	 *  resized to match the presentation viewport's dimensions.
 	 */
 	constructor(device: GPUDevice, dimensions: Extent2D, old?: GBuffer) {
 		this.colorWithSurfaceWorldDepthInAlpha = device.createTexture({

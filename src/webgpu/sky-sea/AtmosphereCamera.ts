@@ -10,7 +10,6 @@ const ATMOSPHERE_CAMERA_OUTPUT_TEXTURE_FORMAT: GPUTextureFormat = "rgba16float";
  * Contains the resources for the composition of the atmosphere with an input
  * GBuffer. The GBuffer is interpreted as the ocean surface and shaded as such.
  * This includes reflections of the sky.
- * @class AtmosphereCameraPassResources
  */
 export class AtmosphereCameraPassResources {
 	/*
@@ -43,24 +42,21 @@ export class AtmosphereCameraPassResources {
 	 * Initializes all resources related to the atmospheric camera pass. The
 	 * texture will be initialized as one pixel by one pixel, call
 	 * {@link resize} afterwards to set the size.
-	 * @param {GPUDevice} device
-	 * @param {GPUBindGroupLayout} gbufferReadGroupLayout - The layout of the
-	 *  GBuffer bind group that will be provided at rendering time.
-	 * @param {GPUTextureView} transmittanceLUT - A view into the transmittance
-	 *  LUT that will be used.
-	 * @param {GPUTextureView} multiscatterLUT - A view into the multiscatter
-	 *  LUT that will be used.
-	 * @param {GPUTextureView} skyviewLUT - A view into the sky view LUT that
+	 * @param device - The WebGPU device to use.
+	 * @param gbufferReadGroupLayout - The layout of the GBuffer bind group that
+	 *  will be provided at rendering time.
+	 * @param transmittanceLUT - A view into the transmittance LUT that will be
+	 *  used.
+	 * @param multiscatterLUT - A view into the multiscatter LUT that will be
+	 *  used.
+	 * @param skyviewLUT - A view into the sky view LUT that will be used.
+	 * @param aerialPerspectiveLUT - A view into the aerial perspective LUT that
 	 *  will be used.
-	 * @param {GPUTextureView} aerialPerspectiveLUT - A view into the aerial
-	 *  perspective LUT that will be used.
-	 * @param {boolean} filterableLUT - Whether or not the passed LUTs are
-	 *  filterable by samples. This is a consideration since the LUTs are 32-bit
-	 *  floats per channel, and filtering such textures is not supported on all
-	 *  WebGPU instances.
-	 * @param {GlobalUBO} globalUBO - The global UBO to bind and use when
-	 *  rendering the LUT.
-	 * @memberof AtmosphereCameraPassResources
+	 * @param filterableLUT - Whether or not the passed LUTs are filterable by
+	 *  samples. This is a consideration since the LUTs are 32-bit floats per
+	 *  channel, and filtering such textures is not supported on all WebGPU
+	 *  instances.
+	 * @param globalUBO - The global UBO to bind and use when rendering the LUT.
 	 */
 	constructor(
 		device: GPUDevice,
@@ -226,12 +222,10 @@ export class AtmosphereCameraPassResources {
 
 	/**
 	 * Resizes all managed textures.
-	 * @see {@link AtmosphereCameraPassResources:constructor} for further
-	 * 	descriptions of the parameters.
-	 * @param {Extent2D} size - The new size to use. {@link outputColor} will be
-	 *  this size.
-	 * @param {GPUDevice} device
-	 * @memberof AtmosphereCameraPassResources
+	 * @see {@link (AtmosphereCameraPassResources:constructor)} for further
+	 *  descriptions of the parameters.
+	 * @param size - The new size to use. {@link outputColor} will be this size.
+	 * @param device - The WebGPU device to use.
 	 */
 	resize(
 		size: Extent2D,
@@ -284,13 +278,12 @@ export class AtmosphereCameraPassResources {
 
 	/**
 	 * Records the rendering of GBuffer scene composited with the atmosphere.
-	 * @param {GPUCommandEncoder} commandEncoder - The command encoder to record
+	 * @param commandEncoder - The command encoder to record
 	 *  into.
-	 * @param {(TimestampQueryInterval | undefined)} timestampInterval - The
+	 * @param timestampInterval - The
 	 *  interval to record timing information into.
-	 * @param {GBuffer} gbuffer - The GBuffer to use as the input scene. See
+	 * @param gbuffer - The GBuffer to use as the input scene. See
 	 * 	shader source for how it is utilized.
-	 * @memberof AtmosphereCameraPassResources
 	 */
 	record(
 		commandEncoder: GPUCommandEncoder,

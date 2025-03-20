@@ -18,7 +18,6 @@ export interface MipMapGenerationTextureBindings {
 /**
  * This contains the resources for generating mipmaps for 2D textures, including
  * texture arrays.
- * @class MipMapGenerationPassResources
  */
 export class MipMapGenerationPassResources {
 	/*
@@ -41,10 +40,9 @@ export class MipMapGenerationPassResources {
 	 * be used to access the texture when writing mipmaps. The returned value
 	 * can be kept and reused each time that mip-level 0 is updated to generate
 	 * new mipmaps.
-	 * @param {GPUDevice} device
-	 * @param {GPUTexture} texture - The texture to generate bindings for.
-	 * @return The bindings can be used for generating mipmaps.
-	 * @memberof MipMapGenerationPassResources
+	 * @param device - The WebGPU device to use.
+	 * @param texture - The texture to generate bindings for.
+	 * @returns The bindings can be used for generating mipmaps.
 	 */
 	createBindGroups(
 		device: GPUDevice,
@@ -184,11 +182,10 @@ export class MipMapGenerationPassResources {
 	 * elements in {@link MipMapGenerationTextureBindings.bindGroupsByMipLevel}.
 	 * This can be called repeatedly across frames to generate up-to-date
 	 * mip-maps.
-	 * @param {GPUComputePassEncoder} fillMipMapsPass - A parent pass to record
+	 * @param fillMipMapsPass - A parent pass to record
 	 *  commands into.
-	 * @param {MipMapGenerationTextureBindings} target - The bindings for the
+	 * @param target - The bindings for the
 	 *  texture to access the mip levels of.
-	 * @memberof MipMapGenerationPassResources
 	 */
 	recordUpdateMipMaps(
 		fillMipMapsPass: GPUComputePassEncoder,

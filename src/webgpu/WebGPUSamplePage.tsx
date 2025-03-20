@@ -18,9 +18,9 @@ import EmbeddedReadme from "./EmbeddedReadme";
  * This component contains the UI and canvas HTML elements used to display and
  * control the WebGPU sample app, while also handling the render loop and
  * timing.
- * @param {RendererApp} app - A fully initialized `RendererApp` to display in
+ * @param app - A fully initialized `RendererApp` to display in
  *  the canvas and bind to the UI.
- * @param {((err: unknown) => void)} onError - An error handler for errors that
+ * @param onError - An error handler for errors that
  *  occur within methods of `app`. Any errors outside `app` are unhandled.
  * @returns
  */
@@ -65,7 +65,7 @@ const RenderingCanvas = function RenderingCanvas({
 				}
 			}, 500);
 
-			return () => {
+			return (): void => {
 				clearTimeout(resizeTimeout.current);
 			};
 		}
@@ -182,7 +182,7 @@ const RenderingCanvas = function RenderingCanvas({
 /**
  * A component that handles the initialization of the rendering application for
  * a given sample, before serving it on a canvas.
- * @param {SampleEntry} sample - The sample load, run, and display.
+ * @param sample - The sample load, run, and display.
  */
 const AppLoader = function AppLoader({
 	sample,

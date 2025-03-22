@@ -474,7 +474,7 @@ export const WebGPUSampleDirectory = memo(
 		return (
 			<>
 				<NavigationHeader />
-				<main className="sample">
+				<main>
 					<div className="sample-text">
 						<h1>WebGPU Samples</h1>
 						<nav aria-label="WebGPU Samples" className="nav-card-container">

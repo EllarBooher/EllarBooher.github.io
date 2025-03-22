@@ -1,6 +1,6 @@
 import { memo, ReactElement } from "react";
 import "./LandingPage.css";
-import { Link } from "react-router";
+import { NavCard } from "./NavCard";
 import { samplesBySearchParam } from "./webgpu/Samples";
 import { NavigationHeader } from "./NavigateLink";
 
@@ -15,55 +15,14 @@ const githubLink = (
 	</a>
 );
 
-interface DisplayCardProps {
-	hyperlink: string;
-	externalLink?: boolean;
-	thumbnailAssets: URL[];
-	thumbnailAltTexts: string[];
-	title: string;
-	description: string;
-}
-
-const DisplayCard = memo(function DisplayCard({
-	hyperlink,
-	thumbnailAssets = [],
-	thumbnailAltTexts,
-	title = `PLACEHOLDER TITLE`,
-	description = `PLACEHOLDER DESCRIPTION`,
-}: DisplayCardProps) {
-	const thumbnails = (
-		<div className="display-card-thumbnails">
-			{thumbnailAssets.map((url: URL, index) => (
-				<div className="display-card-thumbnail" key={url.toString()}>
-					<img
-						className="display-card-image"
-						src={url.toString()}
-						alt={thumbnailAltTexts[index] ?? null}
-					/>
-				</div>
-			))}
-		</div>
-	);
-
-	return (
-		<Link className="nav-card" to={hyperlink}>
-			<h2>{title}</h2>
-			<p>{description}</p>
-			{thumbnails}
-		</Link>
-	);
-});
-
 export default memo(function LandingPage(): JSX.Element {
 	const webGPUCards: ReactElement[] = [];
 	samplesBySearchParam.forEach((value, key) => {
 		webGPUCards.push(
-			<DisplayCard
+			<NavCard
 				key={key}
-				hyperlink={`/webgpu?sample=${key}`}
-				externalLink={false}
-				thumbnailAssets={[]}
-				thumbnailAltTexts={[]}
+				url={new URL(`/webgpu?sample=${key}`, window.location.href)}
+				thumbnails={[]}
 				title={value.name}
 				description={value.description}
 			/>
@@ -71,12 +30,14 @@ export default memo(function LandingPage(): JSX.Element {
 	});
 
 	const offlineCards = [
-		<DisplayCard
+		<NavCard
 			key="Syzygy"
-			hyperlink={`https://github.com/EllarBooher/Syzygy`}
-			thumbnailAssets={[new URL("./assets/syzygy1.png", import.meta.url)]}
-			thumbnailAltTexts={[
-				"A computer rendered sun rises over chess pieces. Application interface elements appear to the left and bottom.",
+			url={new URL(`https://github.com/EllarBooher/Syzygy`)}
+			thumbnails={[
+				{
+					url: new URL("./assets/syzygy1.png", import.meta.url),
+					alt: "A computer rendered sun rises over chess pieces. Application interface elements appear to the left and bottom.",
+				},
 			]}
 			title={`Syzygy`}
 			description={`
@@ -84,12 +45,14 @@ export default memo(function LandingPage(): JSX.Element {
                 It aims to be a testbed of various features and techniques.
             `}
 		/>,
-		<DisplayCard
+		<NavCard
 			key="SSAO"
-			hyperlink={`https://github.com/EllarBooher/VulkanTemplate/tree/SSAO`}
-			thumbnailAssets={[new URL("./assets/ssao1.png", import.meta.url)]}
-			thumbnailAltTexts={[
-				"A computer rendered building, with various decorations such as banners and pillars. Only the shadows are visible, with no color information.",
+			url={new URL(`https://github.com/EllarBooher/VulkanTemplate/tree/SSAO`)}
+			thumbnails={[
+				{
+					url: new URL("./assets/ssao1.png", import.meta.url),
+					alt: "A computer rendered building, with various decorations such as banners and pillars. Only the shadows are visible, with no color information.",
+				},
 			]}
 			title={`SSAO`}
 			description={`
@@ -99,16 +62,18 @@ export default memo(function LandingPage(): JSX.Element {
 	];
 
 	const videogameCards = [
-		<DisplayCard
+		<NavCard
 			key="Snail Blazer"
-			hyperlink={`https://ellarbooher.itch.io/snail-blazer`}
-			thumbnailAssets={[
-				new URL("./assets/snailblazer1.png", import.meta.url),
-				new URL("./assets/snailblazer2.png", import.meta.url),
-			]}
-			thumbnailAltTexts={[
-				"A smirking cartoon character with yellow hair faces off against a grimacing cartoon character with blue hair. In the middle is an arena filled with magma and colorful battle effects.",
-				"A crying cartoon character with yellow hair faces off against a scowling cartoon character with blue hair. In the middle is an arena filled with magma and colorful battle effects.",
+			url={new URL(`https://ellarbooher.itch.io/snail-blazer`)}
+			thumbnails={[
+				{
+					url: new URL("./assets/snailblazer1.png", import.meta.url),
+					alt: "A smirking cartoon character with yellow hair faces off against a grimacing cartoon character with blue hair. In the middle is an arena filled with magma and colorful battle effects.",
+				},
+				{
+					url: new URL("./assets/snailblazer2.png", import.meta.url),
+					alt: "A crying cartoon character with yellow hair faces off against a scowling cartoon character with blue hair. In the middle is an arena filled with magma and colorful battle effects.",
+				},
 			]}
 			title={`Snail Blazer`}
 			description={`
@@ -136,15 +101,18 @@ export default memo(function LandingPage(): JSX.Element {
 				</p>
 				<p>To contact me, please email at {emailLink}.</p>
 				<h2>In-Browser WebGPU Samples</h2>
-				<nav className="display-grid" aria-label="WebGPU Samples">
+				<nav className="nav-card-container" aria-label="WebGPU Samples">
 					{webGPUCards}
 				</nav>
 				<h2>Offline Computer Graphics</h2>
-				<nav className="display-grid" aria-label="Offline Computer Graphics">
+				<nav
+					className="nav-card-container"
+					aria-label="Offline Computer Graphics"
+				>
 					{offlineCards}
 				</nav>
 				<h2>Video Games</h2>
-				<nav className="display-grid" aria-label="Video Games">
+				<nav className="nav-card-container" aria-label="Video Games">
 					{videogameCards}
 				</nav>
 			</main>

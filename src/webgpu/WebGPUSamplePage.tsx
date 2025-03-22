@@ -13,6 +13,7 @@ import { GUI } from "lil-gui";
 import "./WebGPUSamplePage.css";
 import { NavigationHeader } from "../NavigateLink";
 import EmbeddedReadme from "./EmbeddedReadme";
+import { NavCard } from "../NavCard";
 
 const CanvasScreenshotWidget = ({
 	canvas,
@@ -403,10 +404,12 @@ export default memo(function WebGPUSamplePage(): JSX.Element {
 			</li>
 		);
 		sampleNavCards.push(
-			<Link key={key} className="nav-card" to={sampleLink}>
-				<h2>{value.name}</h2>
-				<p>{value.description}</p>
-			</Link>
+			<NavCard
+				key={key}
+				url={new URL(sampleLink, import.meta.url)}
+				title={value.name}
+				description={value.description}
+			/>
 		);
 	});
 

@@ -5,8 +5,11 @@ html {
 	-moz-osx-font-smoothing: grayscale;
 
 	--header-height: 3rem;
-	--background-color-dark: rgb(2 48 71);
-	--background-color-light: rgb(55 95 113);
+	--background-color-dark: #223038;
+	--background-color-light: #304550;
+	--background-color-lightest: #3e5a68;
+	--text-color: #fff;
+	--text-color-link: #fcc878;
 }
 
 body {
@@ -18,12 +21,7 @@ body {
 	display: flex;
 	flex-direction: column;
 	min-height: 100vh;
-	color: white;
-}
-
-header,
-footer {
-	background-color: var(--background-color-dark);
+	color: var(--text-color);
 }
 
 main {
@@ -72,31 +70,4 @@ a:hover {
 	margin: 0;
 	overflow: visible;
 	position: static;
-}
-
-.nav-card-container {
-	display: flex;
-	margin-block: 1rem;
-	gap: 1rem;
-	flex-wrap: wrap;
-}
-
-.nav-card {
-	width: 30rem;
-	color: white;
-	display: flex;
-	flex-direction: column;
-	align-items: stretch;
-	padding: 1rem;
-	background-color: hsl(199deg 35% 40%);
-	border-radius: 1rem;
-	transition: 0.3s;
-	cursor: pointer;
-	border: 0.2em solid transparent;
-	text-decoration: none;
-}
-
-.nav-card:hover {
-	background-color: hsl(199deg 35% 43%);
-	border: 0.2em solid white;
 }

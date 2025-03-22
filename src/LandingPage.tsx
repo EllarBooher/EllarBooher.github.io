@@ -1,7 +1,7 @@
 import { memo, ReactElement } from "react";
 import "./LandingPage.css";
 import { NavCard } from "./NavCard";
-import { samplesBySearchParam } from "./webgpu/Samples";
+import { samplesByID } from "./webgpu/Samples";
 import { NavigationHeader } from "./NavigateLink";
 
 const emailLink = (
@@ -17,7 +17,7 @@ const githubLink = (
 
 export default memo(function LandingPage(): JSX.Element {
 	const webGPUCards: ReactElement[] = [];
-	samplesBySearchParam.forEach((value, key) => {
+	samplesByID.forEach((value, key) => {
 		webGPUCards.push(
 			<NavCard
 				key={key}

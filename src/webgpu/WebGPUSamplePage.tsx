@@ -6,8 +6,8 @@ import {
 	memo,
 	ReactElement,
 } from "react";
-import { Link, useSearchParams } from "react-router";
-import { SampleEntry, samplesBySearchParam } from "./Samples";
+import { Link } from "react-router";
+import { SampleEntry, samplesByID } from "./Samples";
 import { RendererApp, initializeApp } from "./RendererApp";
 import { GUI } from "lil-gui";
 import "./WebGPUSamplePage.css";
@@ -382,45 +382,95 @@ function useWindowDimensions(): WindowDimensions {
 }
 
 /**
- * The body of the WebGPU sample page, with a sidebar of links to all of the
- * samples. It loads the sample via the URL search param with key 'sample'. If
- * no valid sample matches the query param, a landing page with a grid of cards
- * containing descriptions of each sample is shown.
+ * A vertical sidebar that lists links to all possible samples.
+ *
+ * This uses relative urls that take the form '../foo', and this component
+ * expects to render on a page with a url path that ends in './webgpu/bar' so
+ * they resolve to './webgpu/foo'.
  */
-export default memo(function WebGPUSamplePage(): JSX.Element {
-	const [searchParams, setSearchParams] = useSearchParams();
-	const { width } = useWindowDimensions();
-
+const SampleNavSidebar = memo(function SampleNavSidebar(): JSX.Element {
 	const sampleSidebarLinks: ReactElement[] = [];
-	const sampleNavCards: ReactElement[] = [];
 
-	samplesBySearchParam.forEach((value, key) => {
+	samplesByID.forEach((value, key) => {
 		sampleSidebarLinks.push(
 			<li key={key}>
-				<Link to={key} key={key}>
+				<Link to={`../${key}`} key={key}>
 					{value.name}
 				</Link>
 			</li>
 		);
-		sampleNavCards.push(
-			<NavCard
-				key={key}
-				href={key}
-				title={value.name}
-				description={value.description}
-			/>
-		);
 	});
 
-	const sampleQueryParam = searchParams.get("sample");
-	const sample = sampleQueryParam
-		? samplesBySearchParam.get(sampleQueryParam)
-		: undefined;
-	if (sampleQueryParam && !sample) {
-		searchParams.delete("sample");
-		setSearchParams(searchParams);
+	return (
+		<nav aria-label="WebGPU Samples" className="sample-sidebar">
+			<h2>Samples</h2>
+			<hr />
+			<ul>{sampleSidebarLinks}</ul>
+		</nav>
+	);
+});
+
+/**
+ * The body that contains the rendering area and readme for a specific WebGPU
+ * sample, with a sidebar of links to all samples.
+ * @param sampleID - The identifier for fetching the sample.
+ * @see {@link samplesByID} for the identifiers.
+ */
+export const WebGPUSamplePage = memo(function WebGPUSamplePage({
+	sampleID,
+}: {
+	sampleID: string;
+}): JSX.Element {
+	const { width } = useWindowDimensions();
+
+	const sample = samplesByID.get(sampleID);
+	if (sample === undefined) {
+		console.error("Not a valid sample");
+		return <></>;
 	}
-	if (sample == undefined) {
+
+	const app = (
+		<div className="sample-app-container">
+			<h1 className="visuallyhidden">WebGPU Animated Sample</h1>
+			<AppLoader sample={sample} />
+		</div>
+	);
+
+	const SIDEBAR_BREAKPOINT = 768;
+
+	return (
+		<>
+			<NavigationHeader />
+			<main className="sample-main">
+				{width > SIDEBAR_BREAKPOINT ? <SampleNavSidebar /> : undefined}
+				<div className="sample-body">
+					{app}
+					<EmbeddedReadme projectFolder={sample.projectFolder} />
+				</div>
+			</main>
+		</>
+	);
+});
+
+/**
+ * A directory containing a grid of navigable cards for all samples. Each card
+ * has a name and description, and links to the page that renders the sample.
+ */
+export const WebGPUSampleDirectory = memo(
+	function WebGPUSampleDirectory(): JSX.Element {
+		const sampleNavCards: ReactElement[] = [];
+
+		samplesByID.forEach((value, key) => {
+			sampleNavCards.push(
+				<NavCard
+					key={key}
+					href={key}
+					title={value.name}
+					description={value.description}
+				/>
+			);
+		});
+
 		return (
 			<>
 				<NavigationHeader />
@@ -435,32 +485,4 @@ export default memo(function WebGPUSamplePage(): JSX.Element {
 			</>
 		);
 	}
-
-	const sampleSidebar = (
-		<nav aria-label="WebGPU Samples" className="sample-sidebar">
-			<h2>Samples</h2>
-			<hr />
-			<ul>{sampleSidebarLinks}</ul>
-		</nav>
-	);
-
-	const app = (
-		<div className="sample-app-container">
-			<h1 className="visuallyhidden">WebGPU Animated Sample</h1>
-			<AppLoader sample={sample} />
-		</div>
-	);
-
-	return (
-		<>
-			<NavigationHeader />
-			<main className="sample-main">
-				{width > 768 ? sampleSidebar : undefined}
-				<div className="sample-body">
-					{app}
-					<EmbeddedReadme projectFolder={sample.projectFolder} />
-				</div>
-			</main>
-		</>
-	);
-});
+);

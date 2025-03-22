@@ -84,14 +84,13 @@ export const defaultSample: SampleEntry = {
 /**
  * A unique key identifying the default WebGPU sample.
  */
-export const defaultSampleSearchParam = "hello-cube";
+export const defaultSampleID = "hello-cube";
 
 /**
- * WebGPU samples, indexed by a unique key that can be used as a URL search
- * param for example.
+ * WebGPU samples, indexed by a unique identifier.
  */
-export const samplesBySearchParam = new Map<string, SampleEntry>([
-	[defaultSampleSearchParam, defaultSample],
+export const samplesByID = new Map<string, SampleEntry>([
+	[defaultSampleID, defaultSample],
 	[
 		"sky-sea",
 		{

@@ -3,9 +3,12 @@ import { createRoot } from "react-dom/client";
 import { Routes, Route, HashRouter, Navigate } from "react-router";
 import "./Main.css";
 import LandingPage from "./LandingPage.tsx";
-import WebGPUSamplePage from "./webgpu/WebGPUSamplePage.tsx";
+import {
+	WebGPUSamplePage,
+	WebGPUSampleDirectory,
+} from "./webgpu/WebGPUSamplePage.tsx";
 import Axe from "./Axe.tsx";
-import { samplesBySearchParam } from "./webgpu/Samples.ts";
+import { samplesByID } from "./webgpu/Samples.ts";
 
 const root = document.getElementById("root")!;
 
@@ -16,13 +19,13 @@ createRoot(root).render(
 			<Routes>
 				<Route index element={<LandingPage />} />
 				<Route path="webgpu">
-					<Route index element={<WebGPUSamplePage />} />
-					{[...samplesBySearchParam.keys()].map((searchParam) => {
+					<Route index element={<WebGPUSampleDirectory />} />
+					{[...samplesByID.keys()].map((sampleID) => {
 						return (
 							<Route
-								key={searchParam}
-								path={searchParam}
-								element={<Navigate to={`..?sample=${searchParam}`} replace />}
+								key={sampleID}
+								path={sampleID}
+								element={<WebGPUSamplePage sampleID={sampleID} />}
 							/>
 						);
 					})}

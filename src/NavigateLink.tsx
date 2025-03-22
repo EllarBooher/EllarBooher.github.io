@@ -1,11 +1,13 @@
 import { useLocation, useSearchParams, Link } from "react-router";
 import "./NavigateLink.css";
 import { memo, Fragment } from "react";
-import { defaultSample, samplesBySearchParam } from "./webgpu/Samples";
+import { defaultSample, samplesByID } from "./webgpu/Samples";
 
 const pathSegmentToTitles = new Map<string, string>([
 	["", "Estelle Booher"],
 	["webgpu", "WebGPU Samples"],
+	["hello-cube", "Hello Cube"],
+	["sky-sea", "Sky Sea"],
 ]);
 
 export const NavigationHeader = memo(function NavigationHeader() {
@@ -44,8 +46,7 @@ export const NavigationHeader = memo(function NavigationHeader() {
 			<Fragment key="sample-caboose">
 				{" > "}
 				<Link to={location.pathname + location.search}>
-					{samplesBySearchParam.get(sampleQueryParam)?.name ??
-						defaultSample.name}
+					{samplesByID.get(sampleQueryParam)?.name ?? defaultSample.name}
 				</Link>
 			</Fragment>
 		);

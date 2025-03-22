@@ -21,7 +21,7 @@ export default memo(function LandingPage(): JSX.Element {
 		webGPUCards.push(
 			<NavCard
 				key={key}
-				url={new URL(`/webgpu?sample=${key}`, window.location.href)}
+				href={`/webgpu/${key}`}
 				thumbnails={[]}
 				title={value.name}
 				description={value.description}
@@ -32,7 +32,8 @@ export default memo(function LandingPage(): JSX.Element {
 	const offlineCards = [
 		<NavCard
 			key="Syzygy"
-			url={new URL(`https://github.com/EllarBooher/Syzygy`)}
+			href={`https://github.com/EllarBooher/Syzygy`}
+			external
 			thumbnails={[
 				{
 					url: new URL("./assets/syzygy1.png", import.meta.url),
@@ -47,7 +48,8 @@ export default memo(function LandingPage(): JSX.Element {
 		/>,
 		<NavCard
 			key="SSAO"
-			url={new URL(`https://github.com/EllarBooher/VulkanTemplate/tree/SSAO`)}
+			href={`https://github.com/EllarBooher/VulkanTemplate/tree/SSAO`}
+			external
 			thumbnails={[
 				{
 					url: new URL("./assets/ssao1.png", import.meta.url),
@@ -64,7 +66,8 @@ export default memo(function LandingPage(): JSX.Element {
 	const videogameCards = [
 		<NavCard
 			key="Snail Blazer"
-			url={new URL(`https://ellarbooher.itch.io/snail-blazer`)}
+			href={`https://ellarbooher.itch.io/snail-blazer`}
+			external
 			thumbnails={[
 				{
 					url: new URL("./assets/snailblazer1.png", import.meta.url),

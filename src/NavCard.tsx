@@ -8,18 +8,29 @@ export interface NavCardThumbnail {
 }
 
 export const NavCard = memo(function DisplayCard({
-	url,
+	href,
+	external,
 	thumbnails,
 	title,
 	description,
 }: {
-	url: URL;
+	href: string;
+	external?: boolean;
 	thumbnails?: NavCardThumbnail[];
 	title: string;
 	description: string;
 }) {
 	return (
-		<Link className="nav-card" to={url.href}>
+		<Link
+			className="nav-card"
+			to={href}
+			{...(external
+				? {
+						target: "_blank",
+						rel: "noopener noreferrer",
+				  }
+				: undefined)}
+		>
 			<h2>{title}</h2>
 			<p>{description}</p>
 			<div className="nav-card-thumbnails">

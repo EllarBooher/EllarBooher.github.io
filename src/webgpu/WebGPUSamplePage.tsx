@@ -395,10 +395,9 @@ export default memo(function WebGPUSamplePage(): JSX.Element {
 	const sampleNavCards: ReactElement[] = [];
 
 	samplesBySearchParam.forEach((value, key) => {
-		const sampleLink = `/webgpu?sample=${key}`;
 		sampleSidebarLinks.push(
 			<li key={key}>
-				<Link to={sampleLink} key={key}>
+				<Link to={key} key={key}>
 					{value.name}
 				</Link>
 			</li>
@@ -406,7 +405,7 @@ export default memo(function WebGPUSamplePage(): JSX.Element {
 		sampleNavCards.push(
 			<NavCard
 				key={key}
-				url={new URL(sampleLink, import.meta.url)}
+				href={key}
 				title={value.name}
 				description={value.description}
 			/>

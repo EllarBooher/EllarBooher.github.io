@@ -266,7 +266,7 @@ export class FullscreenQuadPassResources {
 				entryPoint: "fragmentMain",
 				targets: [
 					{
-						format: outputFormat,
+						format: this.outputFormat,
 					},
 				],
 			},
@@ -290,7 +290,7 @@ export class FullscreenQuadPassResources {
 				entryPoint: "fragmentMainArray",
 				targets: [
 					{
-						format: outputFormat,
+						format: this.outputFormat,
 					},
 				],
 			},
@@ -314,7 +314,7 @@ export class FullscreenQuadPassResources {
 				entryPoint: "fragmentMain3D",
 				targets: [
 					{
-						format: outputFormat,
+						format: this.outputFormat,
 					},
 				],
 			},

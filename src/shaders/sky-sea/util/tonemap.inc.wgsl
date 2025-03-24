@@ -1,20 +1,20 @@
 // Transfer implementation as defined in
 // https://www.color.org/chardata/rgb/srgb.xalter
 
-// nonlinear sRGB -> linear
-fn SRGBtoLinear(color_srgb: vec3<f32>) -> vec3<f32>
+// sRGB nonlinear -> sRGB linear
+fn sRGB_EOTF(color_nonlinear: vec3<f32>) -> vec3<f32>
 {
-    let piecewise_boundary = color_srgb < vec3<f32>(0.0031308 * 12.92);
-    let piecewise_linear = color_srgb / vec3<f32>(12.92);
+    let piecewise_boundary = color_nonlinear < vec3<f32>(0.0031308 * 12.92);
+    let piecewise_linear = color_nonlinear / vec3<f32>(12.92);
     let piecewise_nonlinear = pow(
-        (color_srgb + vec3<f32>(0.055)) / vec3<f32>(1.055), vec3<f32>(2.4)
+        (color_nonlinear + vec3<f32>(0.055)) / vec3<f32>(1.055), vec3<f32>(2.4)
     );
 
     return 0.95 * select(piecewise_nonlinear, piecewise_linear, piecewise_boundary);
 }
 
-// linear -> nonlinear sRGB
-fn linearToSRGB(color_linear: vec3<f32>) -> vec3<f32>
+// sRGB linear -> sRGB nonlinear
+fn sRGB_OETF(color_linear: vec3<f32>) -> vec3<f32>
 {
     let piecewise_boundary = color_linear <= vec3<f32>(0.0031308);
     let piecewise_linear = vec3<f32>(12.92) * color_linear;
@@ -33,7 +33,10 @@ fn RRTAndODTFit(v: vec3<f32>) -> vec3<f32>
     return a / b;
 }
 
-fn tonemapACES(color_hdr: vec3<f32>) -> vec3<f32>
+/**
+* Output is nonlinear-encoded sRGB.
+*/
+fn HDRtoSRGB_ACES(color_hdr: vec3<f32>) -> vec3<f32>
 {
 	// sRGB => XYZ => D65_2_D60 => AP1 => RRT_SAT
 	const ACES_INPUT_MAT = mat3x3<f32>(
@@ -50,15 +53,18 @@ fn tonemapACES(color_hdr: vec3<f32>) -> vec3<f32>
 		vec3<f32>(-0.07367, -0.00605,  1.07602)
 	);
 
-    var color = ACES_INPUT_MAT * linearToSRGB(color_hdr);
+    var color = ACES_INPUT_MAT * sRGB_OETF(color_hdr);
     color = RRTAndODTFit(color);
     color = ACES_OUTPUT_MAT * color;
     color = clamp(color, vec3<f32>(0.0), vec3<f32>(1.0));
-    color = SRGBtoLinear(color);
     return color;
 }
 
-// Implementation of https://github.com/KhronosGroup/ToneMapping/tree/main/PBR_Neutral
+/**
+* Implementation of https://github.com/KhronosGroup/ToneMapping/tree/main/PBR_Neutral
+* Input and output are linear color in the Rec. 709 gamut (same as sRGB when linear/not encoded).
+* Input components are in [0, infinity), output components are in [0,1]
+*/
 fn tonemapPBRNeutral(color: vec3<f32>) -> vec3<f32>
 {
     let x = min(min(color.r, color.g), color.b);

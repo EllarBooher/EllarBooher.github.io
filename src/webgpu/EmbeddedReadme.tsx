@@ -3,6 +3,10 @@ import Markdown from "react-markdown";
 import { Children } from "react";
 import "./EmbeddedReadme.css";
 
+// Prism for builtin support of WGSL
+import rehypePrismPlus from "rehype-prism-plus";
+import "prism-themes/themes/prism-one-dark.min.css";
+
 /**
  * Formatting of the markdown READMEs in a style specific to this project.
  * This means handling a subset of embedded html, formatting citations that
@@ -47,6 +51,7 @@ export default memo(function EmbeddedReadme({
 	return (
 		<div className="readme-body">
 			<Markdown
+				rehypePlugins={[rehypePrismPlus]}
 				components={{
 					a(props) {
 						// eslint-disable-next-line react/prop-types

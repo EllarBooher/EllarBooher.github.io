@@ -7,7 +7,7 @@ import { GUI } from "lil-gui";
  */
 export interface RendererApp {
 	quit: boolean;
-	presentationInterface(): { device: GPUDevice; format: GPUTextureFormat };
+	presentationInterface(): GPUCanvasConfiguration;
 	/*
 	 * TODO: We could maybe just resize resources on draw if the presentTexture
 	 * is an unexpected size, cutting this handleResize method.
@@ -26,17 +26,17 @@ export interface RendererApp {
 /**
  * A function signature for the constructor that fully initializes a WebGPU
  * sample renderer apps.
- * @param device - The device that is used for the allocation of all
- *  resources and dispatch of rendering commands.
- * @param presentFormat - The format of the presentation
- *  texture that will be passed in {@link RendererApp.draw}. Rendering is not
- *  guaranteed to work if the format does not match at draw time.
+ * @param device - The device that is used for the allocation of all resources
+ *  and dispatch of rendering commands.
+ * @param canvasFormat - The format of the canvas texture that will be passed in
+ *  {@link RendererApp.draw}. Rendering is not guaranteed to work if the format
+ *  does not match.
  * @returns The instantiated renderer, ready for binding UI and recording frame
  * draws
  */
 export type RendererAppConstructor = (
 	device: GPUDevice,
-	presentFormat: GPUTextureFormat
+	canvasFormat: GPUTextureFormat
 ) => RendererApp;
 
 /**
@@ -187,8 +187,8 @@ export async function initializeApp(props: {
 			...props,
 		}),
 	]).then(([sampleConstructor, { adapter: _adapter, device }]) => {
-		const presentFormat = props.gpu.getPreferredCanvasFormat();
-		const app = sampleConstructor(device, presentFormat);
+		const canvasFormat = props.gpu.getPreferredCanvasFormat();
+		const app = sampleConstructor(device, canvasFormat);
 
 		device.lost
 			.then(

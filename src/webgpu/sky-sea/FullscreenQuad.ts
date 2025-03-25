@@ -70,7 +70,12 @@ export class FullscreenQuadPassResources {
 	private pipelineArray: GPURenderPipeline;
 	private pipeline3D: GPURenderPipeline;
 
-	public readonly outputFormat: GPUTextureFormat;
+	/**
+	 * The view format of the texture that will be passed to draw.
+	 * @see {@link record} for the function that takes in the view of this
+	 *  format.
+	 */
+	public readonly attachmentFormat: GPUTextureFormat;
 
 	/**
 	 * Generate and save bind groups for a given tag, so it can be read at
@@ -151,12 +156,12 @@ export class FullscreenQuadPassResources {
 	/**
 	 * Instantiates all resources.
 	 * @param device - The WebGPU device to use.
-	 * @param outputFormat - The texture format that will be used for the render
-	 *  pipelines attachments. This must match the format of the texture view
-	 *  used as the attachment at draw time.
+	 * @param attachmentFormat - The texture format that will be used for the
+	 *  render pipelines attachments. This must match the format of the texture
+	 *  view used as the attachment at draw time.
 	 */
-	constructor(device: GPUDevice, outputFormat: GPUTextureFormat) {
-		this.outputFormat = outputFormat;
+	constructor(device: GPUDevice, attachmentFormat: GPUTextureFormat) {
+		this.attachmentFormat = attachmentFormat;
 
 		const fullscreenQuadIndices = new Uint32Array([0, 1, 2, 0, 2, 3]);
 		this.fullscreenQuadIndexBuffer = device.createBuffer({
@@ -266,7 +271,7 @@ export class FullscreenQuadPassResources {
 				entryPoint: "fragmentMain",
 				targets: [
 					{
-						format: this.outputFormat,
+						format: this.attachmentFormat,
 					},
 				],
 			},
@@ -290,7 +295,7 @@ export class FullscreenQuadPassResources {
 				entryPoint: "fragmentMainArray",
 				targets: [
 					{
-						format: this.outputFormat,
+						format: this.attachmentFormat,
 					},
 				],
 			},
@@ -314,7 +319,7 @@ export class FullscreenQuadPassResources {
 				entryPoint: "fragmentMain3D",
 				targets: [
 					{
-						format: this.outputFormat,
+						format: this.attachmentFormat,
 					},
 				],
 			},

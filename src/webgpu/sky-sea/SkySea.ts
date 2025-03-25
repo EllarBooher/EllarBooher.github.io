@@ -487,6 +487,25 @@ function initializeResources(
 	};
 }
 
+function viewFormatFromCanvasFormat(
+	format: GPUTextureFormat
+): GPUTextureFormat {
+	switch (format) {
+		case "bgra8unorm": {
+			return "bgra8unorm-srgb";
+		}
+		case "rgba8unorm": {
+			return "rgba8unorm-srgb";
+		}
+		default: {
+			console.warn(
+				`Using unsupported canvas format "${format}", color encoding will be off.`
+			);
+			return format;
+		}
+	}
+}
+
 function updateGlobalUBO(
 	queue: GPUQueue,
 	globalUBO: GlobalUBO,
@@ -583,17 +602,19 @@ class SkySeaApp implements RendererApp {
 	private dummyFrameCounter: number;
 	private benchmarkFrameCounter: number;
 
+	private canvasTextureFormat: GPUTextureFormat;
+
 	destroy(): void {
 		this.device.destroy();
 	}
 
-	presentationInterface(): {
-		device: GPUDevice;
-		format: GPUTextureFormat;
-	} {
+	presentationInterface(): GPUCanvasConfiguration {
 		return {
 			device: this.device,
-			format: this.resources!.fullscreenQuadPassResources.outputFormat,
+			format: this.canvasTextureFormat,
+			viewFormats: [
+				this.resources!.fullscreenQuadPassResources.attachmentFormat,
+			],
 		};
 	}
 
@@ -625,7 +646,7 @@ class SkySeaApp implements RendererApp {
 		this.resources = initializeResources(
 			this.device,
 			this.performanceConfig,
-			this.resources!.fullscreenQuadPassResources.outputFormat
+			viewFormatFromCanvasFormat(this.canvasTextureFormat)
 		);
 
 		this.parameters.renderScale = this.performanceConfig.renderScale;
@@ -643,6 +664,7 @@ class SkySeaApp implements RendererApp {
 	constructor(device: GPUDevice, presentFormat: GPUTextureFormat) {
 		this.device = device;
 
+		this.canvasTextureFormat = presentFormat;
 		this.performanceConfig = PERFORMANCE_CONFIGS.get("good")!;
 
 		this.renderOutputController = new RenderOutputController();
@@ -695,7 +717,7 @@ class SkySeaApp implements RendererApp {
 		this.resources = initializeResources(
 			this.device,
 			this.performanceConfig,
-			presentFormat
+			viewFormatFromCanvasFormat(presentFormat)
 		);
 
 		for (const props of this.resources.fullscreenQuadPassResources.getAllTextureProperties()) {
@@ -760,7 +782,9 @@ class SkySeaApp implements RendererApp {
 			this.dummyFrameCounter -= 1;
 			return;
 		}
-		const presentView = presentTexture.createView();
+		const presentView = presentTexture.createView({
+			format: "bgra8unorm-srgb",
+		});
 
 		this.performance.beginFrame(deltaTimeMilliseconds);
 

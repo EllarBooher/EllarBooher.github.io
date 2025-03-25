@@ -46,16 +46,16 @@ class HelloCubeApp implements RendererApp {
 		this.device.destroy();
 	}
 
-	presentationInterface(): { device: GPUDevice; format: GPUTextureFormat } {
+	presentationInterface(): GPUCanvasConfiguration {
 		return {
 			device: this.device,
 			format: this.presentFormat,
 		};
 	}
 
-	constructor(device: GPUDevice, presentFormat: GPUTextureFormat) {
+	constructor(device: GPUDevice, canvasFormat: GPUTextureFormat) {
 		this.device = device;
-		this.presentFormat = presentFormat;
+		this.presentFormat = canvasFormat;
 		this.supportedFeatures = device.features;
 
 		const shaderModule = this.device.createShaderModule({
@@ -163,7 +163,7 @@ class HelloCubeApp implements RendererApp {
 				entryPoint: "fragment_main",
 				targets: [
 					{
-						format: presentFormat,
+						format: canvasFormat,
 					},
 				],
 			},
@@ -248,7 +248,7 @@ class HelloCubeApp implements RendererApp {
  */
 export const HelloCubeAppConstructor: RendererAppConstructor = (
 	device,
-	presentFormat
+	canvasFormat
 ) => {
-	return new HelloCubeApp(device, presentFormat);
+	return new HelloCubeApp(device, canvasFormat);
 };

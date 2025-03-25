@@ -488,6 +488,6 @@ fn renderCompositedAtmosphere(@builtin(global_invocation_id) global_id : vec3<u3
 
     let luminance = light.strength * light.color * luminance_transfer;
 
-    let output = vec4<f32>(HDRtoSRGB_ACES(luminance),1.0);
+    let output = vec4<f32>(sRGB_EOTF(HDRtoSRGB_ACES(luminance)),1.0);
     textureStore(output_color, texel_coord, output);
 }

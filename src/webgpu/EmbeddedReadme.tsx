@@ -7,6 +7,9 @@ import "./EmbeddedReadme.css";
 import rehypePrismPlus from "rehype-prism-plus";
 import "prism-themes/themes/prism-one-dark.min.css";
 
+const repoRoot =
+	"https://github.com/EllarBooher/EllarBooher.github.io/tree/main/src/webgpu";
+
 /**
  * Formatting of the markdown READMEs in a style specific to this project.
  * This means handling a subset of embedded html, formatting citations that
@@ -56,15 +59,38 @@ export default memo(function EmbeddedReadme({
 					a(props) {
 						// eslint-disable-next-line react/prop-types
 						const { href, children, ...rest } = props;
+						if (href === undefined) {
+							return <a {...rest}>{children}</a>;
+						}
+
 						// eslint-disable-next-line react/prop-types
-						if (href?.startsWith("#") === true) {
+						if (href.startsWith("#") === true) {
 							return <>{children}</>;
 						}
-						return (
-							<a href={href} {...rest}>
-								{children}
-							</a>
-						);
+
+						if (URL.canParse(href)) {
+							return (
+								<a href={href} {...rest}>
+									{children}
+								</a>
+							);
+						}
+
+						const projectRoot = `${repoRoot}/${projectFolder}/`;
+						if (URL.canParse(href, projectRoot)) {
+							return (
+								<a
+									target="_blank"
+									rel="noopener noreferrer"
+									href={URL.parse(href, projectRoot)?.href}
+									{...rest}
+								>
+									{children}
+								</a>
+							);
+						}
+
+						return <>{children}</>;
 					},
 					p(props) {
 						// TODO: How to add prop type validation to this?

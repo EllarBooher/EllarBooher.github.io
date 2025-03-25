@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import { Children } from "react";
 import "./EmbeddedReadme.css";
+import { HashLink } from "react-router-hash-link";
 
 // Prism for builtin support of WGSL
 import rehypePrismPlus from "rehype-prism-plus";
@@ -63,11 +64,17 @@ export default memo(function EmbeddedReadme({
 							return <a {...rest}>{children}</a>;
 						}
 
+						// Anchor Link
 						// eslint-disable-next-line react/prop-types
 						if (href.startsWith("#") === true) {
-							return <>{children}</>;
+							return (
+								<HashLink to={href} {...rest}>
+									{children}
+								</HashLink>
+							);
 						}
 
+						// External Link
 						if (URL.canParse(href)) {
 							return (
 								<a href={href} {...rest}>
@@ -76,6 +83,7 @@ export default memo(function EmbeddedReadme({
 							);
 						}
 
+						// Link to source (hosted on github)
 						const projectRoot = `${repoRoot}/${projectFolder}/`;
 						if (URL.canParse(href, projectRoot)) {
 							return (
@@ -98,29 +106,35 @@ export default memo(function EmbeddedReadme({
 						const { children, ...rest } = props;
 
 						const arrayChildren = Children.toArray(children);
-						if (arrayChildren.length < 3) {
+						if (
+							arrayChildren.length < 3 ||
+							arrayChildren.slice(0, 3).some((value) => {
+								return typeof value !== "string";
+							})
+						) {
 							return <p {...rest}>{children}</p>;
 						}
 
-						/*
-						 * Detect the shape "<a ...>","...","</a>", which is the inline HTML
-						 * safely escaped by Markdown. This is only used as an anchor for
-						 * citations.
+						/**
+						 * must match:
+						 *  - <a> opening tag while capturing id
+						 *  - numbered citation format, e.g. [0] or [15]
+						 *  - </a> closing tag.
 						 */
-						const first =
-							typeof arrayChildren[0] === "string" &&
-							arrayChildren[0].startsWith("<a");
-						const second = typeof arrayChildren[1] === "string";
-						const third =
-							typeof arrayChildren[2] === "string" &&
-							arrayChildren[2] === "</a>";
+						const patterns = [/<a.*id="(.*)".*>/g, /\[([0-9]*)\]/g, /<\/a>/g];
 
-						if (!first || !second || !third) {
+						const parsed = arrayChildren.slice(0, 3).map((value, index) => {
+							return patterns[index].exec(value as string);
+						});
+
+						if (parsed.some((value) => value === null)) {
 							return <p {...rest}>{children}</p>;
 						}
 
+						const id = parsed[0]![1];
+						// Citation anchor + text
 						return (
-							<div className="citation">
+							<div id={id} className="citation">
 								{arrayChildren[1]}
 								<p {...rest}>{arrayChildren.slice(3)}</p>
 							</div>

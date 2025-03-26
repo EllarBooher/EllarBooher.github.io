@@ -1,12 +1,9 @@
-import { memo, useEffect, useState } from "react";
-import Markdown from "react-markdown";
-import { Children } from "react";
+import { memo, ReactElement, ReactNode, useEffect, useState } from "react";
 import "./EmbeddedReadme.css";
-import { HashLink } from "react-router-hash-link";
-
-// Prism for builtin support of WGSL
-import rehypePrismPlus from "rehype-prism-plus";
 import "prism-themes/themes/prism-one-dark.min.css";
+
+import parseToHTML from "html-react-parser";
+import { HashLink } from "react-router-hash-link";
 
 const repoRoot =
 	"https://github.com/EllarBooher/EllarBooher.github.io/tree/main/src/webgpu";
@@ -54,96 +51,40 @@ export default memo(function EmbeddedReadme({
 
 	return (
 		<div className="readme-body">
-			<Markdown
-				rehypePlugins={[rehypePrismPlus]}
-				components={{
-					a(props) {
-						// eslint-disable-next-line react/prop-types
-						const { href, children, ...rest } = props;
-						if (href === undefined) {
-							return <a {...rest}>{children}</a>;
-						}
+			{parseToHTML(readmeText, {
+				transform(reactNode, _domNode, _index) {
+					const element = reactNode as ReactElement;
+					if (element.props === undefined || element.type !== "a") {
+						return <>{reactNode}</>;
+					}
 
-						// Anchor Link
-						// eslint-disable-next-line react/prop-types
-						if (href.startsWith("#") === true) {
-							return (
-								<HashLink to={href} {...rest}>
-									{children}
-								</HashLink>
-							);
-						}
+					const { href, children } = element.props as {
+						href: string;
+						children?: ReactNode[];
+						id?: string;
+					};
 
-						// External Link
-						if (URL.canParse(href)) {
-							return (
-								<a href={href} {...rest}>
-									{children}
-								</a>
-							);
-						}
+					// Anchor Link
+					if (href.startsWith("#") === true) {
+						return <HashLink to={href}>{children}</HashLink>;
+					}
 
-						// Link to source (hosted on github)
-						const projectRoot = `${repoRoot}/${projectFolder}/`;
-						if (URL.canParse(href, projectRoot)) {
-							return (
-								<a
-									target="_blank"
-									rel="noopener noreferrer"
-									href={URL.parse(href, projectRoot)?.href}
-									{...rest}
-								>
-									{children}
-								</a>
-							);
-						}
+					const projectRoot = `${repoRoot}/${projectFolder}/`;
 
-						return <>{children}</>;
-					},
-					p(props) {
-						// TODO: How to add prop type validation to this?
-						// eslint-disable-next-line react/prop-types
-						const { children, ...rest } = props;
+					let hrefParsed: undefined | string = undefined;
+					if (URL.canParse(href)) {
+						hrefParsed = href;
+					} else if (URL.canParse(href, projectRoot)) {
+						hrefParsed = URL.parse(href, projectRoot)!.href;
+					}
 
-						const arrayChildren = Children.toArray(children);
-						if (
-							arrayChildren.length < 3 ||
-							arrayChildren.slice(0, 3).some((value) => {
-								return typeof value !== "string";
-							})
-						) {
-							return <p {...rest}>{children}</p>;
-						}
-
-						/**
-						 * must match:
-						 *  - <a> opening tag while capturing id
-						 *  - numbered citation format, e.g. [0] or [15]
-						 *  - </a> closing tag.
-						 */
-						const patterns = [/<a.*id="(.*)".*>/g, /\[([0-9]*)\]/g, /<\/a>/g];
-
-						const parsed = arrayChildren.slice(0, 3).map((value, index) => {
-							return patterns[index].exec(value as string);
-						});
-
-						if (parsed.some((value) => value === null)) {
-							return <p {...rest}>{children}</p>;
-						}
-
-						const id = parsed[0]![1];
-						// Citation anchor + text
-						return (
-							<div id={id} className="citation">
-								{arrayChildren[1]}
-								<p {...rest}>{arrayChildren.slice(3)}</p>
-							</div>
-						);
-					},
-				}}
-			>
-				{readmeText}
-			</Markdown>
+					return (
+						<a target="_blank" rel="noopener noreferrer" href={hrefParsed}>
+							{children}
+						</a>
+					);
+				},
+			})}
 		</div>
 	);
 });

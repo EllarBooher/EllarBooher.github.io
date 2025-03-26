@@ -216,7 +216,6 @@ export function packShaders(
 	const includeMappings = new Map<string, ShaderInclude>();
 
 	const logger = console.log;
-	// eslint-disable-next-line @typescript-eslint/no-empty-function
 	console.log = (...args): void => {
 		if (!quiet) {
 			logger(...args);

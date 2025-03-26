@@ -20,7 +20,7 @@ export const wgslPlugin = (): PluginOption => ({
 	name: "wgsl-plugin",
 	transform: (src: string, id: string): TransformResult | undefined => {
 		if (!id.endsWith(".inc.wgsl") && id.endsWith(".wgsl")) {
-			const packed = packShaders(id, src);
+			const packed = packShaders(id, src, true);
 			packed.includes.forEach((includeFullPath) => {
 				if (!modulesByInclude.has(includeFullPath)) {
 					modulesByInclude.set(includeFullPath, new Set());

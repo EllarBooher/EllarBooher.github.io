@@ -208,11 +208,20 @@ function replaceConditionalBlocks(
  */
 export function packShaders(
 	filePath: string,
-	source: string
+	source: string,
+	quiet: boolean
 ): { source: string; includes: string[] } {
 	const INCLUDE_PREFIX = "#include ";
 
 	const includeMappings = new Map<string, ShaderInclude>();
+
+	const logger = console.log;
+	// eslint-disable-next-line @typescript-eslint/no-empty-function
+	console.log = (...args): void => {
+		if (!quiet) {
+			logger(...args);
+		}
+	};
 
 	console.log(`Preprocessing shader ${filePath}`);
 
@@ -289,6 +298,8 @@ export function packShaders(
 		}
 	}
 	const sourceOut = lines.join("\n");
+
+	console.log = logger;
 
 	return {
 		source: sourceOut,

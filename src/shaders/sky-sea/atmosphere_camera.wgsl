@@ -39,7 +39,7 @@ struct PBRTexel
 
 fn convertPBRPropertiesWater(color: vec3<f32>, normal: vec3<f32>, foam: f32) -> PBRTexel
 {
-    const METALLIC_WATER = 0.8;
+    const METALLIC_WATER = 0.5;
 
 	const SPECULAR_POWER = 160.0;
 	const ROUGHNESS_WATER = 0.05;
@@ -339,29 +339,32 @@ fn sampleGeometryLuminance(
 
     var light_luminance_transfer = aerial_perspective.xyz;
 
-    /*
-	 * Model water as perfect reflections with some diffuse scattering to
-	 * emulate light coming up from underwater.
-	 * For now, no refraction, secondary bounces, or transmittance through
-	 * waves.
-	 */
 	// TODO: Better lighting model of the water
 
     let surface_position = position + direction * distance;
 
-	// Perfect reflection of sky dome
+	// Specular term, use perfect reflection to best capture sky dome image
+	let sky_reflection_lobe_solid_angle = (4.0 * PI) / 200;
     let reflection_direction = reflect(normalize(direction), normalize(material.normal));
-	let sky_luminance = sampleSkyViewLUT(atmosphere, surface_position, reflection_direction);
+	let sky_reflection_luminance = sampleSkyViewLUT(atmosphere, surface_position, reflection_direction);
 	light_luminance_transfer +=
 		transmittance_to_surface
-		* sky_luminance
+		* sky_reflection_lobe_solid_angle
+		* sky_reflection_luminance
+		* specularBRDF(material, reflection_direction, -direction)
 		* computeFresnelPerfectReflection(material, reflection_direction);
 
 	// Diffuse scattering from sky dome
-	let sky_visible_solid_angle = 2.0 * PI * (0.5 * dot(vec3<f32>(0.0, 1.0, 0.0), material.normal) + 0.5);
-	let sky_indirect_luminance = sampleSkyViewLUT(atmosphere, surface_position, reflect(-light_direction, vec3<f32>(0.0,1.0,0.0)));
-	let sea_luminance = diffuseBRDF(material) * sky_visible_solid_angle * sky_indirect_luminance;
-	light_luminance_transfer += transmittance_to_surface * sea_luminance;
+	var sky_diffuse_lobe_solid_angle = 2.0 * PI;
+	let diffuse_sample_direction = normalize(light_direction + vec3<f32>(0.0,1.0,0.0));
+	let sky_indirect_luminance = sampleSkyViewLUT(atmosphere, surface_position, diffuse_sample_direction);
+
+	light_luminance_transfer +=
+		transmittance_to_surface
+		* sky_diffuse_lobe_solid_angle
+		* sky_indirect_luminance
+		* diffuseBRDF(material)
+		* (1.0 - computeFresnelMicrofacet(material, light_direction, -direction));
 
 	// Reflected/scattered direct sunlight
 	let surface_transmittance_to_sun = sampleTransmittanceLUT_Ray(
@@ -371,11 +374,21 @@ fn sampleGeometryLuminance(
 		surface_position,
 		light_direction
 	);
-	let light_luminance = surface_transmittance_to_sun
+
+	/*
+	 * This calculation is problematic, and I have not thought through how to
+	 * better express it.
+	 *
+	 * Illuminance is luminance integrated over a solid angle, but our final
+	 * result is a linear "transfer factor" and the solid angle is absorbed into
+	 * a sun strength factor we multiply at the end. Thus we can't multiply a
+	 * solid angle here, since that would be double counting it.
+	 */
+	let light_illuminance = surface_transmittance_to_sun
 		* sunFractionOfRadianceVisible(atmosphere, light, surface_position, light_direction);
 	light_luminance_transfer +=
 		transmittance_to_surface
-		* light_luminance
+		* light_illuminance
 		* mix(
 			specularBRDF(material, light_direction, -direction),
 			diffuseBRDF(material),

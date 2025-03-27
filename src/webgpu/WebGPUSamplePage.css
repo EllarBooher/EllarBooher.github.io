@@ -1,13 +1,13 @@
 .lil-gui {
-	--background-color: rgb(50 99 121);
-	--text-color: white;
-	--title-background-color: var(--background-color-dark);
-	--title-text-color: white;
-	--widget-color: var(--background-color-dark);
-	--hover-color: #144963;
-	--focus-color: #144963;
-	--number-color: rgb(96 190 234);
-	--string-color: white;
+	--title-background-color: var(--background-color-darkest);
+	--title-text-color: var(--text-color);
+	--background-color: var(--background-color-dark);
+	--widget-color: var(--background-color-light);
+	--hover-color: var(--background-color-lightest);
+	--focus-color: var(--background-color-lightest);
+	--text-color: var(--text-color);
+	--number-color: var(--text-color);
+	--string-color: var(--text-color);
 }
 
 .lil-gui.root {

@@ -20,7 +20,7 @@ interface ReadmePluginOptions {
  * Rehype plugin that finds our specifically formatted sources/citations in the
  * readme, and wraps them in nicer divs.
  */
-const transformCitation = () => {
+const rehypeCitation = () => {
 	const modify = (node: Nodes): void => {
 		if (node.type !== "element") {
 			return;
@@ -91,7 +91,7 @@ export default function sampleReadme(
 		.use(remarkMath)
 		.use(remarkRehype, { allowDangerousHtml: true })
 		.use(rehypeRaw)
-		.use(transformCitation)
+		.use(rehypeCitation)
 		.use(rehypeMathjax)
 		.use(rehypePrismPlus)
 		.use(rehypeStringify);

@@ -376,13 +376,10 @@ fn sampleGeometryLuminance(
 	);
 
 	/*
-	 * This calculation is problematic, and I have not thought through how to
-	 * better express it.
-	 *
 	 * Illuminance is luminance integrated over a solid angle, but our final
 	 * result is a linear "transfer factor" and the solid angle is absorbed into
 	 * a sun strength factor we multiply at the end. Thus we can't multiply a
-	 * solid angle here, since that would be double counting it.
+	 * solid angle here.
 	 */
 	let light_illuminance = surface_transmittance_to_sun
 		* sunFractionOfRadianceVisible(atmosphere, light, surface_position, light_direction);

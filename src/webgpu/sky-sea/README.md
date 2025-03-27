@@ -46,7 +46,7 @@ The per-vertex displacement is three dimensional, since this allows for more rea
 $$
 \begin{align*}
 t &: \text{time in seconds} \\
-\vec r = (x,z) &: \text{position of an ocean particle in meters} \\
+\vec r = (x,y,z) &: \text{position of an ocean particle in meters} \\
 \vec k = (k_x,k_z) &: \text{angular wave vector in radians per meter} \\
 \omega &: \text{angular frequency in radians per second} \\
 \vec D(\vec r,t) = (D_x,D_y,D_z) &: \text{displacement of a given ocean particle} \\
@@ -54,72 +54,84 @@ A &: \text{amplitude of the wave in meters}
 \end{align*}
 $$
 
-So if we index waves by $j$, we can have:
+So if we identify our waves by a unique wave vector $\vec k$ and parameters $A(\vec k)$ and $\omega(\vec k)$, we have:
 
 $$
 \begin{align*}
-\theta &= \vec k \cdot \vec r - \omega t \\
-D_{j,y} &= A\cos(\theta) \\
-D_{j,x} &= -A\frac{k_x}{||\vec k||} \sin(\theta) \\
-D_{j,z} &= -A\frac{k_z}{||\vec k||} \sin(\theta) \\
-(D_x,D_y,D_z) &= \sum_{j=0}^N (D_{j,x},D_{j,y},D_{j,z})
+\theta(\vec k,\vec r,t) &= \vec k \cdot \vec r - \omega(\vec k) t \\
+\hat k &= \frac{\vec k}{\left\|\vec k\right\|} = (\hat k_x, \hat k_z)\\
+\vec D(\vec k,\vec r,t) &= \sum_{\vec k} \left(-A\hat k_x \sin(\theta),A\cos(\theta),-A\hat k_z \sin(\theta)\right)
 \end{align*}
 $$
 
-Note that $\frac{\vec k}{||\vec k||}$ gives the direction that the wave propagates, so this formulation describes ocean surface particles as moving in a circle parallel to the direction of travel. The wave parameters can be loaded from a uniform buffer of waves. This works for stylistic oceans, but for hundreds of waves the result can be unrealistic. You could use millions of waves, but the `O(N)` scaling of the sum leads to poor performance.
+Note that $\hat k$ gives the direction that the wave propagates, so this formulation describes ocean surface particles as moving in a circle parallel to the direction of travel. The wave parameters can be loaded from a uniform buffer of waves. This works for stylistic oceans, but for hundreds of waves the result can be unrealistic. You could use millions of waves, but the linear scaling of the sum leads to poor performance.
 
-Luckily, we can apply the Fast Fourier Transform (FFT) to knock down the complexity, since we can reformulate our sum to be a Fourier transform. See [`fourier_waves.wgsl`](../../shaders/sky-sea/ocean/fourier_waves.wgsl) and [`FourierWaves.ts`](./ocean/FourierWaves.ts) for the creation of the complex-valued wave spectrum, or [`fft.wgsl`](../../shaders/sky-sea/util/fft.wgsl) and [`FFT.ts`](./util/FFT.ts) for the general FFT implementation. We reformulate our spectrum of waves from a linear list to a square grid of width `n`, so calculating a single vertex displacement is naively an `O(n^2)` operation. A normal FFT has `O(n * log n)` time complexity, allowing for many more waves. Each component of the displacement requires its own inverse FFT to compute, so we require three inverse FFTs, which mirrors the three sine or cosine calculations per wave. The wave spectrum formulation is:
+Luckily, we can apply the Fast Fourier Transform (FFT) to knock down the complexity, since we can reformulate our sum to be a Fourier transform. See [`fourier_waves.wgsl`](../../shaders/sky-sea/ocean/fourier_waves.wgsl) and [`FourierWaves.ts`](./ocean/FourierWaves.ts) for the creation of the complex-valued wave spectrum, or [`fft.wgsl`](../../shaders/sky-sea/util/fft.wgsl) and [`FFT.ts`](./util/FFT.ts) for the general 2D FFT implementation. We reformulate our spectrum of waves from a linear list to a square grid of width $n$, and our displacement map shall be the same dimension and size. This is the primary restriction of the periodic DFFT: each sample in the frequency domain gives one sample in the spatial domain. In other words, $n^2$ waves gives $n^2$ unique displacement in our texture. This fact is not necessarily a negative, but we do need to design around it.
+
+Calculating a single vertex displacement on this grid as a naive sum is $O(n^2)$. However, a normal FFT has $O(n \log n)$ time complexity, allowing for many more waves. Each component of the displacement requires its own inverse FFT to compute, so we require three inverse FFTs, which mirrors the three sine or cosine calculations per wave we saw earlier. The wave spectrum formulation is:
 
 $$
 \begin{align*}
  \tilde{h}(k,t) &: \text{frequency domain amplitude}\\
-\vec{h}(\vec k,t) &= \tilde{h}(k,t)\left(-i\frac{k_x}{||\vec k||},1,-i\frac{k_z}{||\vec k||}\right) \\
+\vec{h}(\vec k,t) &= \tilde{h}(k,t)\left(-i\hat{k}_x,1,-i\hat{k}_z\right) \\
 \vec D(\vec r,t) &= \sum_{\vec k} \vec h(\vec k,t)e^{i\vec k \cdot \vec r} \\
 \end{align*}
 $$
 
-The per-wave complex-valued amplitude $\tilde{h}(\vec k,t)$, analogous to the real-valued $A$, is calculated from empirically derived ocean spectrum models such as JONSWAP. See Tessendorf and Gamper's papers for more discussion, since there is a lot of freedom for what to use depending on which ocean conditions you wish to accurately portray. The only important condition is that $\tilde{h}$ is [Hermitian](https://en.wikipedia.org/wiki/Hermitian_function), which results in the Fourier transform being real-valued. In the end, we compute these amplitudes with a mixture of random noise and parameters such as wind speed, wind fetch, simulation time, and others.
+The per-wave complex-valued amplitude $\tilde{h}(\vec k,t)$, analogous to the real-valued $A$, is calculated from empirically derived ocean spectrum models such as JONSWAP. See Tessendorf and Gamper's papers (cited earlier) for more discussion, since there is a lot of freedom for what to use depending on which ocean conditions you wish to accurately portray. One important criteria is that $\tilde{h}$ is [Hermitian](https://en.wikipedia.org/wiki/Hermitian_function), which results in the Fourier transform being real-valued. In the end, we compute these amplitudes with a mixture of random noise and parameters such as wind speed, wind fetch, simulation time, and others.
 
-We also use three cascades to divide the ocean spectrum and generate three displacement maps at different world-space scales. This allows us to capture detail across multiple scales, since for good performance the grid size of the ocean spectrum must be quite small. We chose 512 by 512 waves for each cascade, with scales of 200, 50, and 10 meters. This is $512 * 512 * 3 = 786432$ unique waves in total, although many are low contribution. This leads to a spatial and wavelength sample rate of $10 / 512 \approx 0.02$ meters, which is roughly two centimeters. This is the approximate boundary at which gravity waves become capillary waves and surface tension becomes the dominating force. The models we use rely on the fact that gravity dominates, and do not sufficiently account for surface tension.
+We also use three cascades to divide the ocean spectrum and generate three displacement maps at different world-space scales. This allows us to capture detail across multiple scales, since for good performance the grid size of the ocean spectrum must be quite small. We chose 512 by 512 waves for each cascade, with scales of 200, 50, and 10 meters. This is $512 * 512 * 3 = 786432$ unique waves in total, although many are low contribution. This leads to a spatial and wavelength sample rate of $10 / 512 \approx 0.02$ meters, which is roughly two centimeters. This is the approximate boundary at which gravity waves become capillary waves and surface tension becomes the dominating force. The models we use rely on the fact that gravity dominates for larger wavelengths, and do not sufficiently account for surface tension.
 
-Next, surface normals are needed for shading. We calculate these from the gradients of the displacement, instead of a numerical method like finite differences. We compute the tangent, bitangent, and normal from the final displaced ocean surface vertex position $D(\vec r,t)$ as follows:
+Next, surface normals are needed for shading. We calculate these from the gradients of the displacement, instead of using a numerical method like finite differences. We compute the tangent, bitangent, and normal from the final displaced ocean surface vertex position $\vec D(\vec r,t)$ as follows:
 
 $$
 \begin{align*}
-\vec D(\vec r,t) &= (x+D_x,y+D_y,z+D_z) \\
-\vec T &= \frac{d}{dx}\vec D(\vec r,t) = \left(1+\frac{d}{dx}D_x,\frac{d}{dx}D_y,\frac{d}{dx}D_z\right)\\
-\vec B &= \frac{d}{dz}\vec D(\vec r,t) = \left(\frac{d}{dz}D_x,\frac{d}{dz}D_y,1+\frac{d}{dz}D_z\right)\\
-\vec N &= \vec T \times \vec B
+\vec P(\vec r,t) &\coloneqq \text{Final ocean surface particle position}\\
+\vec P(\vec r,t) &= \vec r + \vec D(\vec r,t) = \left(x+\vec D_x,y+\vec D_y,z+\vec D_z\right)\\
+\vec T &= \frac{d}{dx}\vec P(\vec r,t) = \left(1+\frac{d}{dx}\vec D_x,\frac{d}{dx}\vec D_y,\frac{d}{dx}\vec D_z\right)\\
+\vec B &= \frac{d}{dz}\vec P(\vec r,t) = \left(\frac{d}{dz}\vec D_x,\frac{d}{dz}\vec D_y,1+\frac{d}{dz}\vec D_z\right)\\
+\vec N &= \vec T \times \vec B \\
 \end{align*}
 $$
 
-The discrete fourier transform is a sum, so the derivative distributes over it. Thus we can instead take the inverse fourier of the per-term partial derivatives. We need six partial derivatives obtained by distributing $\frac{d}{dx}$ and $\frac{d}{dz}$ to the three components of the displacement. It can be shown that the mixed partials $\frac{d}{dx}D_z$ and $\frac{d}{dz}D_x$ are equal, so we only need to compute five extra IFFTs for eight in total.
+The discrete fourier transform is a sum, so the derivative distributes over it. Thus we can instead take the inverse fourier of the per-term partial derivatives. We need six partial derivatives obtained by distributing $\frac{d}{dx}$ and $\frac{d}{dz}$ to the three components of the displacement. It can be shown that the mixed partials $\frac{d}{dx}D_z$ and $\frac{d}{dz}D_x$ are equal, so we only need to compute five extra IFFTs for eight in total. A single derivative of the DFFT goes as follows:
+
+$$
+\begin{align*}
+x_i &\in {x,z} \\
+\frac{d}{dx_i}\vec D_{x_i}(\vec k,\vec r,t) &= \frac{d}{dx_i}\sum_{\vec k} \vec h(\vec k,t)e^{i\vec k \cdot \vec r} \\
+&= \sum_{\vec k} \vec h(\vec k,t)\frac{d}{dx_i}e^{i\vec k \cdot \vec r} \\
+&= \sum_{\vec k} ik_{x_i}\vec h(\vec k,t)e^{i\vec k \cdot \vec r}
+\end{align*}
+$$
 
 We can improve the performance further. Since the displacement is real-valued, we can pack two IFFTs into one by summing two streams of input data while multiplying one by $i$. The discrete fourier transform is a linear sum, so multiplying the inputs by a scalar multiplies the output by that same scalar. For example:
 
 $$
-\tilde{h}_x(k,t)+i\tilde{h}_z(k,t)\xmapsto{IFFT}D_x+iD_z
+\tilde{h}_x(k,t)+i\tilde{h}_z(k,t)\xmapsto{IFFT}\vec D_x+i\vec D_z
 $$
 
-From this we can easily extract $D_x$ and $D_z$ since they will be in separate vector components. Furthermore, since textures have four components, we can pack two IFFTs into one set of dispatches via concatenation. See `computeRealizedAmplitude` of [`fourier_waves.wgsl`](../../shaders/sky-sea/ocean/fourier_waves.wgsl#L354) for how we pack the spectrum data.
+From this we can easily extract $\vec D_x$ and $\vec D_z$ since they will be in separate vector components. Furthermore, since textures have four components, we can pack two IFFTs into one set of dispatches via concatenation. See `computeRealizedAmplitude` of [`fourier_waves.wgsl`](../../shaders/sky-sea/ocean/fourier_waves.wgsl#L354) for how we pack the spectrum data.
 
 In the end, we write the displacement, partial derivatives, and surface jacobian into arrays of maps that are sampled in the vertex and fragment shaders to rasterize the final ocean surface mesh into the GBuffer.
 
 ### Atmosphere
 
-The technique for the atmosphere is based heavily on a 2020 paper by Sébastien Hillaire titled "A scalable and production ready sky and atmosphere rendering technique" (see [[6]](#hillaire-2020)). The final output of the atmosphere step is a set of four lookup tables: the transmittance LUT, skyview LUT, multiscatter LUT, and aerial perspective LUT. See Hillaire's paper for all of the equations, but here is a brief overview of each resource.
+The technique for the atmosphere is taken from a 2020 paper by Sébastien Hillaire titled "A scalable and production ready sky and atmosphere rendering technique" (see [[6]](#hillaire-2020)). The final atmospheric output is a set of four lookup tables: the transmittance LUT, skyview LUT, multiscatter LUT, and aerial perspective LUT. See Hillaire's paper for all of the equations, but here is a brief overview of each resource. The parameterization of these maps is based on the work in [[2]](#bruneton-2008), which Hillaire's paper also cites.
 
-The atmosphere is modelled as a medium that continuously scatters light. We consider the Mie and Rayleigh models of scattering, alongside the scattering due to ozone. See `computeLuminanceScatteringIntegral` in [`atmosphere_raymarch.inc.wgsl`](../../shaders/sky-sea/atmosphere/atmosphere_raymarch.inc.wgsl) for the raymarching algorithm used to evaluate the scattering integral, which is used in multiple places. Scattering and absorption factors determine the [optical depth](https://en.wikipedia.org/wiki/Optical_depth), see [`GlobalUBO.ts`](./GlobalUBO.ts) for where these parameters are set, and `sampleExtinction` in [`atmosphere_common.inc.wgsl`](../../shaders/sky-sea/atmosphere/atmosphere_common.inc.wgsl) for where optical depth is determined. Mie and Rayleigh extinction is modelled with exponential functions that decay with altitude as a parameter, and their maximal influence is right at the planet's surface. Ozone is modelled with a tent function that places its maximal influence much higher in the atmosphere.
+The atmosphere is modelled as a medium that continuously scatters light, shaped as a spherical shell around a spherical planet with a sharp boundary. We consider scattering and absorption effects from Mie, Rayleigh, and Ozone particles. See `computeLuminanceScatteringIntegral` in [`atmosphere_raymarch.inc.wgsl`](../../shaders/sky-sea/atmosphere/atmosphere_raymarch.inc.wgsl) for the raymarching algorithm used to evaluate the scattering integral, which is used whenever we need to compute primary scattered light along a ray. Per-atmospheric-position scattering and absorption determine [optical depth](https://en.wikipedia.org/wiki/Optical_depth) along each raymarched path segment, see [`GlobalUBO.ts`](./GlobalUBO.ts) and `sampleExtinction` in [`atmosphere_common.inc.wgsl`](../../shaders/sky-sea/atmosphere/atmosphere_common.inc.wgsl). Mie and Rayleigh extinction is modelled with exponential density functions that decay with altitude as a parameter, with maximal density at the surface. Ozone extinction is modelled with a tent function that places its maximal influence much higher in the atmosphere.
 
-The transmittance LUT (see [`transmittance_LUT.wgsl`](../../shaders/sky-sea/atmosphere/transmittance_LUT.wgsl)) measures the spectral transmittance for red, blue, and green along a given view ray, all the way to the edge of the atmosphere. The map is parameterized by altitude and view zenith angle. The transmittance is found by integrating optical depth along a discrete number of steps, where a smaller step size leads to higher accuracy. Sampling the transmittance LUT should be avoided for low altitudes at angles nearly parallel to the surface of the planet, since you run into precision issues. In general, raymarching to determine transmittance is better but the LUT is faster. By default, we recompute transmittance when raymarching luminance, which we only do in our lookup tables and not in the final composition pass.
+The transmittance LUT (see [`transmittance_LUT.wgsl`](../../shaders/sky-sea/atmosphere/transmittance_LUT.wgsl)) measures the spectral transmittance for red, blue, and green along a given view ray, all the way to the edge of the atmosphere. The map is parameterized by altitude and view zenith angle. The transmittance is found by integrating optical depth along a discrete number of steps, where a smaller step size leads to higher accuracy. Sampling the transmittance LUT should be avoided for low altitudes at angles nearly parallel to the surface of the planet, since you run into precision issues. In general, raymarching to determine transmittance is more accurate but the LUT is faster. By default, we recompute transmittance when raymarching luminance, which we only do in our lookup tables and not in the final composition pass.
 
-The multiscatter LUT (see [`multiscatter_LUT.wgsl`](../../shaders/sky-sea/atmosphere/multiscatter_LUT.wgsl)) contains a map of the total incoming luminance from all directions due to higher orders of scattering, i.e. light that bounces a few times. The map is parameterized by altitude and light zenith angle. This means that only the the current time of day and the viewer's altitude varies multiscattering, not longitude and latitude. Higher orders of scattered light are roughly correlated, which means their sum can be accurately estimated by a geometric series, making the multiscattering LUT much easier to calculate. Even so, this calculation is the most expensive of our LUTs.
+The multiscatter LUT (see [`multiscatter_LUT.wgsl`](../../shaders/sky-sea/atmosphere/multiscatter_LUT.wgsl)) contains a map of the total incoming luminance from all directions due to higher orders of scattering, in other words light that bounces a few times. Due to the symmetry of a spherical earth, the map is parameterized by altitude and light zenith angle. Since time of day is constant during a frame, during any given raymarch a single 1D slice of this map is "active", and the raymarch samples along the slice. Higher orders of scattered light are roughly correlated, which means their sum can be accurately estimated by a geometric series, making the multiscattering LUT much easier to calculate. Even so, this calculation is the most expensive of our LUTs.
 
-The skyview LUT (see [`skyview_LUT.wgsl`](../../shaders/sky-sea/atmosphere/skyview_LUT.wgsl)) contains a map of the total incoming luminance along a ray from the camera's position. Each texel is just a single evaluation of the scattering integral for light reaching the observer. It contains a projection of the full spherical view, and is parameterized by azimuthal and zenith viewing angles from the camera's position. Thus, it only needs to be recomputed if the atmosphere parameters change, or the camera moves, but not as the camera rotates. This LUT provides a short computation path for unobstructed views of the sky, and can be a relatively low resolution due to the low signal frequency of the luminance.
+The skyview LUT (see [`skyview_LUT.wgsl`](../../shaders/sky-sea/atmosphere/skyview_LUT.wgsl)) contains a map of the total incoming luminance along a ray from the camera's position. Each texel is a single evaluation of the scattering integral for light reaching the observer. It contains a projection of the full spherical view from the camera, and is parameterized by azimuth and zenith angles of a given view direction. This LUT provides a short computation path for unobstructed views of the sky, and can be a relatively low resolution due to the low signal frequency of the luminance.
 
-The aerial perspective LUT (see [`aerial_perspective_LUT.wgsl`](../../shaders/sky-sea/atmosphere/aerial_perspective_LUT.wgsl)) is used for determining the [aerial perspective](https://en.wikipedia.org/wiki/Aerial_perspective) for surface geometry, in which distant objects are gradually obscured by the scattering effects of the atmosphere. The aerial perspective LUT is fit to the camera frustum, and is an array with multiple depth slices. By default the texture is 32 texels on all dimensions, with a range of one kilometer per depth-slice. Aerial perspective is low frequency, so this small resolution is suitable. The aerial perspective LUT is very similar to the skyview LUT, just with different parameterization.
+The aerial perspective LUT (see [`aerial_perspective_LUT.wgsl`](../../shaders/sky-sea/atmosphere/aerial_perspective_LUT.wgsl)) is used for determining the [aerial perspective](https://en.wikipedia.org/wiki/Aerial_perspective) for surface geometry, in which the increasing atmospheric distance between the viewer and a distant object accumulates scattered light. The aerial perspective LUT is fit to the camera frustum, and is an array with multiple depth slices. By default the texture is 32 texels on all dimensions, with a range of one kilometer per depth-slice. Aerial perspective is low frequency, so this small resolution is suitable. The aerial perspective LUT is very similar to the skyview LUT, just with different parameterization.
 
-Each frame, we only need to recompute the skyview LUT and aerial perspective LUT, since those two are the ones that depend on time of day and viewer position. The transmittance LUT and multiscatter LUT only depend on the atmosphere's conditions (excluding sun position), and thus only need to be generated initially and when e.g. scattering coefficients are changed.
+Another important detail of the aerial perspective LUT is that we pack wavelength averaged transmittance into the alpha channel, using the transmittance calculated while raymarching the scattering. As mentioned for the transmittance LUT, there are floating point precision issues near the surface. By using the raymarched transmittance from the aerial perspective LUT, we avoid these issues. This is important for pixels near the horizon, since otherwise you get incorrect color ratios and possibly banding. We could store full spectral transmittance in a separate texture, but that is not necessary to get good enough results.
+
+Each frame, we only need to recompute the skyview LUT and aerial perspective LUT, since those two are the ones that depend on time of day and viewer position. The transmittance LUT and multiscatter LUT only depend on the atmospheric medium's parameters, and thus only need to be regenerated sparingly.
 
 ### Composition
 
@@ -133,24 +145,25 @@ $$
 \begin{align*}
 \vec C &: \text{Camera position} \\
 \vec P &: \text{Surface position} \\
-\vec L &: \text{Light direction of travel} \\
-\vec V &\coloneqq \operatorname{normalize}(C - P) \text{, View direction} \\
+\vec L &: \text{Light direction outgoing from surface} \\
+\vec V &\coloneqq \operatorname{normalize}(\vec C - \vec P) \text{, View direction} \\
 \vec H &\coloneqq \operatorname{normalize(\vec L + \vec V)} \text{, Halfway vector} \\
 \vec N &: \text{Surface normal} \\
 R(\vec v,\vec n) &: \text{Fresnel factor for direction $\vec v$ and surface normal $\vec n$} \\
-L(\vec p,\vec v) &: \text{Luminance in direction $\vec v$ from point $\vec p$, incoming or outgoing} \\
-T(\vec x, \vec y) &: \text{Transmittance between points $\vec x$ and $\vec y$} \\
-\operatorname{BRDF}(\vec a, \vec b) &: \text{BRDF for outgoing vectors $\vec a$ and $\vec b$} \\
+L_{out}(\vec p,\vec v) &: \text{Outgoing luminance from position $\vec p$ to direction $\vec v$ } \\
+L_{in}(\vec p,\vec v) &: \text{Incoming luminance to position $\vec p$ from direction $\vec v$} \\
+T(\vec x, \vec y) &: \text{Transmittance between positions $\vec x$ and $\vec y$} \\
+\operatorname{BRDF}(\vec a, \vec b) &: \text{BRDF for outgoing directions $\vec a$ and $\vec b$} \\
 \omega &: \text{Solid angle in steradians} \\
 \end{align*}
 $$
 
-We wish to compute $L_{camera}(\vec C, -\vec V)$, the incoming luminance for the camera in the direction of the surface point. We continue as follows:
+We wish to compute $L_{in}(\vec C, -\vec V)$, the total luminance reaching the camera in the direction of the surface. We split it up into contributions from the scattered sky dome and un-scattered sun as follows:
 
 $$
 \begin{align*}
-L_{camera}(\vec C, -\vec V) &= T(\vec C, \vec P)*L_{surface}(\vec P, \vec V) \\
-L_{surface}(\vec P,\vec V) &= L_{sky}+L_{sun} \\
+L_{in}(\vec C, -\vec V) &= T(\vec C, \vec P)*L_{out}(\vec P, \vec V) \\
+L_{out}(\vec P,\vec V) &= L_{sky}+L_{sun} \\
 \end{align*}
 $$
 
@@ -158,8 +171,8 @@ Estimating the luminance from the sky dome accurately is difficult, see [[3]](#b
 
 $$
 \begin{align*}
-L_{sky} &= \omega_s*L_{in,sky}(\vec v_s)*\operatorname{BRDF_s}(\vec v_s,\vec V)R_s  \\
-&+ \omega_d*L_{in,sky}(\vec v_d)*\operatorname{BRDF_d}(\vec v_d,\vec V)R_d \\
+L_{sky} &= \omega_s*L_{in,sky}(\vec C,\vec v_s)*\operatorname{BRDF_s}(\vec v_s,\vec V)R_s  \\
+&+ \omega_d*L_{in,sky}(\vec C,\vec v_d)*\operatorname{BRDF_d}(\vec v_d,\vec V)R_d \\
 \omega_s &= \frac{4\pi}{200}\\
 \vec v_{s} &= \operatorname{reflect(\vec V, \vec N)} \\
 R_s &= R(\vec v_s, \vec N) \\
@@ -169,32 +182,34 @@ R_d &= 1 - R(\vec v_d, \operatorname{normalize}(\vec v_d+\vec L)) \\
 \end{align*}
 $$
 
-$L_{in,sky}$ is sampled from the skyview LUT.
+$L_{in,sky}$ is sampled from the skyview LUT. Since the skyview LUT is dependent on the cameras position, this could be inaccurate for distant $\vec P$ near the horizon. However, there are not too many such pixels and they are typically obscured by aerial perspective anyway.
 
 For $BRDF_s$, we use a specular microfacet BRDF. To determine the sample, we assume the maximal impact sample is in the direction of a perfect reflection. At sunset, the luminance varies by about 20 times from minimum to maximum. At noon, this variation is only 2 times. Thus, since the specular BRDF has a sharp falloff, this assumption is reasonably accurate. So our choice of $\vec v_s$ in the direction of a perfect reflection is suitable.
 
 For $BRDF_d$, we use a diffuse lambertian BRDF. To determine the sample, we assume a sample direction that is halfway between the light and world up roughly approximates the mean luminance from the sky. This is because, as stated earlier for the specular sample, the sky luminance does not vary much. So our choice of $\vec v_d$ is suitable.
 
-We compute the sun luminance as follows:
+We compute the sun luminance as follows, where $E_{sun}$ is the illuminance from the sun incident to the atmospheric boundary:
 
 $$
 \begin{align*}
 S(\vec p, \vec l) \in [0,1] &: \text{Sun visibility at surface position $\vec p$ and light direction $\vec l$} \\
-\vec A(\vec o, \vec d) &: \text{Atmosphere boundary, from $\vec o$ in direction $\vec d$ } \\
-L_{sun} &= S(\vec C, \vec L) * E_{sun} * BRDF_{sun} \\
-E_{sun} &= T(\vec P, \vec A(\vec C, \vec L))\\
-
+\vec A(\vec o, \vec d) &: \text{Atmosphere boundary intersection point from $\vec o$ in direction $\vec d$} \\
+L_{sun} &= S(\vec C, \vec L) * T(\vec P, \vec A(\vec C, \vec L)) * E_{sun} * BRDF_{sun} \\
 BRDF_{sun} &= \operatorname{lerp}(BRDF_s(\vec L, \vec V),BRDF_d(\vec L, \vec V),\vec R(\vec L,\vec H))\\
 \end{align*}
 $$
 
 The visibility of the sun varies as the sun dips below the horizon, and thus so does the incoming luminance.
 
-An important fact that is not obvious is that the final luminance we are computing is linear in terms of the illuminance hitting the atmospheric boundary. We can fix this illuminance to be 1, then multiply at the end by an arbitrary solar strength factor that combines the sun's apparent solid angle and luminous intensity. This is why we compute $E_{sun}$ as just the transmittance from the surface to the sun.
+An important fact that is not obvious unless you examine the rendering equations we use is that our luminance factors linearly:
 
-This also means that $L_{camera}$ is not luminance but actually a linear transfer factor that converts from illuminance at the atmospheric boundary from the sun, to luminance hitting the camera in the view direction.
+$$
+L_{in}(\vec C, -\vec V) = L_{transfer}(\vec C, -\vec V)E_{sun}
+$$
 
-After computing $L_{camera}$, we multiply it by the arbitrary strength and color of the sun to get the final HDR luminance. We convert to sRGB with the ACES tonemapping function, then present to the screen.
+What we have actually calculated this entire time is $L_{transfer}$. We have the freedom to choose $E_{sun} = 1$ and ignore it in all lighting calculations. Then as the final step before presentation, we multiply by an arbitrary solar strength parameter that combines the sun's apparent solid angle and luminous intensity.
+
+After computing $L_{in}(\vec C, -\vec V)$, we multiply it by the strength and color of the sun to get the final HDR luminance. We convert to sRGB with the ACES tonemapping function, then present to the screen.
 
 ## Further Work
 
@@ -206,7 +221,7 @@ After computing $L_{camera}$, we multiply it by the arbitrary strength and color
   - Light transmitting through waves
   - Secondary bounces
   - Refraction
-  - General accuracy
+  - Accurate estimation of sky dome luminance
 - More realistic foam and spray
   - Handle loops in wave crests
 - Underwater camera

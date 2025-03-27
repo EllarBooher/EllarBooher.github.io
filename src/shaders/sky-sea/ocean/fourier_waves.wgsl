@@ -257,7 +257,7 @@ fn complexMult(a: vec2<f32>, b: vec2<f32>) -> vec2<f32>
 }
 
 @compute @workgroup_size(16, 16, 1)
-fn computeRealizedAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
+fn computeTimeDependentAmplitude(@builtin(global_invocation_id) global_id: vec3<u32>)
 {
     let texel_coord: vec2<u32> = global_id.xy;
 	let array_layer: u32 = global_id.z;

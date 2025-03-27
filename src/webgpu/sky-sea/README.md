@@ -111,7 +111,7 @@ $$
 \tilde{h}_x(k,t)+i\tilde{h}_z(k,t)\xmapsto{IFFT}\vec D_x+i\vec D_z
 $$
 
-From this we can easily extract $\vec D_x$ and $\vec D_z$ since they will be in separate vector components. Furthermore, since textures have four components, we can pack two IFFTs into one set of dispatches via concatenation. See `computeRealizedAmplitude` of [`fourier_waves.wgsl`](../../shaders/sky-sea/ocean/fourier_waves.wgsl#L354) for how we pack the spectrum data.
+From this we can easily extract $\vec D_x$ and $\vec D_z$ since they will be in separate vector components. Furthermore, since textures have four components, we can pack two IFFTs into one set of dispatches via concatenation. See `computeTimeDependentAmplitude` of [`fourier_waves.wgsl`](../../shaders/sky-sea/ocean/fourier_waves.wgsl#L354) for how we pack the spectrum data.
 
 In the end, we write the displacement, partial derivatives, and surface jacobian into arrays of maps that are sampled in the vertex and fragment shaders to rasterize the final ocean surface mesh into the GBuffer.
 

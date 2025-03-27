@@ -279,8 +279,8 @@ interface FFTWaveCascades {
 	 * @group(1) @binding(0) var<uniform> u_global: GlobalUBO;
 	 * @group(1) @binding(1) var<uniform> u_fourier_waves: FourierWavesUBO;
 	 */
-	realizedAmplitudeGroup0: GPUBindGroup;
-	realizedAmplitudeGroup1: GPUBindGroup;
+	timeDependentAmplitudeGroup0: GPUBindGroup;
+	timeDependentAmplitudeGroup1: GPUBindGroup;
 }
 
 interface TurbulenceJacobianEntry {
@@ -318,7 +318,7 @@ export class FFTWaveSpectrumResources {
 	}
 
 	private initialAmplitudeKernel: GPUComputePipeline;
-	private realizedAmplitudeKernel: GPUComputePipeline;
+	private timeDependentAmplitudeKernel: GPUComputePipeline;
 	private accumulateTurbulenceKernel: GPUComputePipeline;
 
 	private dfftResources: DFFTResources;
@@ -473,9 +473,9 @@ export class FFTWaveSpectrumResources {
 				usage: packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray.usage,
 			});
 
-		const realizedAmplitudeGroup0 = device.createBindGroup({
-			label: "FFT Wave Realized Fourier Amplitude h(k,t) Group 0",
-			layout: this.realizedAmplitudeKernel.getBindGroupLayout(0),
+		const timeDependentAmplitudeGroup0 = device.createBindGroup({
+			label: "FFT Wave Time Dependent Fourier Amplitude h(k,t) Group 0",
+			layout: this.timeDependentAmplitudeKernel.getBindGroupLayout(0),
 			entries: [
 				{
 					binding: 2,
@@ -494,9 +494,9 @@ export class FFTWaveSpectrumResources {
 			],
 		});
 
-		const realizedAmplitudeGroup1 = device.createBindGroup({
-			label: "FFT Wave Realized Fourier Amplitude h(k,t) Group 1",
-			layout: this.realizedAmplitudeKernel.getBindGroupLayout(1),
+		const timeDependentAmplitudeGroup1 = device.createBindGroup({
+			label: "FFT Wave Time Dependent Fourier Amplitude h(k,t) Group 1",
+			layout: this.timeDependentAmplitudeKernel.getBindGroupLayout(1),
 			entries: [
 				{
 					binding: 0,
@@ -519,8 +519,8 @@ export class FFTWaveSpectrumResources {
 				packed_Dx_plus_iDy_Dz_iDxdz_AmplitudeArray,
 			packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_AmplitudeArray:
 				packed_Dydx_plus_iDydz_Dxdx_plus_iDzdz_AmplitudeArray,
-			realizedAmplitudeGroup0: realizedAmplitudeGroup0,
-			realizedAmplitudeGroup1: realizedAmplitudeGroup1,
+			timeDependentAmplitudeGroup0: timeDependentAmplitudeGroup0,
+			timeDependentAmplitudeGroup1: timeDependentAmplitudeGroup1,
 		};
 	}
 
@@ -598,66 +598,70 @@ export class FFTWaveSpectrumResources {
 
 		this.mipMapGenerator = new MipMapGenerationPassResources(device);
 
-		const realizedAmplitudeGroup0Layout = device.createBindGroupLayout({
-			label: "FFT Wave Realized Fourier Amplitude h(k,t) Group 0",
-			entries: [
-				{
-					binding: 2,
-					visibility: GPUShaderStage.COMPUTE,
-					storageTexture: {
-						format: FFT_IO_TEXTURE_FORMAT,
-						viewDimension: "2d-array",
-						access: "write-only",
+		const timeDependentAmplitudeGroup0Layout = device.createBindGroupLayout(
+			{
+				label: "FFT Wave Time Dependent Fourier Amplitude h(k,t) Group 0",
+				entries: [
+					{
+						binding: 2,
+						visibility: GPUShaderStage.COMPUTE,
+						storageTexture: {
+							format: FFT_IO_TEXTURE_FORMAT,
+							viewDimension: "2d-array",
+							access: "write-only",
+						},
 					},
-				},
-				{
-					binding: 3,
-					visibility: GPUShaderStage.COMPUTE,
-					storageTexture: {
-						format: FFT_IO_TEXTURE_FORMAT,
-						viewDimension: "2d-array",
-						access: "write-only",
+					{
+						binding: 3,
+						visibility: GPUShaderStage.COMPUTE,
+						storageTexture: {
+							format: FFT_IO_TEXTURE_FORMAT,
+							viewDimension: "2d-array",
+							access: "write-only",
+						},
 					},
-				},
-				{
-					binding: 4,
-					visibility: GPUShaderStage.COMPUTE,
-					texture: {
-						sampleType: "unfilterable-float",
-						viewDimension: "2d-array",
+					{
+						binding: 4,
+						visibility: GPUShaderStage.COMPUTE,
+						texture: {
+							sampleType: "unfilterable-float",
+							viewDimension: "2d-array",
+						},
 					},
-				},
-			],
-		});
+				],
+			}
+		);
 
-		const realizedAmplitudeGroup1Layout = device.createBindGroupLayout({
-			label: "FFT Wave Realized Fourier Amplitude h(k,t) Group 1",
-			entries: [
-				{
-					binding: 0,
-					visibility: GPUShaderStage.COMPUTE,
-					buffer: { type: "uniform" },
-				},
-				{
-					binding: 1,
-					visibility: GPUShaderStage.COMPUTE,
-					buffer: { type: "uniform" },
-				},
-			],
-		});
+		const timeDependentAmplitudeGroup1Layout = device.createBindGroupLayout(
+			{
+				label: "FFT Wave Time Dependent Fourier Amplitude h(k,t) Group 1",
+				entries: [
+					{
+						binding: 0,
+						visibility: GPUShaderStage.COMPUTE,
+						buffer: { type: "uniform" },
+					},
+					{
+						binding: 1,
+						visibility: GPUShaderStage.COMPUTE,
+						buffer: { type: "uniform" },
+					},
+				],
+			}
+		);
 
-		this.realizedAmplitudeKernel = device.createComputePipeline({
-			label: "FFT Wave Realized Fourier Amplitude h(k,t)",
+		this.timeDependentAmplitudeKernel = device.createComputePipeline({
+			label: "FFT Wave Time Dependent Fourier Amplitude h(k,t)",
 			layout: device.createPipelineLayout({
-				label: "FFT Wave Realized Fourier Amplitude h(k,t)",
+				label: "FFT Wave Time Dependent Fourier Amplitude h(k,t)",
 				bindGroupLayouts: [
-					realizedAmplitudeGroup0Layout,
-					realizedAmplitudeGroup1Layout,
+					timeDependentAmplitudeGroup0Layout,
+					timeDependentAmplitudeGroup1Layout,
 				],
 			}),
 			compute: {
 				module: shaderModule,
-				entryPoint: "computeRealizedAmplitude",
+				entryPoint: "computeTimeDependentAmplitude",
 			},
 		});
 
@@ -1013,14 +1017,14 @@ export class FFTWaveSpectrumResources {
 						: undefined,
 			});
 
-			realizePassEncoder.setPipeline(this.realizedAmplitudeKernel);
+			realizePassEncoder.setPipeline(this.timeDependentAmplitudeKernel);
 			realizePassEncoder.setBindGroup(
 				0,
-				this.cascades.realizedAmplitudeGroup0
+				this.cascades.timeDependentAmplitudeGroup0
 			);
 			realizePassEncoder.setBindGroup(
 				1,
-				this.cascades.realizedAmplitudeGroup1
+				this.cascades.timeDependentAmplitudeGroup1
 			);
 
 			const dispatchSize = this.textureGridSize;

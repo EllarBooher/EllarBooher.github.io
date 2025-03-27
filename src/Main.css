@@ -5,6 +5,7 @@ html {
 	-moz-osx-font-smoothing: grayscale;
 
 	--header-height: 3rem;
+	--background-color-darkest: #151d21;
 	--background-color-dark: #223038;
 	--background-color-light: #304550;
 	--background-color-lightest: #3e5a68;

@@ -43,3 +43,10 @@
 .readme-body > * > p {
 	overflow-wrap: anywhere;
 }
+
+/* Style blocks of math, not inline math */
+mjx-container[display="true"] {
+	background-color: var(--background-color-darkest);
+	padding: 1em;
+	border-radius: 0.5em;
+}

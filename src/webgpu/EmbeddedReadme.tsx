@@ -1,8 +1,8 @@
-import { memo, ReactElement, ReactNode, useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import "./EmbeddedReadme.css";
 import "prism-themes/themes/prism-one-dark.min.css";
 
-import parseToHTML from "html-react-parser";
+import parseToHTML, { DOMNode, domToReact, Element } from "html-react-parser";
 import { HashLink } from "react-router-hash-link";
 
 const repoRoot =
@@ -49,42 +49,43 @@ export default memo(function EmbeddedReadme({
 		return undefined;
 	}
 
-	return (
-		<div className="readme-body">
-			{parseToHTML(readmeText, {
-				transform(reactNode, _domNode, _index) {
-					const element = reactNode as ReactElement;
-					if (element.props === undefined || element.type !== "a") {
-						return <>{reactNode}</>;
-					}
+	const options = {
+		replace(domNode: DOMNode): JSX.Element | undefined {
+			const { attribs, children } = domNode as Element;
+			if (attribs === undefined || children === undefined) {
+				return;
+			}
 
-					const { href, children } = element.props as {
-						href: string;
-						children?: ReactNode[];
-						id?: string;
-					};
+			const href = attribs.href;
+			if (typeof href !== "string") {
+				return;
+			}
 
-					// Anchor Link
-					if (href.startsWith("#") === true) {
-						return <HashLink to={href}>{children}</HashLink>;
-					}
+			// Anchor Link
+			if (href.startsWith("#") === true) {
+				return (
+					<HashLink to={href}>
+						{domToReact(children as DOMNode[], options)}
+					</HashLink>
+				);
+			}
 
-					const projectRoot = `${repoRoot}/${projectFolder}/`;
+			const projectRoot = `${repoRoot}/${projectFolder}/`;
 
-					let hrefParsed: undefined | string = undefined;
-					if (URL.canParse(href)) {
-						hrefParsed = href;
-					} else if (URL.canParse(href, projectRoot)) {
-						hrefParsed = URL.parse(href, projectRoot)!.href;
-					}
+			let hrefParsed: undefined | string = undefined;
+			if (URL.canParse(href)) {
+				hrefParsed = href;
+			} else if (URL.canParse(href, projectRoot)) {
+				hrefParsed = URL.parse(href, projectRoot)!.href;
+			}
 
-					return (
-						<a target="_blank" rel="noopener noreferrer" href={hrefParsed}>
-							{children}
-						</a>
-					);
-				},
-			})}
-		</div>
-	);
+			return (
+				<a target="_blank" rel="noopener noreferrer" href={hrefParsed}>
+					{domToReact(children as DOMNode[], options)}
+				</a>
+			);
+		},
+	};
+
+	return <div className="readme-body">{parseToHTML(readmeText, options)}</div>;
 });

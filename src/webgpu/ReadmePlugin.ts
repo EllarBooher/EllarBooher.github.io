@@ -4,6 +4,8 @@ import rehypeStringify from "rehype-stringify";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
+import rehypeMathjax from "rehype-mathjax";
+import remarkMath from "remark-math";
 import path from "path";
 import rehypeRaw from "rehype-raw";
 import { Nodes, Root } from "hast";
@@ -86,9 +88,11 @@ export default function sampleReadme(
 
 	const processor = unified()
 		.use(remarkParse)
+		.use(remarkMath)
 		.use(remarkRehype, { allowDangerousHtml: true })
 		.use(rehypeRaw)
 		.use(transformCitation)
+		.use(rehypeMathjax)
 		.use(rehypePrismPlus)
 		.use(rehypeStringify);
 

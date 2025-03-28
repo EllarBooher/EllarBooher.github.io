@@ -704,8 +704,8 @@ class SkySeaApp implements RendererApp {
 				deltaTimeSeconds: 0.0,
 			},
 			orbit: {
-				timeHours: 5.7,
-				timeSpeedupFactor: 400.0,
+				timeHours: 5.6,
+				timeSpeedupFactor: 200.0,
 				paused: false,
 				reversed: false,
 				inclinationRadians: Math.PI / 2,

@@ -88,19 +88,19 @@ $$
 \begin{align*}
 \mathbf P(\mathbf r,t) &\coloneqq \text{Final ocean surface particle position}\\
 \mathbf P(\mathbf r,t) &= \mathbf r + \mathbf D(\mathbf r,t) = \left(x+\mathbf D_x,y+\mathbf D_y,z+\mathbf D_z\right)\\
-\mathbf T &= \frac{d}{dx}\mathbf P(\mathbf r,t) = \left(1+\frac{d}{dx}\mathbf D_x,\frac{d}{dx}\mathbf D_y,\frac{d}{dx}\mathbf D_z\right)\\
-\mathbf B &= \frac{d}{dz}\mathbf P(\mathbf r,t) = \left(\frac{d}{dz}\mathbf D_x,\frac{d}{dz}\mathbf D_y,1+\frac{d}{dz}\mathbf D_z\right)\\
+\mathbf T &= \frac{\partial}{\partial x}\mathbf P(\mathbf r,t) = \left(1+\frac{\partial}{\partial x}\mathbf D_x,\frac{\partial}{\partial x}\mathbf D_y,\frac{\partial}{\partial x}\mathbf D_z\right)\\
+\mathbf B &= \frac{\partial}{\partial z}\mathbf P(\mathbf r,t) = \left(\frac{\partial}{\partial z}\mathbf D_x,\frac{\partial}{\partial z}\mathbf D_y,1+\frac{\partial}{\partial z}\mathbf D_z\right)\\
 \mathbf N &= \mathbf T \times \mathbf B \\
 \end{align*}
 $$
 
-The discrete fourier transform is a sum, so the derivative distributes over it. Thus we can instead take the inverse fourier of the per-term partial derivatives. We need six partial derivatives obtained by distributing $\frac{d}{dx}$ and $\frac{d}{dz}$ to the three components of the displacement. It can be shown that the mixed partials $\frac{d}{dx}D_z$ and $\frac{d}{dz}D_x$ are equal, so we only need to compute five extra IFFTs for eight in total. The derivatives of the DFFT go as follows:
+The discrete fourier transform is a sum, so the derivative distributes over it. Thus we can instead take the inverse fourier of the per-term partial derivatives. We need six partial derivatives obtained by distributing $\frac{\partial}{\partial x}$ and $\frac{\partial}{\partial z}$ to the three components of the displacement. It can be shown that the mixed partials $\frac{\partial}{\partial x}D_z$ and $\frac{\partial}{\partial z}D_x$ are equal, so we only need to compute five extra IFFTs for eight in total. The derivatives of the DFFT go as follows:
 
 $$
 \begin{align*}
 x_i &\in {x,z} \\
-\frac{d}{dx_i}\mathbf D_{x_i}(\mathbf k,\mathbf r,t) &= \frac{d}{dx_i}\sum_{\mathbf k} \tilde{\mathbf h}_{x_i}(\mathbf k,t)e^{i\mathbf k \cdot \mathbf r} \\
-&= \sum_{\mathbf k} \tilde{\mathbf h}_{x_i}(\mathbf k,t)\frac{d}{dx_i}e^{i\mathbf k \cdot \mathbf r} \\
+\frac{\partial}{\partial x_i}\mathbf D_{x_i}(\mathbf k,\mathbf r,t) &= \frac{\partial}{\partial x_i}\sum_{\mathbf k} \tilde{\mathbf h}_{x_i}(\mathbf k,t)e^{i\mathbf k \cdot \mathbf r} \\
+&= \sum_{\mathbf k} \tilde{\mathbf h}_{x_i}(\mathbf k,t)\frac{\partial}{\partial x_i}e^{i\mathbf k \cdot \mathbf r} \\
 &= \sum_{\mathbf k} ik_{x_i}\tilde{\mathbf h}_{x_i}(\mathbf k,t)e^{i\mathbf k \cdot \mathbf r}
 \end{align*}
 $$

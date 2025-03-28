@@ -5,7 +5,6 @@
 	--widget-color: var(--background-color-light);
 	--hover-color: var(--background-color-lightest);
 	--focus-color: var(--background-color-lightest);
-	--text-color: var(--text-color);
 	--number-color: var(--text-color);
 	--string-color: var(--text-color);
 }

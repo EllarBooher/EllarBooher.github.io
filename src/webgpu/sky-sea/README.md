@@ -80,7 +80,7 @@ $$
 
 The per-wave complex-valued amplitude $\tilde{h}(\vec k,t)$, analogous to the real-valued $A$, is calculated from empirically derived ocean spectrum models such as JONSWAP. See Tessendorf and Gamper's papers (cited earlier) for more discussion, since there is a lot of freedom for what to use depending on which ocean conditions you wish to accurately portray. One important criteria is that $\tilde{h}$ is [Hermitian](https://en.wikipedia.org/wiki/Hermitian_function), which results in the Fourier transform being real-valued. In the end, we compute these amplitudes with a mixture of random noise and parameters such as wind speed, wind fetch, simulation time, and others.
 
-We also use three cascades to divide the ocean spectrum and generate three displacement maps at different world-space scales. This allows us to capture detail across multiple scales, since for good performance the grid size of the ocean spectrum must be quite small. We chose 512 by 512 waves for each cascade, with scales of 200, 50, and 10 meters. This is $512 * 512 * 3 = 786432$ unique waves in total, although many are low contribution. This leads to a spatial and wavelength sample rate of $10 / 512 \approx 0.02$ meters, which is roughly two centimeters. This is the approximate boundary at which gravity waves become capillary waves and surface tension becomes the dominating force. The models we use rely on the fact that gravity dominates for larger wavelengths, and do not sufficiently account for surface tension.
+We also use three cascades to divide the ocean spectrum and generate three displacement maps at different world-space scales. This allows us to capture detail across multiple scales, since for good performance the grid size of the ocean spectrum must be quite small. We chose 512 by 512 waves for each cascade, with scales of 200, 50, and 10 meters. This is $512 \cdot 512 \cdot 3 = 786432$ unique waves in total, although many are low contribution. This leads to a spatial and wavelength sample rate of $10 / 512 \approx 0.02$ meters, which is roughly two centimeters. This is the approximate boundary at which gravity waves become capillary waves and surface tension becomes the dominating force. The models we use rely on the fact that gravity dominates for larger wavelengths, and do not sufficiently account for surface tension.
 
 Next, surface normals are needed for shading. We calculate these from the gradients of the displacement, instead of using a numerical method like finite differences. We compute the tangent, bitangent, and normal from the final displaced ocean surface vertex position $\vec D(\vec r,t)$ as follows:
 
@@ -149,10 +149,11 @@ $$
 \vec V &\coloneqq \operatorname{normalize}(\vec C - \vec P) \text{, View direction} \\
 \vec H &\coloneqq \operatorname{normalize(\vec L + \vec V)} \text{, Halfway vector} \\
 \vec N &: \text{Surface normal} \\
-R(\vec v,\vec n) &: \text{Fresnel factor for direction $\vec v$ and surface normal $\vec n$} \\
+R(\vec v,\vec n) &: \text{Fresnel factor for perfect reflection, outgoing $\vec v$ and surface normal $\vec n$} \\
 L_{out}(\vec p,\vec v) &: \text{Outgoing luminance from position $\vec p$ to direction $\vec v$ } \\
 L_{in}(\vec p,\vec v) &: \text{Incoming luminance to position $\vec p$ from direction $\vec v$} \\
-T(\vec x, \vec y) &: \text{Transmittance between positions $\vec x$ and $\vec y$} \\
+\vec T_{segment}(\vec x, \vec y) &: \text{Spectral transmittance between positions $\vec x$ and $\vec y$} \\
+\vec T_{ray}(\vec o,\vec d) &: \text{Spectral transmittance to atmospheric boundary for ray of origin $\vec o$ and direction $\vec d$} \\
 \operatorname{BRDF}(\vec a, \vec b) &: \text{BRDF for outgoing directions $\vec a$ and $\vec b$} \\
 \omega &: \text{Solid angle in steradians} \\
 \end{align*}
@@ -162,7 +163,7 @@ We wish to compute $L_{in}(\vec C, -\vec V)$, the total luminance reaching the c
 
 $$
 \begin{align*}
-L_{in}(\vec C, -\vec V) &= T(\vec C, \vec P)*L_{out}(\vec P, \vec V) \\
+L_{in}(\vec C, -\vec V) &= \vec T_{segment}(\vec C, \vec P)\:L_{out}(\vec P, \vec V) \\
 L_{out}(\vec P,\vec V) &= L_{sky}+L_{sun} \\
 \end{align*}
 $$
@@ -171,8 +172,8 @@ Estimating the luminance from the sky dome accurately is difficult, see [[3]](#b
 
 $$
 \begin{align*}
-L_{sky} &= \omega_s*L_{in,sky}(\vec C,\vec v_s)*\operatorname{BRDF_s}(\vec v_s,\vec V)R_s  \\
-&+ \omega_d*L_{in,sky}(\vec C,\vec v_d)*\operatorname{BRDF_d}(\vec v_d,\vec V)R_d \\
+L_{sky} &= \omega_s\:L_{in,sky}(\vec C,\vec v_s)\:\operatorname{BRDF_s}(\vec v_s,\vec V)R_s  \\
+&+ \omega_d\:L_{in,sky}(\vec C,\vec v_d)\:\operatorname{BRDF_d}(\vec v_d,\vec V)R_d \\
 \omega_s &= \frac{4\pi}{200}\\
 \vec v_{s} &= \operatorname{reflect(\vec V, \vec N)} \\
 R_s &= R(\vec v_s, \vec N) \\
@@ -188,14 +189,13 @@ For $BRDF_s$, we use a specular microfacet BRDF. To determine the sample, we ass
 
 For $BRDF_d$, we use a diffuse lambertian BRDF. To determine the sample, we assume a sample direction that is halfway between the light and world up roughly approximates the mean luminance from the sky. This is because, as stated earlier for the specular sample, the sky luminance does not vary much. So our choice of $\vec v_d$ is suitable.
 
-We compute the sun luminance as follows, where $E_{sun}$ is the illuminance from the sun incident to the atmospheric boundary:
+We compute the sun luminance as follows, where $E_{sun}$ is the solar illuminance incident to the atmospheric boundary:
 
 $$
 \begin{align*}
 S(\vec p, \vec l) \in [0,1] &: \text{Sun visibility at surface position $\vec p$ and light direction $\vec l$} \\
-\vec A(\vec o, \vec d) &: \text{Atmosphere boundary intersection point from $\vec o$ in direction $\vec d$} \\
-L_{sun} &= S(\vec C, \vec L) * T(\vec P, \vec A(\vec C, \vec L)) * E_{sun} * BRDF_{sun} \\
-BRDF_{sun} &= \operatorname{lerp}(BRDF_s(\vec L, \vec V),BRDF_d(\vec L, \vec V),\vec R(\vec L,\vec H))\\
+L_{sun} &= S(\vec C, \vec L)\:\vec T_{ray}(\vec P,\vec L)\:E_{sun}\:BRDF_{sun} \\
+BRDF_{sun} &= \operatorname{lerp}\left(BRDF_s(\vec L, \vec V),BRDF_d(\vec L, \vec V),\vec R(\vec L,\vec H)\right)\\
 \end{align*}
 $$
 
@@ -204,10 +204,10 @@ The visibility of the sun varies as the sun dips below the horizon, and thus so 
 An important fact that is not obvious unless you examine the rendering equations we use is that our luminance factors linearly:
 
 $$
-L_{in}(\vec C, -\vec V) = L_{transfer}(\vec C, -\vec V)E_{sun}
+L_{in}(\vec C, -\vec V) = L_{transfer}(\vec C, -\vec V)\:E_{sun}
 $$
 
-What we have actually calculated this entire time is $L_{transfer}$. We have the freedom to choose $E_{sun} = 1$ and ignore it in all lighting calculations. Then as the final step before presentation, we multiply by an arbitrary solar strength parameter that combines the sun's apparent solid angle and luminous intensity.
+What we have actually calculated this entire time is $L_{transfer}$, a ratio between luminance hitting the camera and solar illuminance at the atmospheric boundary. We have the freedom to choose $E_{sun} = 1$ and ignore it in all lighting calculations. Then as the final step before presentation, we multiply by an arbitrary solar strength parameter that combines the sun's apparent solid angle and luminous intensity.
 
 After computing $L_{in}(\vec C, -\vec V)$, we multiply it by the strength and color of the sun to get the final HDR luminance. We convert to sRGB with the ACES tonemapping function, then present to the screen.
 

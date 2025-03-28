@@ -43,7 +43,7 @@ fn convertPBRPropertiesWater(color: vec3<f32>, normal: vec3<f32>, foam: f32) -> 
 
 	const SPECULAR_POWER = 160.0;
 	const ROUGHNESS_WATER = 0.05;
-	const ROUGHNESS_FOAM = 0.3;
+	const ROUGHNESS_FOAM = 1.0;
 
     let roughness = mix(
 		ROUGHNESS_WATER,
@@ -342,6 +342,8 @@ fn sampleGeometryLuminance(
 	// TODO: Better lighting model of the water
 
     let surface_position = position + direction * distance;
+	let sea_subscattering_factor = 0.3;
+	let sea_brdf = sea_subscattering_factor * diffuseBRDF(material);
 
 	// Specular term, use perfect reflection to best capture sky dome image
 	let sky_reflection_lobe_solid_angle = (4.0 * PI) / 200;
@@ -363,7 +365,7 @@ fn sampleGeometryLuminance(
 		transmittance_to_surface
 		* sky_diffuse_lobe_solid_angle
 		* sky_indirect_luminance
-		* diffuseBRDF(material)
+		* sea_brdf
 		* (1.0 - computeFresnelMicrofacet(material, light_direction, -direction));
 
 	// Reflected/scattered direct sunlight
@@ -387,8 +389,8 @@ fn sampleGeometryLuminance(
 		transmittance_to_surface
 		* light_illuminance
 		* mix(
+			sea_brdf,
 			specularBRDF(material, light_direction, -direction),
-			diffuseBRDF(material),
 			computeFresnelMicrofacet(material, light_direction, -direction)
 		);
 

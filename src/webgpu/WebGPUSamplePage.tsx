@@ -204,6 +204,17 @@ const RenderingCanvas = function RenderingCanvas({
 		resizeCanvas();
 	}, [resizeCanvas, guiDocked]);
 
+	const performanceToggle = app.setLowPerformanceMode ? (
+		<div>
+			<input
+				type="checkbox"
+				onChange={(e) => {
+					app.setLowPerformanceMode?.(e.currentTarget.checked);
+				}}
+			></input>
+		</div>
+	) : undefined;
+
 	/*
 	 * The precise hierarchy of these elements is important for the desired
 	 * effect. See `WebGPUSamplePage.css` for the specifics.
@@ -216,7 +227,9 @@ const RenderingCanvas = function RenderingCanvas({
 			<div
 				className={guiDocked ? undefined : "gui-pane-floating"}
 				ref={guiPaneRef}
-			/>
+			>
+				{performanceToggle}
+			</div>
 			{import.meta.env.DEV ? (
 				<CanvasScreenshotWidget canvas={canvasRef} />
 			) : undefined}

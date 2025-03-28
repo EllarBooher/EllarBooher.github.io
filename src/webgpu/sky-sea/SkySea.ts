@@ -600,7 +600,6 @@ class SkySeaApp implements RendererApp {
 	quit = false;
 
 	private dummyFrameCounter: number;
-	private benchmarkFrameCounter: number;
 
 	private canvasTextureFormat: GPUTextureFormat;
 
@@ -656,10 +655,13 @@ class SkySeaApp implements RendererApp {
 		for (const props of this.resources.fullscreenQuadPassResources.getAllTextureProperties()) {
 			this.renderOutputController.setTextureProperties(props);
 		}
+	}
 
-		this.benchmarkFrameCounter = 20.0;
-		this.parameters.orbit.timeHours = 5.2;
-		this.parameters.time.timeSeconds = 0.0;
+	setLowPerformanceMode(isLowPerf: boolean): void {
+		const desiredPerfMode: PerformanceConfigName = isLowPerf
+			? "bad"
+			: "good";
+		this.setPerformanceConfig(desiredPerfMode);
 	}
 
 	constructor(device: GPUDevice, presentFormat: GPUTextureFormat) {
@@ -730,7 +732,6 @@ class SkySeaApp implements RendererApp {
 		this.performance = new PerformanceTracker(this.device);
 
 		this.dummyFrameCounter = 10.0;
-		this.benchmarkFrameCounter = 20.0;
 	}
 
 	tickTime(deltaTimeMilliseconds: number): void {
@@ -837,29 +838,15 @@ class SkySeaApp implements RendererApp {
 			this.resources.gbuffer
 		);
 
-		if (this.benchmarkFrameCounter === 1) {
-			const passedBenchmark = this.performance.averageFPS > 30;
-			if (!passedBenchmark) {
-				console.log(`Setting performance config to low`);
-				this.setPerformanceConfig("bad");
-			}
-		}
-
-		if (this.benchmarkFrameCounter > 0) {
-			this.benchmarkFrameCounter -= 1;
-		}
-
-		if (this.benchmarkFrameCounter === 0) {
-			const output = this.renderOutputController.current();
-			this.resources.fullscreenQuadPassResources.record(
-				this.device,
-				commandEncoder,
-				presentView,
-				output.tag,
-				output.transform,
-				this.performance.queueTimestampInterval("FullscreenQuad")
-			);
-		}
+		const output = this.renderOutputController.current();
+		this.resources.fullscreenQuadPassResources.record(
+			this.device,
+			commandEncoder,
+			presentView,
+			output.tag,
+			output.transform,
+			this.performance.queueTimestampInterval("FullscreenQuad")
+		);
 
 		this.performance.preSubmitCommands(commandEncoder);
 

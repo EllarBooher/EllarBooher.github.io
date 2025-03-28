@@ -8,6 +8,7 @@ import { GUI } from "lil-gui";
 export interface RendererApp {
 	quit: boolean;
 	presentationInterface(): GPUCanvasConfiguration;
+	setLowPerformanceMode?: (isLowPerf: boolean) => void;
 	/*
 	 * TODO: We could maybe just resize resources on draw if the presentTexture
 	 * is an unexpected size, cutting this handleResize method.

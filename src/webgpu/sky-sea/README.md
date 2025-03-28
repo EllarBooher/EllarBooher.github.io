@@ -45,26 +45,26 @@ The per-vertex displacement is three dimensional, since this allows for more rea
 
 $$
 \begin{align*}
-t &: \text{time in seconds} \\
-\vec r = (x,y,z) &: \text{position of an ocean particle in meters} \\
-\vec k = (k_x,k_z) &: \text{angular wave vector in radians per meter} \\
-\omega &: \text{angular frequency in radians per second} \\
-\vec D(\vec r,t) = (D_x,D_y,D_z) &: \text{displacement of a given ocean particle} \\
-A &: \text{amplitude of the wave in meters}
+t &: \text{Time in seconds} \\
+\mathbf r = (x,y,z) &: \text{Position of an ocean particle in meters} \\
+\mathbf k = (k_x,k_z) &: \text{Angular wave vector in radians per meter} \\
+\omega &: \text{Angular frequency in radians per second} \\
+\mathbf D(\mathbf r,t) = (D_x,D_y,D_z) &: \text{Displacement of a given ocean particle} \\
+A &: \text{Amplitude of the wave in meters}
 \end{align*}
 $$
 
-So if we identify our waves by a unique wave vector $\vec k$ and parameters $A(\vec k)$ and $\omega(\vec k)$, we have:
+So if we index our waves by a unique wave vector $\mathbf k$ and parameters $A(\mathbf k)$ and $\omega(\mathbf k)$, we have:
 
 $$
 \begin{align*}
-\theta(\vec k,\vec r,t) &= \vec k \cdot \vec r - \omega(\vec k) t \\
-\hat k &= \frac{\vec k}{\left\|\vec k\right\|} = (\hat k_x, \hat k_z)\\
-\vec D(\vec k,\vec r,t) &= \sum_{\vec k} \left(-A\hat k_x \sin(\theta),A\cos(\theta),-A\hat k_z \sin(\theta)\right)
+\theta(\mathbf k,\mathbf r,t) &= \mathbf k \cdot (\mathbf r_x,\mathbf r_z) - \omega(\mathbf k) t \\
+\hat{\mathbf k} &= \frac{\mathbf k}{\left\|\mathbf k\right\|} \\
+\mathbf D(\mathbf k,\mathbf r,t) &= \sum_{\mathbf k} \left(-A\hat{\mathbf k}_x \sin(\theta),A\cos(\theta),-A\hat{\mathbf k}_z \sin(\theta)\right)
 \end{align*}
 $$
 
-Note that $\hat k$ gives the direction that the wave propagates, so this formulation describes ocean surface particles as moving in a circle parallel to the direction of travel. The wave parameters can be loaded from a uniform buffer of waves. This works for stylistic oceans, but for hundreds of waves the result can be unrealistic. You could use millions of waves, but the linear scaling of the sum leads to poor performance.
+Note that $\hat{\mathbf k}$ gives the direction that the wave propagates, so this formulation describes ocean surface particles as moving in a circle parallel to the direction of travel. The wave parameters can be loaded from a uniform buffer of waves. This works for stylistic oceans, but for hundreds of waves the result can be unrealistic. You could use millions of waves, but the linear scaling of the sum leads to poor performance.
 
 Luckily, we can apply the Fast Fourier Transform (FFT) to knock down the complexity, since we can reformulate our sum to be a Fourier transform. See [`fourier_waves.wgsl`](../../shaders/sky-sea/ocean/fourier_waves.wgsl) and [`FourierWaves.ts`](./ocean/FourierWaves.ts) for the creation of the complex-valued wave spectrum, or [`fft.wgsl`](../../shaders/sky-sea/util/fft.wgsl) and [`FFT.ts`](./util/FFT.ts) for the general 2D FFT implementation. We reformulate our spectrum of waves from a linear list to a square grid of width $n$, and our displacement map shall be the same dimension and size. This is the primary restriction of the periodic DFFT: each sample in the frequency domain gives one sample in the spatial domain. In other words, $n^2$ waves gives $n^2$ unique displacement in our texture. This fact is not necessarily a negative, but we do need to design around it.
 
@@ -72,46 +72,46 @@ Calculating a single vertex displacement on this grid as a naive sum is $O(n^2)$
 
 $$
 \begin{align*}
- \tilde{h}(k,t) &: \text{frequency domain amplitude}\\
-\vec{h}(\vec k,t) &= \tilde{h}(k,t)\left(-i\hat{k}_x,1,-i\hat{k}_z\right) \\
-\vec D(\vec r,t) &= \sum_{\vec k} \vec h(\vec k,t)e^{i\vec k \cdot \vec r} \\
+ \tilde{h}(\mathbf k,t) &: \text{Frequency domain amplitude}\\
+\tilde {\mathbf h}(\mathbf k,t) &= \tilde{h}(\mathbf k,t)\left(-i\hat{\mathbf k}_x,1,-i\hat{\mathbf k}_z\right) \\
+\mathbf D(\mathbf r,t) &= \sum_{\mathbf k} \tilde{\mathbf h}(\mathbf k,t)e^{i\mathbf k \cdot \mathbf r} \\
 \end{align*}
 $$
 
-The per-wave complex-valued amplitude $\tilde{h}(\vec k,t)$, analogous to the real-valued $A$, is calculated from empirically derived ocean spectrum models such as JONSWAP. See Tessendorf and Gamper's papers (cited earlier) for more discussion, since there is a lot of freedom for what to use depending on which ocean conditions you wish to accurately portray. One important criteria is that $\tilde{h}$ is [Hermitian](https://en.wikipedia.org/wiki/Hermitian_function), which results in the Fourier transform being real-valued. In the end, we compute these amplitudes with a mixture of random noise and parameters such as wind speed, wind fetch, simulation time, and others.
+The per-wave complex-valued amplitude $\tilde{h}(\mathbf k,t)$, analogous to the real-valued $A$, is calculated from empirically derived ocean spectrum models such as JONSWAP. See Tessendorf and Gamper's papers (cited earlier) for more discussion, since there is a lot of freedom for what to use depending on which ocean conditions you wish to accurately portray. One important criteria is that $\tilde{h}$ is [Hermitian](https://en.wikipedia.org/wiki/Hermitian_function), which results in the inverse fourier transform being real-valued. In the end, we compute these amplitudes with a mixture of random noise and parameters such as wind speed, wind fetch, simulation time, and others.
 
 We also use three cascades to divide the ocean spectrum and generate three displacement maps at different world-space scales. This allows us to capture detail across multiple scales, since for good performance the grid size of the ocean spectrum must be quite small. We chose 512 by 512 waves for each cascade, with scales of 200, 50, and 10 meters. This is $512 \cdot 512 \cdot 3 = 786432$ unique waves in total, although many are low contribution. This leads to a spatial and wavelength sample rate of $10 / 512 \approx 0.02$ meters, which is roughly two centimeters. This is the approximate boundary at which gravity waves become capillary waves and surface tension becomes the dominating force. The models we use rely on the fact that gravity dominates for larger wavelengths, and do not sufficiently account for surface tension.
 
-Next, surface normals are needed for shading. We calculate these from the gradients of the displacement, instead of using a numerical method like finite differences. We compute the tangent, bitangent, and normal from the final displaced ocean surface vertex position $\vec D(\vec r,t)$ as follows:
+Next, surface normals are needed for shading. We calculate these from the gradients of the displacement, instead of using a numerical method like finite differences. We compute the tangent, bitangent, and normal from the final displaced ocean surface vertex position $\mathbf D(\mathbf r,t)$ as follows:
 
 $$
 \begin{align*}
-\vec P(\vec r,t) &\coloneqq \text{Final ocean surface particle position}\\
-\vec P(\vec r,t) &= \vec r + \vec D(\vec r,t) = \left(x+\vec D_x,y+\vec D_y,z+\vec D_z\right)\\
-\vec T &= \frac{d}{dx}\vec P(\vec r,t) = \left(1+\frac{d}{dx}\vec D_x,\frac{d}{dx}\vec D_y,\frac{d}{dx}\vec D_z\right)\\
-\vec B &= \frac{d}{dz}\vec P(\vec r,t) = \left(\frac{d}{dz}\vec D_x,\frac{d}{dz}\vec D_y,1+\frac{d}{dz}\vec D_z\right)\\
-\vec N &= \vec T \times \vec B \\
+\mathbf P(\mathbf r,t) &\coloneqq \text{Final ocean surface particle position}\\
+\mathbf P(\mathbf r,t) &= \mathbf r + \mathbf D(\mathbf r,t) = \left(x+\mathbf D_x,y+\mathbf D_y,z+\mathbf D_z\right)\\
+\mathbf T &= \frac{d}{dx}\mathbf P(\mathbf r,t) = \left(1+\frac{d}{dx}\mathbf D_x,\frac{d}{dx}\mathbf D_y,\frac{d}{dx}\mathbf D_z\right)\\
+\mathbf B &= \frac{d}{dz}\mathbf P(\mathbf r,t) = \left(\frac{d}{dz}\mathbf D_x,\frac{d}{dz}\mathbf D_y,1+\frac{d}{dz}\mathbf D_z\right)\\
+\mathbf N &= \mathbf T \times \mathbf B \\
 \end{align*}
 $$
 
-The discrete fourier transform is a sum, so the derivative distributes over it. Thus we can instead take the inverse fourier of the per-term partial derivatives. We need six partial derivatives obtained by distributing $\frac{d}{dx}$ and $\frac{d}{dz}$ to the three components of the displacement. It can be shown that the mixed partials $\frac{d}{dx}D_z$ and $\frac{d}{dz}D_x$ are equal, so we only need to compute five extra IFFTs for eight in total. A single derivative of the DFFT goes as follows:
+The discrete fourier transform is a sum, so the derivative distributes over it. Thus we can instead take the inverse fourier of the per-term partial derivatives. We need six partial derivatives obtained by distributing $\frac{d}{dx}$ and $\frac{d}{dz}$ to the three components of the displacement. It can be shown that the mixed partials $\frac{d}{dx}D_z$ and $\frac{d}{dz}D_x$ are equal, so we only need to compute five extra IFFTs for eight in total. The derivatives of the DFFT go as follows:
 
 $$
 \begin{align*}
 x_i &\in {x,z} \\
-\frac{d}{dx_i}\vec D_{x_i}(\vec k,\vec r,t) &= \frac{d}{dx_i}\sum_{\vec k} \vec h(\vec k,t)e^{i\vec k \cdot \vec r} \\
-&= \sum_{\vec k} \vec h(\vec k,t)\frac{d}{dx_i}e^{i\vec k \cdot \vec r} \\
-&= \sum_{\vec k} ik_{x_i}\vec h(\vec k,t)e^{i\vec k \cdot \vec r}
+\frac{d}{dx_i}\mathbf D_{x_i}(\mathbf k,\mathbf r,t) &= \frac{d}{dx_i}\sum_{\mathbf k} \tilde{\mathbf h}_{x_i}(\mathbf k,t)e^{i\mathbf k \cdot \mathbf r} \\
+&= \sum_{\mathbf k} \tilde{\mathbf h}_{x_i}(\mathbf k,t)\frac{d}{dx_i}e^{i\mathbf k \cdot \mathbf r} \\
+&= \sum_{\mathbf k} ik_{x_i}\tilde{\mathbf h}_{x_i}(\mathbf k,t)e^{i\mathbf k \cdot \mathbf r}
 \end{align*}
 $$
 
 We can improve the performance further. Since the displacement is real-valued, we can pack two IFFTs into one by summing two streams of input data while multiplying one by $i$. The discrete fourier transform is a linear sum, so multiplying the inputs by a scalar multiplies the output by that same scalar. For example:
 
 $$
-\tilde{h}_x(k,t)+i\tilde{h}_z(k,t)\xmapsto{IFFT}\vec D_x+i\vec D_z
+\tilde{\mathbf h}_x(k,t)+i\tilde{\mathbf h}_z(k,t)\xmapsto{IFFT}\mathbf D_x+i\mathbf D_z
 $$
 
-From this we can easily extract $\vec D_x$ and $\vec D_z$ since they will be in separate vector components. Furthermore, since textures have four components, we can pack two IFFTs into one set of dispatches via concatenation. See `computeTimeDependentAmplitude` of [`fourier_waves.wgsl`](../../shaders/sky-sea/ocean/fourier_waves.wgsl#L354) for how we pack the spectrum data.
+From this we can easily extract $\mathbf D_x$ and $\mathbf D_z$ since they will be in separate vector components. Furthermore, since textures have four components, we can pack two IFFTs into one set of dispatches via concatenation. See `computeTimeDependentAmplitude` of [`fourier_waves.wgsl`](../../shaders/sky-sea/ocean/fourier_waves.wgsl#L354) for how we pack the spectrum data and compute $\tilde{\mathbf h}$.
 
 In the end, we write the displacement, partial derivatives, and surface jacobian into arrays of maps that are sampled in the vertex and fragment shaders to rasterize the final ocean surface mesh into the GBuffer.
 
@@ -143,28 +143,28 @@ We wish to compute the luminance incident to the camera for every pixel. Conside
 
 $$
 \begin{align*}
-\vec C &: \text{Camera position} \\
-\vec P &: \text{Surface position} \\
-\vec L &: \text{Light direction outgoing from surface} \\
-\vec V &\coloneqq \operatorname{normalize}(\vec C - \vec P) \text{, View direction} \\
-\vec H &\coloneqq \operatorname{normalize(\vec L + \vec V)} \text{, Halfway vector} \\
-\vec N &: \text{Surface normal} \\
-R(\vec v,\vec n) &: \text{Fresnel factor for perfect reflection, outgoing $\vec v$ and surface normal $\vec n$} \\
-L_{out}(\vec p,\vec v) &: \text{Outgoing luminance from position $\vec p$ to direction $\vec v$ } \\
-L_{in}(\vec p,\vec v) &: \text{Incoming luminance to position $\vec p$ from direction $\vec v$} \\
-\vec T_{segment}(\vec x, \vec y) &: \text{Spectral transmittance between positions $\vec x$ and $\vec y$} \\
-\vec T_{ray}(\vec o,\vec d) &: \text{Spectral transmittance to atmospheric boundary for ray of origin $\vec o$ and direction $\vec d$} \\
-\operatorname{BRDF}(\vec a, \vec b) &: \text{BRDF for outgoing directions $\vec a$ and $\vec b$} \\
+\mathbf C &: \text{Camera position} \\
+\mathbf P &: \text{Surface position} \\
+\mathbf L &: \text{Light direction outgoing from surface} \\
+\mathbf N &: \text{Surface normal} \\
+\mathbf V &\coloneqq \operatorname{normalize}(\mathbf C - \mathbf P) \\
+\mathbf H &\coloneqq \operatorname{normalize(\mathbf L + \mathbf V)} \\
+R(\mathbf v,\mathbf n) &: \text{Fresnel factor for perfect reflection, outgoing $\mathbf v$ and surface normal $\mathbf n$} \\
+L_{out}(\mathbf p,\mathbf v) &: \text{Outgoing luminance from position $\mathbf p$ to direction $\mathbf v$ } \\
+L_{in}(\mathbf p,\mathbf v) &: \text{Incoming luminance to position $\mathbf p$ from direction $\mathbf v$} \\
+\mathbf T_{segment}(\mathbf x, \mathbf y) &: \text{Spectral transmittance between positions $\mathbf x$ and $\mathbf y$} \\
+\mathbf T_{ray}(\mathbf o,\mathbf d) &: \text{Spectral transmittance to atmospheric boundary for ray of origin $\mathbf o$ and direction $\mathbf d$} \\
+\operatorname{BRDF}(\mathbf a, \mathbf b) &: \text{BRDF for outgoing directions $\mathbf a$ and $\mathbf b$} \\
 \omega &: \text{Solid angle in steradians} \\
 \end{align*}
 $$
 
-We wish to compute $L_{in}(\vec C, -\vec V)$, the total luminance reaching the camera in the direction of the surface. We split it up into contributions from the scattered sky dome and un-scattered sun as follows:
+We wish to compute $L_{in}(\mathbf C, -\mathbf V)$, the total luminance reaching the camera in the direction of the surface. We split it up into contributions from the scattered sky dome and un-scattered sun as follows:
 
 $$
 \begin{align*}
-L_{in}(\vec C, -\vec V) &= \vec T_{segment}(\vec C, \vec P)\:L_{out}(\vec P, \vec V) \\
-L_{out}(\vec P,\vec V) &= L_{sky}+L_{sun} \\
+L_{in}(\mathbf C, -\mathbf V) &= \mathbf T_{segment}(\mathbf C, \mathbf P)\:L_{out}(\mathbf P, \mathbf V) \\
+L_{out}(\mathbf P,\mathbf V) &= L_{sky}+L_{sun} \\
 \end{align*}
 $$
 
@@ -172,30 +172,30 @@ Estimating the luminance from the sky dome accurately is difficult, see [[3]](#b
 
 $$
 \begin{align*}
-L_{sky} &= \omega_s\:L_{in,sky}(\vec C,\vec v_s)\:\operatorname{BRDF_s}(\vec v_s,\vec V)R_s  \\
-&+ \omega_d\:L_{in,sky}(\vec C,\vec v_d)\:\operatorname{BRDF_d}(\vec v_d,\vec V)R_d \\
+L_{sky} &= \omega_s\:L_{in,sky}(\mathbf C,\mathbf v_s)\:\operatorname{BRDF_s}(\mathbf v_s,\mathbf V)R_s  \\
+&+ \omega_d\:L_{in,sky}(\mathbf C,\mathbf v_d)\:\operatorname{BRDF_d}(\mathbf v_d,\mathbf V)R_d \\
 \omega_s &= \frac{4\pi}{200}\\
-\vec v_{s} &= \operatorname{reflect(\vec V, \vec N)} \\
-R_s &= R(\vec v_s, \vec N) \\
+\mathbf v_{s} &= \operatorname{reflect(\mathbf V, \mathbf N)} \\
+R_s &= R(\mathbf v_s, \mathbf N) \\
 \omega_d &= 2\pi \\
-\vec v_{d} &= \operatorname{normalize(\vec L+(0,1,0))} \\
-R_d &= 1 - R(\vec v_d, \operatorname{normalize}(\vec v_d+\vec L)) \\
+\mathbf v_{d} &= \operatorname{normalize(\mathbf L+(0,1,0))} \\
+R_d &= 1 - R(\mathbf v_d, \operatorname{normalize}(\mathbf v_d+\mathbf L)) \\
 \end{align*}
 $$
 
-$L_{in,sky}$ is sampled from the skyview LUT. Since the skyview LUT is dependent on the cameras position, this could be inaccurate for distant $\vec P$ near the horizon. However, there are not too many such pixels and they are typically obscured by aerial perspective anyway.
+$L_{in,sky}$ is sampled from the skyview LUT. Since the skyview LUT is dependent on the cameras position, this could be inaccurate for distant $\mathbf P$ near the horizon. However, there are not too many such pixels and they are typically obscured by aerial perspective anyway.
 
-For $BRDF_s$, we use a specular microfacet BRDF. To determine the sample, we assume the maximal impact sample is in the direction of a perfect reflection. At sunset, the luminance varies by about 20 times from minimum to maximum. At noon, this variation is only 2 times. Thus, since the specular BRDF has a sharp falloff, this assumption is reasonably accurate. So our choice of $\vec v_s$ in the direction of a perfect reflection is suitable.
+For $BRDF_s$, we use a specular microfacet BRDF. To determine the sample, we assume the maximal impact sample is in the direction of a perfect reflection. At sunset, the luminance varies by about 20 times from minimum to maximum. At noon, this variation is only 2 times. Thus, since the specular BRDF has a sharp falloff, this assumption is reasonably accurate. So our choice of $\mathbf v_s$ in the direction of a perfect reflection is suitable.
 
-For $BRDF_d$, we use a diffuse lambertian BRDF. To determine the sample, we assume a sample direction that is halfway between the light and world up roughly approximates the mean luminance from the sky. This is because, as stated earlier for the specular sample, the sky luminance does not vary much. So our choice of $\vec v_d$ is suitable.
+For $BRDF_d$, we use a diffuse lambertian BRDF. To determine the sample, we assume a sample direction that is halfway between the light and world up roughly approximates the mean luminance from the sky. This is because, as stated earlier for the specular sample, the sky luminance does not vary much. So our choice of $\mathbf v_d$ is suitable.
 
 We compute the sun luminance as follows, where $E_{sun}$ is the solar illuminance incident to the atmospheric boundary:
 
 $$
 \begin{align*}
-S(\vec p, \vec l) \in [0,1] &: \text{Sun visibility at surface position $\vec p$ and light direction $\vec l$} \\
-L_{sun} &= S(\vec C, \vec L)\:\vec T_{ray}(\vec P,\vec L)\:E_{sun}\:BRDF_{sun} \\
-BRDF_{sun} &= \operatorname{lerp}\left(BRDF_s(\vec L, \vec V),BRDF_d(\vec L, \vec V),\vec R(\vec L,\vec H)\right)\\
+S(\mathbf p, \mathbf l) \in [0,1] &: \text{Sun visibility at surface position $\mathbf p$ and light direction $\mathbf l$} \\
+L_{sun} &= S(\mathbf C, \mathbf L)\:\mathbf T_{ray}(\mathbf P,\mathbf L)\:E_{sun}\:BRDF_{sun} \\
+BRDF_{sun} &= \operatorname{lerp}\left(BRDF_s(\mathbf L, \mathbf V),BRDF_d(\mathbf L, \mathbf V),\mathbf R(\mathbf L,\mathbf H)\right)\\
 \end{align*}
 $$
 
@@ -204,12 +204,12 @@ The visibility of the sun varies as the sun dips below the horizon, and thus so 
 An important fact that is not obvious unless you examine the rendering equations we use is that our luminance factors linearly:
 
 $$
-L_{in}(\vec C, -\vec V) = L_{transfer}(\vec C, -\vec V)\:E_{sun}
+L_{in}(\mathbf C, -\mathbf V) = L_{transfer}(\mathbf C, -\mathbf V)\:E_{sun}
 $$
 
 What we have actually calculated this entire time is $L_{transfer}$, a ratio between luminance hitting the camera and solar illuminance at the atmospheric boundary. We have the freedom to choose $E_{sun} = 1$ and ignore it in all lighting calculations. Then as the final step before presentation, we multiply by an arbitrary solar strength parameter that combines the sun's apparent solid angle and luminous intensity.
 
-After computing $L_{in}(\vec C, -\vec V)$, we multiply it by the strength and color of the sun to get the final HDR luminance. We convert to sRGB with the ACES tonemapping function, then present to the screen.
+After computing $L_{in}(\mathbf C, -\mathbf V)$, we multiply it by the strength and color of the sun to get the final HDR luminance. We convert to sRGB with the ACES tonemapping function, then present to the screen.
 
 ## Further Work
 

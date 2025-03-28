@@ -605,6 +605,7 @@ class SkySeaApp implements RendererApp {
 	private canvasTextureFormat: GPUTextureFormat;
 
 	destroy(): void {
+		this.performance.destroy();
 		this.device.destroy();
 	}
 

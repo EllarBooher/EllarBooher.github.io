@@ -134,8 +134,18 @@ export class PerformanceTracker {
 		frametimeControllers: Map<FrametimeCategory, LilController>;
 	};
 
+	private initialized: boolean;
+
 	public get averageFPS(): number {
 		return this.uiDisplay.averageFPS;
+	}
+
+	destroy(): void {
+		this.queryBuffers?.querySet.destroy();
+		this.queryBuffers?.writeBuffer.destroy();
+		this.queryBuffers?.readBuffer.destroy();
+
+		this.initialized = false;
 	}
 
 	/**
@@ -300,10 +310,16 @@ export class PerformanceTracker {
 				buffer.unmap();
 			})
 			.catch((reason) => {
+				if (!this.initialized) {
+					return;
+				}
+
 				console.error(
-					`Failed while retrieving frametime values from GPU:`
+					new Error(
+						`Failed while retrieving frametime values from GPU:`,
+						{ cause: reason }
+					)
 				);
-				console.error(reason);
 			});
 	}
 
@@ -322,6 +338,8 @@ export class PerformanceTracker {
 			console.warn(
 				"WebGPU feature 'timestamp-query' is not supported. Continuing, but without performance information about specific stages."
 			);
+
+			this.initialized = true;
 			return;
 		}
 
@@ -349,5 +367,7 @@ export class PerformanceTracker {
 				new ArithmeticSumArray(FRAMETIME_SAMPLE_SIZE)
 			);
 		});
+
+		this.initialized = true;
 	}
 }

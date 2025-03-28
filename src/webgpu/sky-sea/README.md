@@ -47,7 +47,7 @@ $$
 \begin{align*}
 t &: \text{Time in seconds} \\
 \mathbf r = (x,y,z) &: \text{Position of an ocean particle in meters} \\
-\mathbf k = (k_x,k_z) &: \text{Angular wave vector in radians per meter} \\
+\mathbf k &: \text{Two-dimensional angular wave vector in radians per meter} \\
 \omega &: \text{Angular frequency in radians per second} \\
 \mathbf D(\mathbf r,t) = (D_x,D_y,D_z) &: \text{Displacement of a given ocean particle} \\
 A &: \text{Amplitude of the wave in meters}
@@ -101,7 +101,7 @@ $$
 x_i &\in {x,z} \\
 \frac{\partial}{\partial x_i}\mathbf D_{x_i}(\mathbf k,\mathbf r,t) &= \frac{\partial}{\partial x_i}\sum_{\mathbf k} \tilde{\mathbf h}_{x_i}(\mathbf k,t)e^{i\mathbf k \cdot \mathbf r} \\
 &= \sum_{\mathbf k} \tilde{\mathbf h}_{x_i}(\mathbf k,t)\frac{\partial}{\partial x_i}e^{i\mathbf k \cdot \mathbf r} \\
-&= \sum_{\mathbf k} ik_{x_i}\tilde{\mathbf h}_{x_i}(\mathbf k,t)e^{i\mathbf k \cdot \mathbf r}
+&= \sum_{\mathbf k} i\mathbf k_{x_i}\tilde{\mathbf h}_{x_i}(\mathbf k,t)e^{i\mathbf k \cdot \mathbf r}
 \end{align*}
 $$
 

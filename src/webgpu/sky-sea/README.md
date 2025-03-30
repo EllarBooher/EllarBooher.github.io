@@ -46,8 +46,8 @@ The per-vertex displacement is three dimensional, since this allows for more rea
 $$
 \begin{align*}
 t &: \text{Time in seconds} \\
-\mathbf r = (x,y,z) &: \text{Position of an ocean particle in meters} \\
-\mathbf k &: \text{Two-dimensional angular wave vector in radians per meter} \\
+\mathbf r = (\mathbf r_x,\mathbf r_y,\mathbf r_z) &: \text{Position of an ocean particle in meters} \\
+\mathbf k = (\mathbf k_x,\mathbf k_z) &: \text{Angular wave vector in radians per meter} \\
 \omega &: \text{Angular frequency in radians per second} \\
 \mathbf D(\mathbf r,t) = (D_x,D_y,D_z) &: \text{Displacement of a given ocean particle} \\
 A &: \text{Amplitude of the wave in meters}
@@ -60,7 +60,7 @@ $$
 \begin{align*}
 \theta(\mathbf k,\mathbf r,t) &= \mathbf k \cdot (\mathbf r_x,\mathbf r_z) - \omega(\mathbf k) t \\
 \hat{\mathbf k} &= \frac{\mathbf k}{\left\|\mathbf k\right\|} \\
-\mathbf D(\mathbf k,\mathbf r,t) &= \sum_{\mathbf k} \left(-A\hat{\mathbf k}_x \sin(\theta),A\cos(\theta),-A\hat{\mathbf k}_z \sin(\theta)\right)
+\mathbf D(\mathbf r,t) &= \sum_{\mathbf k} \left(-A\hat{\mathbf k}_x \sin(\theta),A\cos(\theta),-A\hat{\mathbf k}_z \sin(\theta)\right)
 \end{align*}
 $$
 
@@ -123,7 +123,7 @@ The atmosphere is modelled as a medium that continuously scatters light, shaped 
 
 The transmittance LUT (see [`transmittance_LUT.wgsl`](../../shaders/sky-sea/atmosphere/transmittance_LUT.wgsl)) measures the spectral transmittance for red, blue, and green along a given view ray, all the way to the edge of the atmosphere. The map is parameterized by altitude and view zenith angle. The transmittance is found by integrating optical depth along a discrete number of steps, where a smaller step size leads to higher accuracy. Sampling the transmittance LUT should be avoided for low altitudes at angles nearly parallel to the surface of the planet, since you run into precision issues. In general, raymarching to determine transmittance is more accurate but the LUT is faster. By default, we recompute transmittance when raymarching luminance, which we only do in our lookup tables and not in the final composition pass.
 
-The multiscatter LUT (see [`multiscatter_LUT.wgsl`](../../shaders/sky-sea/atmosphere/multiscatter_LUT.wgsl)) contains a map of the total incoming luminance from all directions due to higher orders of scattering, in other words light that bounces a few times. Due to the symmetry of a spherical earth, the map is parameterized by altitude and light zenith angle. Since time of day is constant during a frame, during any given raymarch a single 1D slice of this map is "active", and the raymarch samples along the slice. Higher orders of scattered light are roughly correlated, which means their sum can be accurately estimated by a geometric series, making the multiscattering LUT much easier to calculate. Even so, this calculation is the most expensive of our LUTs.
+The multiscatter LUT (see [`multiscatter_LUT.wgsl`](../../shaders/sky-sea/atmosphere/multiscatter_LUT.wgsl)) contains a map of the total incoming luminance from all directions due to higher orders of scattering. Due to the symmetry of a spherical earth, the map is parameterized by altitude and light zenith angle, and not observer latitude or longitude. This map is the most expensive of our maps to calculate, since it requires sampling the luminance in dozens of directions, with each sample requiring raymarching scattered solar luminance with hundreds of steps. Luckily, higher orders of scattered light are roughly correlated, which means their sum can be accurately estimated by a geometric series, and we only need to calculate one order of luminance to estimate the entire series.
 
 The skyview LUT (see [`skyview_LUT.wgsl`](../../shaders/sky-sea/atmosphere/skyview_LUT.wgsl)) contains a map of the total incoming luminance along a ray from the camera's position. Each texel is a single evaluation of the scattering integral for light reaching the observer. It contains a projection of the full spherical view from the camera, and is parameterized by azimuth and zenith angles of a given view direction. This LUT provides a short computation path for unobstructed views of the sky, and can be a relatively low resolution due to the low signal frequency of the luminance.
 
@@ -131,7 +131,7 @@ The aerial perspective LUT (see [`aerial_perspective_LUT.wgsl`](../../shaders/sk
 
 Another important detail of the aerial perspective LUT is that we pack wavelength averaged transmittance into the alpha channel, using the transmittance calculated while raymarching the scattering. As mentioned for the transmittance LUT, there are floating point precision issues near the surface. By using the raymarched transmittance from the aerial perspective LUT, we avoid these issues. This is important for pixels near the horizon, since otherwise you get incorrect color ratios and possibly banding. We could store full spectral transmittance in a separate texture, but that is not necessary to get good enough results.
 
-Each frame, we only need to recompute the skyview LUT and aerial perspective LUT, since those two are the ones that depend on time of day and viewer position. The transmittance LUT and multiscatter LUT only depend on the atmospheric medium's parameters, and thus only need to be regenerated sparingly.
+Each frame, we only need to recompute the skyview LUT and aerial perspective LUT, since those two depend on time of day and viewer position. The transmittance LUT and multiscatter LUT only depend on the atmosphere parameters, and thus are regenerated sparingly.
 
 ### Composition
 
@@ -149,12 +149,16 @@ $$
 \mathbf N &: \text{Surface normal} \\
 \mathbf V &\coloneqq \operatorname{normalize}(\mathbf C - \mathbf P) \\
 \mathbf H &\coloneqq \operatorname{normalize(\mathbf L + \mathbf V)} \\
-R(\mathbf v,\mathbf n) &: \text{Fresnel factor for perfect reflection, outgoing $\mathbf v$ and surface normal $\mathbf n$} \\
+R(\mathbf v,\mathbf n) &: \text{Fresnel factor for perfect reflection for} \\
+&\;\; \text{ outgoing $\mathbf v$ and surface normal $\mathbf n$} \\
 L_{out}(\mathbf p,\mathbf v) &: \text{Outgoing luminance from position $\mathbf p$ to direction $\mathbf v$ } \\
 L_{in}(\mathbf p,\mathbf v) &: \text{Incoming luminance to position $\mathbf p$ from direction $\mathbf v$} \\
 \mathbf T_{segment}(\mathbf x, \mathbf y) &: \text{Spectral transmittance between positions $\mathbf x$ and $\mathbf y$} \\
-\mathbf T_{ray}(\mathbf o,\mathbf d) &: \text{Spectral transmittance to atmospheric boundary for ray of origin $\mathbf o$ and direction $\mathbf d$} \\
+\mathbf T_{ray}(\mathbf o,\mathbf d) &: \text{Spectral transmittance to atmospheric boundary for} \\
+&\;\; \text{ ray of origin $\mathbf o$ and direction $\mathbf d$} \\
 \operatorname{BRDF}(\mathbf a, \mathbf b) &: \text{BRDF for outgoing directions $\mathbf a$ and $\mathbf b$} \\
+\operatorname{BRDF_s} &: \text{Specular microfacet BRDF} \\
+\operatorname{BRDF_d} &: \text{Diffuse Lambertian BRDF} \\
 \omega &: \text{Solid angle in steradians} \\
 \end{align*}
 $$
@@ -185,17 +189,17 @@ $$
 
 $L_{in,sky}$ is sampled from the skyview LUT. Since the skyview LUT is dependent on the cameras position, this could be inaccurate for distant $\mathbf P$ near the horizon. However, there are not too many such pixels and they are typically obscured by aerial perspective anyway.
 
-For $BRDF_s$, we use a specular microfacet BRDF. To determine the sample, we assume the maximal impact sample is in the direction of a perfect reflection. At sunset, the luminance varies by about 20 times from minimum to maximum. At noon, this variation is only 2 times. Thus, since the specular BRDF has a sharp falloff, this assumption is reasonably accurate. So our choice of $\mathbf v_s$ in the direction of a perfect reflection is suitable.
+We assume the maximal impact specular sample is in the direction of a perfect reflection. At sunset, the luminance varies by about 20 times from minimum to maximum. At noon, this variation is only 2 times. Thus, since the specular BRDF has a sharp falloff, this assumption is reasonably accurate. So our choice of $\mathbf v_s$ in the direction of a perfect reflection is suitable.
 
-For $BRDF_d$, we use a diffuse lambertian BRDF. To determine the sample, we assume a sample direction that is halfway between the light and world up roughly approximates the mean luminance from the sky. This is because, as stated earlier for the specular sample, the sky luminance does not vary much. So our choice of $\mathbf v_d$ is suitable.
+For the diffuse sample, we need to estimate mean sky dome luminance to then estimate illuminance. We assume a sample direction that is halfway between the light and world up roughly estimates mean luminance, since as stated the sky luminance does not vary much. So our choice of $\mathbf v_d$ is suitable.
 
-We compute the sun luminance as follows, where $E_{sun}$ is the solar illuminance incident to the atmospheric boundary:
+After computing $E_{sky}$, we compute the sun luminance as follows, where $E_{sun}$ is the solar illuminance incident to the atmospheric boundary:
 
 $$
 \begin{align*}
 S(\mathbf p, \mathbf l) \in [0,1] &: \text{Sun visibility at surface position $\mathbf p$ and light direction $\mathbf l$} \\
-L_{sun} &= S(\mathbf C, \mathbf L)\:\mathbf T_{ray}(\mathbf P,\mathbf L)\:E_{sun}\:BRDF_{sun} \\
-BRDF_{sun} &= \operatorname{lerp}\left(BRDF_s(\mathbf L, \mathbf V),BRDF_d(\mathbf L, \mathbf V),\mathbf R(\mathbf L,\mathbf H)\right)\\
+L_{sun} &= S(\mathbf P, \mathbf L)\:\mathbf T_{ray}(\mathbf P,\mathbf L)\:E_{sun}\:BRDF_{sun} \\
+BRDF_{sun} &= \operatorname{lerp}\left(BRDF_d(\mathbf L, \mathbf V),BRDF_s(\mathbf L, \mathbf V),\mathbf R(\mathbf L,\mathbf H)\right)\\
 \end{align*}
 $$
 

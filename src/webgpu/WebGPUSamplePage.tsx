@@ -78,7 +78,7 @@ const RenderingCanvas = function RenderingCanvas({
 	const guiPaneRef = useRef<HTMLDivElement>(null);
 	const hibernateRef = useRef(false);
 	const guiRef = useRef<GUI>();
-	const [guiDocked, setGUIDocked] = useState<boolean>(false);
+	const [guiDocked, setGUIDocked] = useState<boolean>(true);
 	const resizeTimeout = useRef<ReturnType<typeof setTimeout>>();
 	const lastTimeRef = useRef<number>();
 
@@ -158,9 +158,16 @@ const RenderingCanvas = function RenderingCanvas({
 		if (guiRef.current) {
 			guiRef.current?.destroy();
 		}
+		guiRef.current = new GUI({ container: guiPaneRef.current! });
+		if (app.setLowPerformanceMode) {
+			guiRef.current
+				.add({ checked: false }, "checked")
+				.onChange((checked: boolean) => {
+					app.setLowPerformanceMode?.(checked);
+				})
+				.name("Low Performance Mode");
+		}
 		if (app.setupUI) {
-			guiRef.current = new GUI({ container: guiPaneRef.current! });
-			guiRef.current.close();
 			guiRef.current.onOpenClose((gui) => {
 				if (gui == guiRef.current) {
 					setGUIDocked(!gui._closed);
@@ -204,17 +211,6 @@ const RenderingCanvas = function RenderingCanvas({
 		resizeCanvas();
 	}, [resizeCanvas, guiDocked]);
 
-	const performanceToggle = app.setLowPerformanceMode ? (
-		<div>
-			<input
-				type="checkbox"
-				onChange={(e) => {
-					app.setLowPerformanceMode?.(e.currentTarget.checked);
-				}}
-			></input>
-		</div>
-	) : undefined;
-
 	/*
 	 * The precise hierarchy of these elements is important for the desired
 	 * effect. See `WebGPUSamplePage.css` for the specifics.
@@ -227,9 +223,7 @@ const RenderingCanvas = function RenderingCanvas({
 			<div
 				className={guiDocked ? undefined : "gui-pane-floating"}
 				ref={guiPaneRef}
-			>
-				{performanceToggle}
-			</div>
+			/>
 			{import.meta.env.DEV ? (
 				<CanvasScreenshotWidget canvas={canvasRef} />
 			) : undefined}

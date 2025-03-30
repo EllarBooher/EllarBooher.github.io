@@ -56,7 +56,12 @@ const rehypeCitation = () => {
 
 		node.children = [
 			anchor,
-			{ type: "element", tagName: "div", properties: {}, children: rest },
+			{
+				type: "element",
+				tagName: "div",
+				properties: { className: ["citation-text"] },
+				children: rest,
+			},
 		];
 	};
 

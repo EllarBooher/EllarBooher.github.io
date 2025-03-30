@@ -10,9 +10,10 @@
 
 .readme-body {
 	padding: 1rem;
-	flex: 1;
-	flex-shrink: 1;
-	overflow-x: hidden;
+}
+
+.readme-body > p {
+	overflow-wrap: anywhere;
 }
 
 .readme-body > h1 {
@@ -40,13 +41,17 @@
 	padding-inline: 2rem;
 }
 
-.readme-body > * > p {
-	overflow-wrap: anywhere;
-}
-
 /* Style blocks of math, not inline math */
-mjx-container[display="true"] {
+mjx-container[display] {
 	background-color: var(--background-color-darkest);
 	padding: 1em;
 	border-radius: 0.5em;
+	width: 0;
+	min-width: 100%;
+	overflow-x: auto;
+	box-sizing: border-box;
+}
+
+.citation-text {
+	overflow-wrap: anywhere;
 }

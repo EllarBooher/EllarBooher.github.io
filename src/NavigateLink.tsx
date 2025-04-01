@@ -1,7 +1,7 @@
 import { useLocation, useSearchParams, Link } from "react-router";
 import "./NavigateLink.css";
 import { memo, Fragment } from "react";
-import { defaultSample, samplesByID } from "./webgpu/Samples";
+import { SampleDisplayDescriptorByID, SampleID } from "webgpu-samples";
 
 const pathSegmentToTitles = new Map<string, string>([
 	["", "Estelle Booher"],
@@ -31,9 +31,7 @@ export const NavigationHeader = memo(function NavigationHeader() {
 				return (
 					<Fragment key={accumulatedLink}>
 						{" > "}
-						<Link to={accumulatedLink}>
-							{prettySegment ? prettySegment : segment}
-						</Link>
+						<Link to={accumulatedLink}>{prettySegment ?? segment}</Link>
 					</Fragment>
 				);
 			})
@@ -46,7 +44,7 @@ export const NavigationHeader = memo(function NavigationHeader() {
 			<Fragment key="sample-caboose">
 				{" > "}
 				<Link to={location.pathname + location.search}>
-					{samplesByID.get(sampleQueryParam)?.name ?? defaultSample.name}
+					{SampleDisplayDescriptorByID.get(sampleQueryParam as SampleID)?.name}
 				</Link>
 			</Fragment>
 		);

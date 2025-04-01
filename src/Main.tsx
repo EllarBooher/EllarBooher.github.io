@@ -3,12 +3,9 @@ import { createRoot } from "react-dom/client";
 import { Routes, Route, HashRouter, Navigate } from "react-router";
 import "./Main.css";
 import LandingPage from "./LandingPage.tsx";
-import {
-	WebGPUSamplePage,
-	WebGPUSampleDirectory,
-} from "./webgpu/WebGPUSamplePage.tsx";
+import { WebGPUSamplePage, WebGPUSampleDirectory } from "./WebGPU.tsx";
 import Axe from "./Axe.tsx";
-import { samplesByID } from "./webgpu/Samples.ts";
+import { SampleIDs } from "webgpu-samples";
 
 const root = document.getElementById("root")!;
 
@@ -20,7 +17,7 @@ createRoot(root).render(
 				<Route index element={<LandingPage />} />
 				<Route path="webgpu">
 					<Route index element={<WebGPUSampleDirectory />} />
-					{[...samplesByID.keys()].map((sampleID) => {
+					{SampleIDs.map((sampleID) => {
 						return (
 							<Route
 								key={sampleID}

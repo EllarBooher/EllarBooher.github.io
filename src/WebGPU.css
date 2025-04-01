@@ -3,6 +3,10 @@
 	flex-direction: row;
 }
 
+.sample-directory {
+	padding: 2rem;
+}
+
 .sample-body {
 	flex: 1;
 }

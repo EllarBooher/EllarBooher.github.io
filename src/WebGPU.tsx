@@ -90,6 +90,12 @@ export const WebGPUSamplePage = memo(function WebGPUSamplePage({
 		</div>
 	);
 
+	const readme = (
+		<div className="sample-readme-container">
+			<EmbeddedReadme sampleID={sampleID} />
+		</div>
+	);
+
 	const SIDEBAR_BREAKPOINT = 768;
 
 	return (
@@ -99,7 +105,7 @@ export const WebGPUSamplePage = memo(function WebGPUSamplePage({
 				{width > SIDEBAR_BREAKPOINT ? <SampleNavSidebar /> : undefined}
 				<div className="sample-body">
 					{app}
-					<EmbeddedReadme sampleID={sampleID} />
+					{readme}
 				</div>
 			</main>
 		</>

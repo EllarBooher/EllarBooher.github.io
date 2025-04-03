@@ -9,6 +9,8 @@
 
 .sample-body {
 	flex: 1;
+	display: flex;
+	flex-direction: column;
 }
 
 .sample-app-container {
@@ -21,6 +23,11 @@
 	 * This assumes that only the header is offsetting the top
 	 */
 	height: calc(100svh - var(--header-height) - 2rem);
+}
+
+.sample-readme-container {
+	max-width: 90ch;
+	align-self: center;
 }
 
 .sample-sidebar {

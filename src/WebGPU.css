@@ -1,6 +1,14 @@
 .sample-main {
 	display: flex;
 	flex-direction: row;
+
+	--webgpu-samples-bg-color-darkest: var(--bg-color-darkest);
+	--webgpu-samples-bg-color-dark: var(--bg-color-dark);
+	--webgpu-samples-bg-color-light: var(--bg-color-light);
+	--webgpu-samples-bg-color-lightest: var(--bg-color-lightest);
+	--webgpu-samples-text-color: var(--text-color);
+	--webgpu-samples-text-color-link: var(--text-color-link);
+	--webgpu-samples-text-color-error: var(--text-color-error);
 }
 
 .sample-directory {
@@ -15,14 +23,8 @@
 
 .sample-app-container {
 	display: flex;
-	flex-direction: row;
-	background-color: var(--background-color-dark);
-
-	/*
-	 * We have sample end neatly at 100vh when page is scrolled all the way up.
-	 * This assumes that only the header is offsetting the top
-	 */
-	height: calc(100svh - var(--header-height) - 2rem);
+	flex-direction: column;
+	background-color: var(--bg-color-dark);
 }
 
 .sample-readme-container {
@@ -32,7 +34,7 @@
 
 .sample-sidebar {
 	width: 10rem;
-	background-color: var(--background-color-dark);
+	background-color: var(--bg-color-dark);
 	justify-items: center;
 }
 

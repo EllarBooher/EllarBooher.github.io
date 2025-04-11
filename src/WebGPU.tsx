@@ -86,7 +86,12 @@ export const WebGPUSamplePage = memo(function WebGPUSamplePage({
 	const app = (
 		<div className="sample-app-container">
 			<h1 className="visuallyhidden">WebGPU Animated Sample</h1>
-			<AppLoader sampleID={sampleID} />
+			<AppLoader
+				sampleID={sampleID}
+				styleOverrides={{
+					height: "calc(100svh - var(--header-height) - 2rem)",
+				}}
+			/>
 		</div>
 	);
 
